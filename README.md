@@ -6,7 +6,7 @@ A minimal, fast Markdown viewer built with Tauri + TypeScript.
 
 - Open and render Markdown files (`.md`, `.markdown`, `.txt`)
 - Open files by double-clicking or "Open With" (registered as a handler for those extensions), the button, or `⌘O` / `Ctrl+O`
-- HTML output sanitized with DOMPurify (safe to open untrusted files)
+- HTML output sanitized with DOMPurify and locked down with a strict CSP (safe to open untrusted files)
 - Reload the current file (`⌘R` / `Ctrl+R`)
 
 ## Install
