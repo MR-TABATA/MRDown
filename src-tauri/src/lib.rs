@@ -48,6 +48,7 @@ fn handle_opened_file(app: &tauri::AppHandle, path: String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(PendingFile::default())
         .invoke_handler(tauri::generate_handler![read_file, get_pending_file])
         .setup(|app| {
