@@ -1,0 +1,9 @@
+- list [ref=e4]:
+  - listitem [ref=e5]: 項目1
+  - listitem [ref=e6]:
+    - text: 項目3
+    - list [ref=e7]:
+      - listitem [ref=e8]:
+        - text: kkk
+        - list [ref=e9]:
+          - listitem [ref=e10]: ppp

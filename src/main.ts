@@ -9,15 +9,24 @@ import { SUPPORTED, isSupported, basename, resolveImagePath } from './paths';
 import { slugify } from './markdown';
 
 const openBtn = document.getElementById('open-btn')!;
-const reloadBtn = document.getElementById('reload-btn')!;
+const reloadBtn = document.getElementById('reload-btn') as HTMLButtonElement;
+const editBtn = document.getElementById('edit-btn') as HTMLButtonElement;
+const editLabel = document.getElementById('edit-label')!;
+const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+const editor = document.getElementById('editor') as HTMLTextAreaElement;
 const output = document.getElementById('output')!;
 const emptyState = document.getElementById('empty-state')!;
 const recentBox = document.getElementById('recent')!;
 const filepath = document.getElementById('filepath')!;
+const divider = document.getElementById('divider')!;
 const contentArea = document.querySelector('.content-area') as HTMLElement;
 
 let currentFilePath: string | null = null;
 let currentMtime = 0;
+let savedSource = '';
+let isEditing = false;
+
+const isDirty = () => editor.value !== savedSource;
 
 // Give headings ids so in-document anchor links (and a future TOC) work.
 function addHeadingIds() {
@@ -92,7 +101,38 @@ function resolveLocalImages(filePath: string) {
   });
 }
 
-async function renderFile(filePath: string, opts: { preserveScroll?: boolean } = {}) {
+// Render Markdown source into the preview pane (no disk I/O).
+async function renderSource(source: string, filePath: string) {
+  const html = await marked.parse(source);
+  output.innerHTML = DOMPurify.sanitize(html);
+  addHeadingIds();
+  resolveLocalImages(filePath);
+  await renderMermaid();
+}
+
+// Reflect the open file + dirty state in the toolbar.
+function updateStatus() {
+  saveBtn.disabled = !isDirty();
+  saveBtn.classList.toggle('dirty', isDirty());
+  filepath.textContent = '';
+  if (!currentFilePath) return;
+  if (isDirty()) {
+    const dot = document.createElement('span');
+    dot.className = 'dirty-dot';
+    dot.textContent = '●';
+    filepath.appendChild(dot);
+  }
+  filepath.append(basename(currentFilePath));
+}
+
+function setEditing(on: boolean) {
+  isEditing = on;
+  contentArea.classList.toggle('editing', on);
+  editLabel.textContent = on ? 'プレビュー' : '編集';
+  if (on) editor.focus();
+}
+
+async function openFile(filePath: string, opts: { preserveScroll?: boolean } = {}) {
   let content: string;
   try {
     content = await invoke<string>('read_file', { path: filePath });
@@ -101,21 +141,38 @@ async function renderFile(filePath: string, opts: { preserveScroll?: boolean } =
     return;
   }
   const scrollTop = contentArea.scrollTop;
-  const html = await marked.parse(content);
-  output.innerHTML = DOMPurify.sanitize(html);
-  addHeadingIds();
-  resolveLocalImages(filePath);
-  await renderMermaid();
+  currentFilePath = filePath;
+  savedSource = content;
+  editor.value = content;
+  setEditing(false);
+  await renderSource(content, filePath);
   output.style.display = 'block';
   emptyState.style.display = 'none';
-  (reloadBtn as HTMLButtonElement).disabled = false;
-  currentFilePath = filePath;
+  reloadBtn.disabled = false;
+  editBtn.disabled = false;
   currentMtime = await invoke<number>('file_mtime', { path: filePath }).catch(() => 0);
-  filepath.textContent = basename(filePath);
+  updateStatus();
   contentArea.scrollTop = opts.preserveScroll ? scrollTop : 0;
-  invoke<string[]>('add_recent_file', { path: filePath })
-    .then(renderRecent)
-    .catch(() => {});
+  invoke<string[]>('add_recent_file', { path: filePath }).then(renderRecent).catch(() => {});
+}
+
+async function save() {
+  if (!currentFilePath || !isDirty()) return;
+  try {
+    await invoke('save_file', { path: currentFilePath, content: editor.value });
+  } catch (e) {
+    filepath.textContent = `保存できませんでした: ${e}`;
+    return;
+  }
+  savedSource = editor.value;
+  currentMtime = await invoke<number>('file_mtime', { path: currentFilePath }).catch(() => 0);
+  updateStatus();
+}
+
+// Re-read from disk, but never silently discard unsaved edits.
+async function reload() {
+  if (!currentFilePath || isDirty()) return;
+  await openFile(currentFilePath, { preserveScroll: true });
 }
 
 // Recent files are shown in the empty state for quick reopening.
@@ -136,7 +193,7 @@ function renderRecent(list: string[]) {
     path.className = 'recent-path';
     path.textContent = p;
     li.append(name, path);
-    li.addEventListener('click', () => renderFile(p));
+    li.addEventListener('click', () => openFile(p));
     ul.appendChild(li);
   }
   recentBox.appendChild(ul);
@@ -147,21 +204,40 @@ openBtn.addEventListener('click', async () => {
     multiple: false,
     filters: [{ name: 'Markdown', extensions: SUPPORTED }]
   });
-  if (selected) await renderFile(selected as string);
+  if (selected) await openFile(selected as string);
 });
 
-reloadBtn.addEventListener('click', async () => {
-  if (currentFilePath) await renderFile(currentFilePath, { preserveScroll: true });
+reloadBtn.addEventListener('click', reload);
+saveBtn.addEventListener('click', save);
+editBtn.addEventListener('click', () => {
+  if (currentFilePath) setEditing(!isEditing);
+});
+
+// Live preview while typing, debounced so large documents stay responsive.
+let previewTimer: number | undefined;
+editor.addEventListener('input', () => {
+  updateStatus();
+  clearTimeout(previewTimer);
+  previewTimer = window.setTimeout(() => {
+    if (currentFilePath) renderSource(editor.value, currentFilePath);
+  }, 250);
 });
 
 document.addEventListener('keydown', async (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
+  const mod = e.metaKey || e.ctrlKey;
+  if (!mod) return;
+  if (e.key === 'o') {
     e.preventDefault();
     openBtn.click();
-  }
-  if ((e.metaKey || e.ctrlKey) && e.key === 'r' && currentFilePath) {
+  } else if (e.key === 's') {
     e.preventDefault();
-    await renderFile(currentFilePath, { preserveScroll: true });
+    await save();
+  } else if (e.key === 'e' && currentFilePath) {
+    e.preventDefault();
+    setEditing(!isEditing);
+  } else if (e.key === 'r') {
+    e.preventDefault();
+    await reload();
   }
 });
 
@@ -181,6 +257,31 @@ output.addEventListener('click', async (e) => {
   }
 });
 
+// Draggable split: drag the divider to resize the editor/preview panes,
+// persisting the ratio across sessions.
+const SPLIT_KEY = 'mdcrud.split';
+const savedSplit = localStorage.getItem(SPLIT_KEY);
+if (savedSplit) contentArea.style.setProperty('--split', savedSplit);
+
+divider.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  contentArea.classList.add('resizing');
+  const onMove = (ev: MouseEvent) => {
+    const rect = contentArea.getBoundingClientRect();
+    const pct = Math.min(80, Math.max(20, ((ev.clientX - rect.left) / rect.width) * 100));
+    contentArea.style.setProperty('--split', `${pct}%`);
+  };
+  const onUp = () => {
+    contentArea.classList.remove('resizing');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    const value = contentArea.style.getPropertyValue('--split');
+    if (value) localStorage.setItem(SPLIT_KEY, value);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+});
+
 // Drag a Markdown file onto the window to open it.
 getCurrentWebview().onDragDropEvent((event) => {
   const p = event.payload;
@@ -189,18 +290,19 @@ getCurrentWebview().onDragDropEvent((event) => {
   } else if (p.type === 'drop') {
     contentArea.classList.remove('drag-over');
     const file = p.paths.find(isSupported);
-    if (file) renderFile(file);
+    if (file) openFile(file);
   } else {
     contentArea.classList.remove('drag-over');
   }
 });
 
-// Auto-reload: re-render when the open file changes on disk.
+// Auto-reload: re-render when the open file changes on disk. Paused while
+// editing or with unsaved changes so it never clobbers the user's work.
 setInterval(async () => {
-  if (!currentFilePath) return;
+  if (!currentFilePath || isEditing || isDirty()) return;
   try {
     const m = await invoke<number>('file_mtime', { path: currentFilePath });
-    if (m > currentMtime) await renderFile(currentFilePath, { preserveScroll: true });
+    if (m > currentMtime) await openFile(currentFilePath, { preserveScroll: true });
   } catch {
     // File may have been moved/removed; leave the last render in place.
   }
@@ -209,12 +311,12 @@ setInterval(async () => {
 // Open files passed by the OS via double-click / "Open With".
 // Runtime opens (app already running) arrive as an event...
 listen<string>('open-file', (e) => {
-  if (e.payload) renderFile(e.payload);
+  if (e.payload) openFile(e.payload);
 });
 
 // ...while a file the app was launched with is fetched once on startup.
 invoke<string | null>('get_pending_file').then((path) => {
-  if (path) renderFile(path);
+  if (path) openFile(path);
 });
 
 // Populate the recent-files list shown in the empty state.

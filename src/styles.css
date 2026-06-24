@@ -82,6 +82,71 @@ button:disabled { opacity: 0.3; cursor: default; }
   color: #888;
 }
 
+/* Editor (split edit/preview) */
+#editor { display: none; }
+#divider { display: none; }
+.content-area.editing {
+  display: flex;
+  flex-direction: row;
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+}
+.content-area.editing #editor {
+  display: block;
+  flex: 0 0 var(--split, 50%);
+  min-width: 0;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: #1a1a1a;
+  color: #d4d4d4;
+  padding: 24px 28px;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 13.5px;
+  line-height: 1.7;
+  tab-size: 2;
+}
+.content-area.editing #output {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 24px 32px;
+  overflow-y: auto;
+  background: #2a2a2a;
+}
+
+/* Draggable divider: a single 1px line that abuts both panes (no gap band),
+   with an invisible wider grab zone so it stays easy to grab. */
+.content-area.editing #divider {
+  display: block;
+  flex: 0 0 1px;
+  position: relative;
+  background: #333;
+  cursor: col-resize;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.content-area.editing #divider::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
+}
+.content-area.editing #divider:hover,
+.content-area.editing.resizing #divider {
+  background: #0d6efd;
+  box-shadow: -1px 0 0 #0d6efd, 1px 0 0 #0d6efd;
+}
+.content-area.resizing { user-select: none; cursor: col-resize; }
+
+#save-btn.dirty { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+#filepath .dirty-dot { color: #0d6efd; margin-right: 5px; }
+
 /* Recent files (shown inside the empty state) */
 #recent { width: 100%; max-width: 420px; margin-top: 8px; }
 #recent .recent-title { font-size: 12px; color: #666; margin-bottom: 8px; text-align: center; }
@@ -104,7 +169,7 @@ button:disabled { opacity: 0.3; cursor: default; }
   background: rgba(13, 110, 253, 0.06);
 }
 
-#output { max-width: 750px; margin: 0 auto; line-height: 1.7; display: none; }
+#output { max-width: 750px; margin: 0 auto; line-height: 1.55; display: none; }
 #output h1, #output h2, #output h3, #output h4 { color: #e2e2e2; margin: 1.5em 0 0.5em; }
 #output h1 { font-size: 2em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
 #output h2 { font-size: 1.5em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
@@ -122,8 +187,10 @@ button:disabled { opacity: 0.3; cursor: default; }
 }
 #output pre code { background: none; padding: 0; color: #d4d4d4; }
 #output blockquote { border-left: 3px solid #444; margin: 1em 0; padding: 4px 16px; color: #888; }
-#output ul, #output ol { padding-left: 1.5em; margin: 0.8em 0; }
-#output li { margin: 0.3em 0; }
+#output ul, #output ol { padding-left: 1.5em; margin: 0.6em 0; }
+#output li { margin: 0.2em 0; }
+/* Nested lists shouldn't add the full block margin — keep the rhythm even */
+#output li > ul, #output li > ol { margin: 0.2em 0; }
 #output table { border-collapse: collapse; width: 100%; margin: 1em 0; }
 #output th, #output td { border: 1px solid #333; padding: 8px 12px; }
 #output th { background: #2d2d2d; color: #e2e2e2; }

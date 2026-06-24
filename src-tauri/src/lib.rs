@@ -25,6 +25,16 @@ fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+/// Write content back to a Markdown file (Update). Guards the extension so the
+/// app never writes to unexpected file types.
+#[tauri::command]
+fn save_file(path: String, content: String) -> Result<(), String> {
+    if !is_supported(&path) {
+        return Err("Unsupported file type".to_string());
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
 /// Last-modified time of a file in milliseconds, used by the frontend to poll
 /// for external edits and auto-reload.
 #[tauri::command]
@@ -107,6 +117,7 @@ pub fn run() {
         .manage(PendingFile::default())
         .invoke_handler(tauri::generate_handler![
             read_file,
+            save_file,
             file_mtime,
             get_recent_files,
             add_recent_file,
@@ -178,5 +189,17 @@ mod tests {
     fn recent_is_capped_at_max() {
         let list = compute_recent(v(&["a", "b", "c"]), "z".into(), 2);
         assert_eq!(list, v(&["z", "a"]));
+    }
+
+    #[test]
+    fn save_file_writes_supported_and_rejects_others() {
+        let path = std::env::temp_dir().join("mdcrud_save_test.md");
+        let path_str = path.to_str().unwrap().to_string();
+
+        save_file(path_str.clone(), "# hello".to_string()).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# hello");
+        let _ = std::fs::remove_file(&path);
+
+        assert!(save_file("/tmp/x.png".to_string(), "data".to_string()).is_err());
     }
 }
