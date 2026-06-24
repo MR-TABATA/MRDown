@@ -6,6 +6,7 @@ A minimal, fast Markdown viewer built with Tauri + TypeScript.
 
 - Open and render Markdown files (`.md`, `.markdown`, `.txt`)
 - Edit with a split editor + live preview (`⌘E` to toggle), save with `⌘S`; drag the divider to resize the panes
+- Keep multiple documents open in a sidebar (BBEdit-style): click to switch, close with the circled × (`⌘W`), toggle the sidebar with `⌘1`; the open set is restored on next launch
 - Open files by double-clicking or "Open With" (registered as a handler for those extensions), the button, `⌘O` / `Ctrl+O`, or by dragging a file onto the window
 - Auto-reloads when the open file changes on disk (scroll position preserved)
 - Recent files list on the start screen for quick reopening

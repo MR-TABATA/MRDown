@@ -8,6 +8,7 @@ import DOMPurify from 'dompurify';
 import { SUPPORTED, isSupported, basename, resolveImagePath } from './paths';
 import { slugify } from './markdown';
 
+const sidebarBtn = document.getElementById('sidebar-btn')!;
 const openBtn = document.getElementById('open-btn')!;
 const reloadBtn = document.getElementById('reload-btn') as HTMLButtonElement;
 const editBtn = document.getElementById('edit-btn') as HTMLButtonElement;
@@ -19,14 +20,24 @@ const emptyState = document.getElementById('empty-state')!;
 const recentBox = document.getElementById('recent')!;
 const filepath = document.getElementById('filepath')!;
 const divider = document.getElementById('divider')!;
+const docList = document.getElementById('doc-list')!;
 const contentArea = document.querySelector('.content-area') as HTMLElement;
 
-let currentFilePath: string | null = null;
-let currentMtime = 0;
-let savedSource = '';
-let isEditing = false;
+// A document open in the session. `workingText` is the editor buffer, which
+// may differ from what's on disk (`savedSource`) until saved.
+interface Doc {
+  path: string;
+  savedSource: string;
+  workingText: string;
+  mtime: number;
+}
 
-const isDirty = () => editor.value !== savedSource;
+let docs: Doc[] = [];
+let active: Doc | null = null;
+let isEditing = false;
+let lastActiveDirty = false;
+
+const isDirty = (d: Doc) => d.workingText !== d.savedSource;
 
 // Give headings ids so in-document anchor links (and a future TOC) work.
 function addHeadingIds() {
@@ -110,19 +121,42 @@ async function renderSource(source: string, filePath: string) {
   await renderMermaid();
 }
 
-// Reflect the open file + dirty state in the toolbar.
-function updateStatus() {
-  saveBtn.disabled = !isDirty();
-  saveBtn.classList.toggle('dirty', isDirty());
+// --- Session UI state ---
+
+function showDocUI() {
+  emptyState.style.display = 'none';
+  output.style.display = 'block';
+  reloadBtn.disabled = false;
+  editBtn.disabled = false;
+}
+
+function showEmpty() {
+  setEditing(false);
+  output.style.display = 'none';
+  output.innerHTML = '';
+  editor.value = '';
+  emptyState.style.display = '';
+  reloadBtn.disabled = true;
+  editBtn.disabled = true;
+  saveBtn.disabled = true;
   filepath.textContent = '';
-  if (!currentFilePath) return;
-  if (isDirty()) {
+  invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
+}
+
+// Reflect the active document + dirty state in the toolbar.
+function updateStatus() {
+  const dirty = active ? isDirty(active) : false;
+  saveBtn.disabled = !dirty;
+  saveBtn.classList.toggle('dirty', dirty);
+  filepath.textContent = '';
+  if (!active) return;
+  if (dirty) {
     const dot = document.createElement('span');
     dot.className = 'dirty-dot';
     dot.textContent = '●';
     filepath.appendChild(dot);
   }
-  filepath.append(basename(currentFilePath));
+  filepath.append(basename(active.path));
 }
 
 function setEditing(on: boolean) {
@@ -132,47 +166,147 @@ function setEditing(on: boolean) {
   if (on) editor.focus();
 }
 
-async function openFile(filePath: string, opts: { preserveScroll?: boolean } = {}) {
+// --- Sidebar (open documents) ---
+
+function renderSidebar() {
+  docList.innerHTML = '';
+  for (const doc of docs) {
+    const li = document.createElement('li');
+    if (doc === active) li.classList.add('active');
+    if (isDirty(doc)) li.classList.add('dirty');
+    li.title = doc.path;
+
+    const name = document.createElement('span');
+    name.className = 'doc-name';
+    name.textContent = basename(doc.path);
+
+    const close = document.createElement('span');
+    close.className = 'doc-close';
+    close.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
+    close.title = '閉じる';
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeDoc(doc);
+    });
+
+    li.append(name);
+    if (isDirty(doc)) {
+      const dot = document.createElement('span');
+      dot.className = 'doc-dirty';
+      dot.textContent = '●';
+      li.append(dot);
+    }
+    li.append(close);
+    li.addEventListener('click', () => setActive(doc));
+    docList.appendChild(li);
+  }
+}
+
+const SESSION_KEY = 'mdcrud.session';
+function saveSession() {
+  const data = { paths: docs.map((d) => d.path), active: active?.path ?? null };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+}
+
+async function setActive(doc: Doc) {
+  if (active === doc) {
+    if (isEditing) editor.focus();
+    return;
+  }
+  active = doc;
+  lastActiveDirty = isDirty(doc);
+  editor.value = doc.workingText;
+  await renderSource(doc.workingText, doc.path);
+  showDocUI();
+  updateStatus();
+  renderSidebar();
+  saveSession();
+  contentArea.scrollTop = 0;
+  if (isEditing) editor.focus();
+}
+
+async function openFile(path: string) {
+  const existing = docs.find((d) => d.path === path);
+  if (existing) {
+    await setActive(existing);
+    return;
+  }
   let content: string;
   try {
-    content = await invoke<string>('read_file', { path: filePath });
+    content = await invoke<string>('read_file', { path });
   } catch (e) {
     filepath.textContent = `開けませんでした: ${e}`;
     return;
   }
-  const scrollTop = contentArea.scrollTop;
-  currentFilePath = filePath;
-  savedSource = content;
+  const mtime = await invoke<number>('file_mtime', { path }).catch(() => 0);
+  const doc: Doc = { path, savedSource: content, workingText: content, mtime };
+  docs.push(doc);
+  active = doc;
+  lastActiveDirty = false;
   editor.value = content;
-  setEditing(false);
-  await renderSource(content, filePath);
-  output.style.display = 'block';
-  emptyState.style.display = 'none';
-  reloadBtn.disabled = false;
-  editBtn.disabled = false;
-  currentMtime = await invoke<number>('file_mtime', { path: filePath }).catch(() => 0);
+  await renderSource(content, path);
+  showDocUI();
   updateStatus();
-  contentArea.scrollTop = opts.preserveScroll ? scrollTop : 0;
-  invoke<string[]>('add_recent_file', { path: filePath }).then(renderRecent).catch(() => {});
+  renderSidebar();
+  saveSession();
+  contentArea.scrollTop = 0;
+  invoke<string[]>('add_recent_file', { path }).then(renderRecent).catch(() => {});
+}
+
+async function closeDoc(doc: Doc) {
+  if (isDirty(doc) && !confirm(`「${basename(doc.path)}」は未保存です。閉じますか？`)) {
+    return;
+  }
+  const idx = docs.indexOf(doc);
+  if (idx === -1) return;
+  docs.splice(idx, 1);
+  if (active === doc) {
+    const next = docs[idx] ?? docs[idx - 1] ?? null;
+    active = null;
+    if (next) await setActive(next);
+    else showEmpty();
+  }
+  renderSidebar();
+  saveSession();
 }
 
 async function save() {
-  if (!currentFilePath || !isDirty()) return;
+  if (!active || !isDirty(active)) return;
   try {
-    await invoke('save_file', { path: currentFilePath, content: editor.value });
+    await invoke('save_file', { path: active.path, content: active.workingText });
   } catch (e) {
     filepath.textContent = `保存できませんでした: ${e}`;
     return;
   }
-  savedSource = editor.value;
-  currentMtime = await invoke<number>('file_mtime', { path: currentFilePath }).catch(() => 0);
+  active.savedSource = active.workingText;
+  active.mtime = await invoke<number>('file_mtime', { path: active.path }).catch(() => 0);
+  lastActiveDirty = false;
   updateStatus();
+  renderSidebar();
+}
+
+// Re-read the active document from disk into the editor and preview.
+async function refreshActiveFromDisk(preserveScroll: boolean) {
+  if (!active) return;
+  const content = await invoke<string>('read_file', { path: active.path }).catch(() => null);
+  if (content == null) return;
+  const scrollTop = contentArea.scrollTop;
+  active.savedSource = content;
+  active.workingText = content;
+  editor.value = content;
+  active.mtime = await invoke<number>('file_mtime', { path: active.path }).catch(() => 0);
+  lastActiveDirty = false;
+  await renderSource(content, active.path);
+  updateStatus();
+  renderSidebar();
+  if (preserveScroll) contentArea.scrollTop = scrollTop;
 }
 
 // Re-read from disk, but never silently discard unsaved edits.
 async function reload() {
-  if (!currentFilePath || isDirty()) return;
-  await openFile(currentFilePath, { preserveScroll: true });
+  if (!active || isDirty(active)) return;
+  await refreshActiveFromDisk(true);
 }
 
 // Recent files are shown in the empty state for quick reopening.
@@ -210,17 +344,32 @@ openBtn.addEventListener('click', async () => {
 reloadBtn.addEventListener('click', reload);
 saveBtn.addEventListener('click', save);
 editBtn.addEventListener('click', () => {
-  if (currentFilePath) setEditing(!isEditing);
+  if (active) setEditing(!isEditing);
 });
 
 // Live preview while typing, debounced so large documents stay responsive.
 let previewTimer: number | undefined;
 editor.addEventListener('input', () => {
+  if (!active) return;
+  active.workingText = editor.value;
   updateStatus();
+  if (isDirty(active) !== lastActiveDirty) {
+    lastActiveDirty = isDirty(active);
+    renderSidebar();
+  }
   clearTimeout(previewTimer);
   previewTimer = window.setTimeout(() => {
-    if (currentFilePath) renderSource(editor.value, currentFilePath);
+    if (active) renderSource(active.workingText, active.path);
   }, 250);
+});
+
+// --- Sidebar visibility (default shown, persisted when hidden) ---
+const SIDEBAR_KEY = 'mdcrud.sidebar';
+document.body.classList.toggle('sidebar-hidden', localStorage.getItem(SIDEBAR_KEY) === 'hidden');
+sidebarBtn.addEventListener('click', () => {
+  const hidden = !document.body.classList.contains('sidebar-hidden');
+  document.body.classList.toggle('sidebar-hidden', hidden);
+  localStorage.setItem(SIDEBAR_KEY, hidden ? 'hidden' : 'shown');
 });
 
 document.addEventListener('keydown', async (e) => {
@@ -232,12 +381,18 @@ document.addEventListener('keydown', async (e) => {
   } else if (e.key === 's') {
     e.preventDefault();
     await save();
-  } else if (e.key === 'e' && currentFilePath) {
+  } else if (e.key === 'e' && active) {
     e.preventDefault();
     setEditing(!isEditing);
   } else if (e.key === 'r') {
     e.preventDefault();
     await reload();
+  } else if (e.key === '1') {
+    e.preventDefault();
+    sidebarBtn.click();
+  } else if (e.key === 'w' && active) {
+    e.preventDefault();
+    closeDoc(active);
   }
 });
 
@@ -289,34 +444,66 @@ getCurrentWebview().onDragDropEvent((event) => {
     contentArea.classList.add('drag-over');
   } else if (p.type === 'drop') {
     contentArea.classList.remove('drag-over');
-    const file = p.paths.find(isSupported);
-    if (file) openFile(file);
+    for (const file of p.paths.filter(isSupported)) openFile(file);
   } else {
     contentArea.classList.remove('drag-over');
   }
 });
 
-// Auto-reload: re-render when the open file changes on disk. Paused while
+// Auto-reload: re-render when the active file changes on disk. Paused while
 // editing or with unsaved changes so it never clobbers the user's work.
 setInterval(async () => {
-  if (!currentFilePath || isEditing || isDirty()) return;
+  if (!active || isEditing || isDirty(active)) return;
   try {
-    const m = await invoke<number>('file_mtime', { path: currentFilePath });
-    if (m > currentMtime) await openFile(currentFilePath, { preserveScroll: true });
+    const m = await invoke<number>('file_mtime', { path: active.path });
+    if (m > active.mtime) await refreshActiveFromDisk(true);
   } catch {
     // File may have been moved/removed; leave the last render in place.
   }
 }, 1500);
 
-// Open files passed by the OS via double-click / "Open With".
-// Runtime opens (app already running) arrive as an event...
+// Restore the previous session, then handle a file the app was launched with.
+async function restoreSession() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return;
+  let data: { paths?: string[]; active?: string | null };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  for (const p of data.paths ?? []) {
+    try {
+      const content = await invoke<string>('read_file', { path: p });
+      const mtime = await invoke<number>('file_mtime', { path: p }).catch(() => 0);
+      docs.push({ path: p, savedSource: content, workingText: content, mtime });
+    } catch {
+      // Skip files that no longer exist.
+    }
+  }
+  const target = docs.find((d) => d.path === data.active) ?? docs[0] ?? null;
+  if (target) {
+    active = target;
+    lastActiveDirty = false;
+    editor.value = target.workingText;
+    await renderSource(target.workingText, target.path);
+    showDocUI();
+    updateStatus();
+  }
+  renderSidebar();
+}
+
+// Runtime opens (app already running) arrive as an event.
 listen<string>('open-file', (e) => {
   if (e.payload) openFile(e.payload);
 });
 
-// ...while a file the app was launched with is fetched once on startup.
-invoke<string | null>('get_pending_file').then((path) => {
-  if (path) openFile(path);
+// Restore the previous session first, then open any file the app was launched
+// with (added on top of / focused within the restored set).
+restoreSession().then(() => {
+  invoke<string | null>('get_pending_file').then((path) => {
+    if (path) openFile(path);
+  });
 });
 
 // Populate the recent-files list shown in the empty state.
