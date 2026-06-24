@@ -56,13 +56,19 @@ fn get_recent_files(app: tauri::AppHandle) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Move `path` to the front of the recent list, deduped and capped at `max`.
+/// Pure (no I/O) so it can be unit-tested.
+fn compute_recent(mut list: Vec<String>, path: String, max: usize) -> Vec<String> {
+    list.retain(|p| p != &path);
+    list.insert(0, path);
+    list.truncate(max);
+    list
+}
+
 /// Record an opened file at the front of the recent list (deduped, capped).
 #[tauri::command]
 fn add_recent_file(app: tauri::AppHandle, path: String) -> Vec<String> {
-    let mut list = get_recent_files(app.clone());
-    list.retain(|p| p != &path);
-    list.insert(0, path);
-    list.truncate(MAX_RECENT);
+    let list = compute_recent(get_recent_files(app.clone()), path, MAX_RECENT);
     if let Some(store) = recent_store(&app) {
         if let Some(dir) = store.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -137,4 +143,40 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn supported_extensions_are_case_insensitive() {
+        assert!(is_supported("a.md"));
+        assert!(is_supported("A.MARKDOWN"));
+        assert!(is_supported("notes.txt"));
+        assert!(!is_supported("image.png"));
+        assert!(!is_supported("Makefile"));
+    }
+
+    fn v(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn recent_moves_existing_entry_to_front_without_duplicating() {
+        let list = compute_recent(v(&["a", "b", "c"]), "c".into(), 10);
+        assert_eq!(list, v(&["c", "a", "b"]));
+    }
+
+    #[test]
+    fn recent_prepends_new_entry() {
+        let list = compute_recent(v(&["a", "b"]), "z".into(), 10);
+        assert_eq!(list, v(&["z", "a", "b"]));
+    }
+
+    #[test]
+    fn recent_is_capped_at_max() {
+        let list = compute_recent(v(&["a", "b", "c"]), "z".into(), 2);
+        assert_eq!(list, v(&["z", "a"]));
+    }
 }
