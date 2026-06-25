@@ -1,11 +1,13 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { homeDir } from '@tauri-apps/api/path';
 import { open, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { SUPPORTED, isSupported, basename, resolveImagePath } from './paths';
+import { SUPPORTED, isSupported, basename, tildify, resolveImagePath } from './paths';
 import { slugify } from './markdown';
 
 const sidebarBtn = document.getElementById('sidebar-btn')!;
@@ -21,6 +23,16 @@ const emptyState = document.getElementById('empty-state')!;
 const recentBox = document.getElementById('recent')!;
 const filepath = document.getElementById('filepath')!;
 const divider = document.getElementById('divider')!;
+const appWindow = getCurrentWindow();
+
+// Home directory, used to abbreviate paths to ~ (resolved once on startup).
+let home = '';
+homeDir()
+  .then((h) => {
+    home = h.replace(/[\\/]$/, '');
+    updateStatus();
+  })
+  .catch(() => {});
 const docList = document.getElementById('doc-list')!;
 const contentArea = document.querySelector('.content-area') as HTMLElement;
 
@@ -144,6 +156,7 @@ function showEmpty() {
   editBtn.disabled = true;
   saveBtn.disabled = true;
   filepath.textContent = '';
+  appWindow.setTitle('mdcrud').catch(() => {});
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
 }
 
@@ -153,6 +166,8 @@ function updateStatus() {
   saveBtn.disabled = !dirty;
   saveBtn.classList.toggle('dirty', dirty);
   filepath.textContent = '';
+  // Window title shows the file name; the toolbar shows the full (~) path.
+  appWindow.setTitle(active ? active.name : 'mdcrud').catch(() => {});
   if (!active) return;
   if (dirty) {
     const dot = document.createElement('span');
@@ -160,7 +175,7 @@ function updateStatus() {
     dot.textContent = '●';
     filepath.appendChild(dot);
   }
-  filepath.append(active.name);
+  filepath.append(active.path ? tildify(active.path, home) : active.name);
 }
 
 function setEditing(on: boolean) {

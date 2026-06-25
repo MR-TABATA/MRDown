@@ -12,6 +12,20 @@ export function basename(path: string): string {
   return path.split(/[\\/]/).pop() || path;
 }
 
+/** Directory portion of a path (everything before the final separator). */
+export function dirname(path: string): string {
+  const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return i <= 0 ? '' : path.slice(0, i);
+}
+
+/** Abbreviate the home-directory prefix to `~` (home should have no trailing slash). */
+export function tildify(path: string, home: string): string {
+  if (home && (path === home || path.startsWith(`${home}/`))) {
+    return `~${path.slice(home.length)}`;
+  }
+  return path;
+}
+
 /**
  * Resolve a Markdown image `src` against the document's file path.
  *

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSupported, basename, resolveImagePath } from './paths';
+import { isSupported, basename, dirname, tildify, resolveImagePath } from './paths';
 
 describe('isSupported', () => {
   it('accepts markdown extensions case-insensitively', () => {
@@ -19,6 +19,29 @@ describe('basename', () => {
     expect(basename('/home/u/a.md')).toBe('a.md');
     expect(basename('C:\\docs\\a.md')).toBe('a.md');
     expect(basename('a.md')).toBe('a.md');
+  });
+});
+
+describe('dirname', () => {
+  it('returns the directory portion', () => {
+    expect(dirname('/home/u/a.md')).toBe('/home/u');
+    expect(dirname('C:\\docs\\a.md')).toBe('C:\\docs');
+  });
+  it('returns empty when there is no directory', () => {
+    expect(dirname('a.md')).toBe('');
+    expect(dirname('/a.md')).toBe('');
+  });
+});
+
+describe('tildify', () => {
+  const home = '/Users/h';
+  it('replaces the home prefix with ~', () => {
+    expect(tildify('/Users/h/notes/a.md', home)).toBe('~/notes/a.md');
+    expect(tildify('/Users/h', home)).toBe('~');
+  });
+  it('leaves paths outside home untouched', () => {
+    expect(tildify('/tmp/a.md', home)).toBe('/tmp/a.md');
+    expect(tildify('/Users/hannah/a.md', home)).toBe('/Users/hannah/a.md');
   });
 });
 
