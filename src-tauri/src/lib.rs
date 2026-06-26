@@ -142,6 +142,9 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
     let about_meta = AboutMetadata {
         name: Some("mdcrud".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
+        copyright: Some("© 2026 TABATA Hitoshi".into()),
+        // Shown in the macOS About panel's credits area (localized).
+        credits: Some(pick("軽量・高速な Markdown ビューア", "A minimal, fast Markdown viewer").into()),
         ..Default::default()
     };
     let app_menu = Submenu::with_items(
