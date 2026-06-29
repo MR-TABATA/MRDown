@@ -173,6 +173,7 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
             &MenuItem::with_id(app, "open", pick("開く…", "Open…"), true, Some("CmdOrCtrl+O"))?,
             &sep()?,
             &MenuItem::with_id(app, "save", pick("保存", "Save"), true, Some("CmdOrCtrl+S"))?,
+            &MenuItem::with_id(app, "save_as", pick("別名で保存…", "Save As…"), true, Some("CmdOrCtrl+Shift+S"))?,
             &MenuItem::with_id(app, "reload", pick("再読み込み", "Reload"), true, Some("CmdOrCtrl+R"))?,
             &sep()?,
             // No accelerator: ⌘⌫ stays the editor's "delete to line start".

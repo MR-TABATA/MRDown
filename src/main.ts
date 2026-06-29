@@ -382,25 +382,10 @@ function newDoc() {
   contentArea.scrollTop = 0;
 }
 
-async function save() {
+// Write the active document to `path`, switch it to that file, and refresh
+// all the UI/session state that depends on the saved location.
+async function persistTo(path: string) {
   if (!active) return;
-  // Titled doc with no changes: nothing to do. Untitled always offers a save.
-  if (active.path && !isDirty(active)) return;
-
-  let path = active.path;
-  if (!path) {
-    // Suggest a file name from the document's first heading, falling back to
-    // the untitled buffer name.
-    const title = firstHeadingTitle(active.workingText);
-    const base = title ? sanitizeFilename(title) : active.name;
-    const chosen = await saveDialog({
-      defaultPath: `${base}.md`,
-      filters: [{ name: 'Markdown', extensions: SUPPORTED }]
-    });
-    if (!chosen) return; // cancelled
-    path = chosen;
-  }
-
   try {
     await invoke('save_file', { path, content: active.workingText });
   } catch (e) {
@@ -417,6 +402,43 @@ async function save() {
   renderSidebar();
   saveSession();
   invoke<string[]>('add_recent_file', { path }).then(renderRecent).catch(() => {});
+}
+
+// Default name offered in the save dialog: an untitled doc's first heading,
+// otherwise the current file/buffer name.
+function suggestedSaveName(): string {
+  if (!active) return 'untitled.md';
+  if (active.path) return basename(active.path);
+  const title = firstHeadingTitle(active.workingText);
+  return `${title ? sanitizeFilename(title) : active.name}.md`;
+}
+
+async function save() {
+  if (!active) return;
+  // Titled doc with no changes: nothing to do. Untitled always offers a save.
+  if (active.path && !isDirty(active)) return;
+
+  let path = active.path;
+  if (!path) {
+    const chosen = await saveDialog({
+      defaultPath: suggestedSaveName(),
+      filters: [{ name: 'Markdown', extensions: SUPPORTED }]
+    });
+    if (!chosen) return; // cancelled
+    path = chosen;
+  }
+  await persistTo(path);
+}
+
+// Save As: always prompt for a new location and switch the document to it.
+async function saveAs() {
+  if (!active) return;
+  const chosen = await saveDialog({
+    defaultPath: suggestedSaveName(),
+    filters: [{ name: 'Markdown', extensions: SUPPORTED }]
+  });
+  if (!chosen) return; // cancelled
+  await persistTo(chosen);
 }
 
 // Re-read the active document from disk into the editor and preview.
@@ -892,6 +914,7 @@ listen<string>('menu', (e) => {
     case 'new': newDoc(); break;
     case 'open': openBtn.click(); break;
     case 'save': save(); break;
+    case 'save_as': saveAs(); break;
     case 'reload': reload(); break;
     case 'delete': deleteActive(); break;
     case 'close': if (active) closeDoc(active); break;
