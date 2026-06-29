@@ -1,0 +1,43 @@
+name: Draft check
+
+# The Release workflow leaves each release as a draft for manual review, so it's
+# easy to forget to publish one (that's how v0.7.1 stayed "Latest" for ages).
+# This nags on every push to main: if any draft release is left over, fail with
+# the list so the reminder lands in the usual GitHub failure notification.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  draft-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Warn about unpublished draft releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          drafts=$(gh release list --limit 100 --json tagName,isDraft \
+            --jq '.[] | select(.isDraft) | .tagName')
+          if [ -z "$drafts" ]; then
+            echo "No draft releases left over. ✅"
+            exit 0
+          fi
+          {
+            echo "## ⚠️ Unpublished draft releases"
+            echo
+            echo "These releases are still drafts. Publish them (policy: keep every version published):"
+            echo
+            echo '```'
+            echo "$drafts" | sed 's/^/  /'
+            echo '```'
+            echo
+            echo "Publish with: \`gh release edit <tag> --draft=false\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Draft releases left unpublished:"
+          echo "$drafts"
+          exit 1
