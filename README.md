@@ -1,4 +1,4 @@
-# MRdown
+# MRDown
 
 A minimal, fast Markdown viewer built with Tauri + TypeScript.
 
@@ -24,16 +24,16 @@ A minimal, fast Markdown viewer built with Tauri + TypeScript.
 
 ## Install
 
-Download a build for your platform from the [Releases](https://github.com/MR-TABATA/MRdown/releases) page.
+Download a build for your platform from the [Releases](https://github.com/MR-TABATA/MRDown/releases) page.
 
 The binaries are ad-hoc signed but **not notarized with an Apple Developer ID yet**, so your OS may warn you on first launch. To run anyway:
 
 - **macOS** — first try right-clicking (or Control-clicking) the app and choosing **Open**, then confirm.
 
-  If instead you see **""MRdown.app" is damaged and can't be opened. You should move it to the Trash"**, the app isn't actually damaged — macOS is blocking the downloaded, un-notarized app. Click **Cancel** (not "Move to Trash"), then remove the download quarantine flag in Terminal and open it normally:
+  If instead you see **""MRDown.app" is damaged and can't be opened. You should move it to the Trash"**, the app isn't actually damaged — macOS is blocking the downloaded, un-notarized app. Click **Cancel** (not "Move to Trash"), then remove the download quarantine flag in Terminal and open it normally:
 
   ```bash
-  xattr -dr com.apple.quarantine /Applications/MRdown.app
+  xattr -dr com.apple.quarantine /Applications/MRDown.app
   ```
 
 - **Windows** — on the SmartScreen prompt, click **More info → Run anyway**.

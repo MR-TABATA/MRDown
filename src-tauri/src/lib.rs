@@ -140,7 +140,7 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
     let sep = || PredefinedMenuItem::separator(app);
 
     let about_meta = AboutMetadata {
-        name: Some("MRdown".into()),
+        name: Some("MRDown".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
         copyright: Some("© 2026 TABATA Hitoshi".into()),
         // Shown in the macOS About panel's credits area (localized).
@@ -149,18 +149,18 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
     };
     let app_menu = Submenu::with_items(
         app,
-        "MRdown",
+        "MRDown",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some(pick("MRdown について", "About MRdown")), Some(about_meta))?,
+            &PredefinedMenuItem::about(app, Some(pick("MRDown について", "About MRDown")), Some(about_meta))?,
             &sep()?,
             &MenuItem::with_id(app, "settings", pick("設定…", "Settings…"), true, Some("CmdOrCtrl+,"))?,
             &sep()?,
-            &PredefinedMenuItem::hide(app, Some(pick("MRdown を隠す", "Hide MRdown")))?,
+            &PredefinedMenuItem::hide(app, Some(pick("MRDown を隠す", "Hide MRDown")))?,
             &PredefinedMenuItem::hide_others(app, Some(pick("ほかを隠す", "Hide Others")))?,
             &PredefinedMenuItem::show_all(app, Some(pick("すべてを表示", "Show All")))?,
             &sep()?,
-            &PredefinedMenuItem::quit(app, Some(pick("MRdown を終了", "Quit MRdown")))?,
+            &PredefinedMenuItem::quit(app, Some(pick("MRDown を終了", "Quit MRDown")))?,
         ],
     )?;
 
@@ -254,7 +254,7 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 let window = app.get_webview_window("main").unwrap();
-                window.set_title("MRdown").unwrap();
+                window.set_title("MRDown").unwrap();
 
                 // Initial menu; the frontend re-applies it in its resolved
                 // language (OS locale or the saved override) right after load.

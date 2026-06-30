@@ -197,7 +197,7 @@ function showEmpty() {
   saveBtn.disabled = true;
   deleteBtn.disabled = true;
   filepath.textContent = '';
-  appWindow.setTitle('MRdown').catch(() => {});
+  appWindow.setTitle('MRDown').catch(() => {});
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
 }
 
@@ -210,7 +210,7 @@ function updateStatus() {
   deleteBtn.disabled = !(active && active.path);
   filepath.textContent = '';
   // Window title shows the file name; the toolbar shows the full (~) path.
-  appWindow.setTitle(active ? active.name : 'MRdown').catch(() => {});
+  appWindow.setTitle(active ? active.name : 'MRDown').catch(() => {});
   if (!active) return;
   if (dirty) {
     const dot = document.createElement('span');
