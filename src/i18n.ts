@@ -105,7 +105,7 @@ const DICT = {
 
 export type Key = keyof (typeof DICT)['ja'];
 
-const LANG_KEY = 'mdcrud.lang';
+const LANG_KEY = 'mrdown.lang';
 
 /** OS-derived language when there's no explicit override. */
 function systemLang(): Lang {

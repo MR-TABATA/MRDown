@@ -197,7 +197,7 @@ function showEmpty() {
   saveBtn.disabled = true;
   deleteBtn.disabled = true;
   filepath.textContent = '';
-  appWindow.setTitle('mdcrud').catch(() => {});
+  appWindow.setTitle('MRdown').catch(() => {});
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
 }
 
@@ -210,7 +210,7 @@ function updateStatus() {
   deleteBtn.disabled = !(active && active.path);
   filepath.textContent = '';
   // Window title shows the file name; the toolbar shows the full (~) path.
-  appWindow.setTitle(active ? active.name : 'mdcrud').catch(() => {});
+  appWindow.setTitle(active ? active.name : 'MRdown').catch(() => {});
   if (!active) return;
   if (dirty) {
     const dot = document.createElement('span');
@@ -265,7 +265,7 @@ function renderSidebar() {
   }
 }
 
-const SESSION_KEY = 'mdcrud.session';
+const SESSION_KEY = 'mrdown.session';
 function saveSession() {
   // Only on-disk documents can be restored; untitled buffers are not persisted.
   const paths = docs.map((d) => d.path).filter((p): p is string => p !== null);
@@ -612,7 +612,7 @@ const groupLabel = (g: FmtAction['group']) => t(g === 'inline' ? 'groupInline' :
 
 // Which buttons the user has chosen to show, persisted across sessions and
 // always kept in registry order.
-const TOOLBAR_KEY = 'mdcrud.toolbar';
+const TOOLBAR_KEY = 'mrdown.toolbar';
 function enabledIds(): string[] {
   const raw = localStorage.getItem(TOOLBAR_KEY);
   if (raw) {
@@ -774,7 +774,7 @@ settingsOverlay.addEventListener('click', (e) => {
 applyI18n();
 
 // --- Sidebar visibility (default shown, persisted when hidden) ---
-const SIDEBAR_KEY = 'mdcrud.sidebar';
+const SIDEBAR_KEY = 'mrdown.sidebar';
 document.body.classList.toggle('sidebar-hidden', localStorage.getItem(SIDEBAR_KEY) === 'hidden');
 sidebarBtn.addEventListener('click', () => {
   const hidden = !document.body.classList.contains('sidebar-hidden');
@@ -823,7 +823,7 @@ output.addEventListener('click', async (e) => {
 
 // Draggable split: drag the divider to resize the editor/preview panes,
 // persisting the ratio across sessions.
-const SPLIT_KEY = 'mdcrud.split';
+const SPLIT_KEY = 'mrdown.split';
 const savedSplit = localStorage.getItem(SPLIT_KEY);
 if (savedSplit) contentArea.style.setProperty('--split', savedSplit);
 

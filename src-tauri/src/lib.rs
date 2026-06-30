@@ -140,7 +140,7 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
     let sep = || PredefinedMenuItem::separator(app);
 
     let about_meta = AboutMetadata {
-        name: Some("mdcrud".into()),
+        name: Some("MRdown".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
         copyright: Some("© 2026 TABATA Hitoshi".into()),
         // Shown in the macOS About panel's credits area (localized).
@@ -149,18 +149,18 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
     };
     let app_menu = Submenu::with_items(
         app,
-        "mdcrud",
+        "MRdown",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some(pick("mdcrud について", "About mdcrud")), Some(about_meta))?,
+            &PredefinedMenuItem::about(app, Some(pick("MRdown について", "About MRdown")), Some(about_meta))?,
             &sep()?,
             &MenuItem::with_id(app, "settings", pick("設定…", "Settings…"), true, Some("CmdOrCtrl+,"))?,
             &sep()?,
-            &PredefinedMenuItem::hide(app, Some(pick("mdcrud を隠す", "Hide mdcrud")))?,
+            &PredefinedMenuItem::hide(app, Some(pick("MRdown を隠す", "Hide MRdown")))?,
             &PredefinedMenuItem::hide_others(app, Some(pick("ほかを隠す", "Hide Others")))?,
             &PredefinedMenuItem::show_all(app, Some(pick("すべてを表示", "Show All")))?,
             &sep()?,
-            &PredefinedMenuItem::quit(app, Some(pick("mdcrud を終了", "Quit mdcrud")))?,
+            &PredefinedMenuItem::quit(app, Some(pick("MRdown を終了", "Quit MRdown")))?,
         ],
     )?;
 
@@ -254,7 +254,7 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 let window = app.get_webview_window("main").unwrap();
-                window.set_title("mdcrud").unwrap();
+                window.set_title("MRdown").unwrap();
 
                 // Initial menu; the frontend re-applies it in its resolved
                 // language (OS locale or the saved override) right after load.
@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn save_file_writes_supported_and_rejects_others() {
-        let path = std::env::temp_dir().join("mdcrud_save_test.md");
+        let path = std::env::temp_dir().join("mrdown_save_test.md");
         let path_str = path.to_str().unwrap().to_string();
 
         save_file(path_str.clone(), "# hello".to_string()).unwrap();
