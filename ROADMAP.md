@@ -36,6 +36,19 @@ turn MRDown from a single-file viewer into something you actually navigate.
 - [ ] Word / character count, reading time
 - [ ] Focus / Zen mode; font size & line-width settings; word-wrap toggle
 
+## Planned — text transforms (act on the selection)
+
+Small "in-place, manual, local" commands that transform the current selection
+(right-click menu / shortcuts), sitting next to the formatting toolbar. All free,
+all cheap in Tauri + TS. (Culled from the `MrEditor` idea backlog — the rest of
+that backlog is a separate product and does not belong here.)
+
+- [ ] **Case convert** — camelCase ⇄ snake_case ⇄ kebab-case ⇄ CONSTANT ⇄ Title
+- [ ] **Sort lines** — alphabetical / numeric / by line length (great for lists)
+- [ ] **Join / split lines** — merge selected lines into one (comma/space) and back
+- [ ] **Reflow / indent** — wrap to a width, dedent, normalize indentation
+- [ ] **Entity / URL decode** — turn `&amp;` / `%20` back into readable text
+
 ## Planned — output & preview
 
 - [ ] Export to HTML (standalone) and PDF / Print
@@ -49,6 +62,39 @@ turn MRDown from a single-file viewer into something you actually navigate.
 - [ ] Open multiple files at once from the Open dialog
 - [ ] Clear / prune dead entries from the recent-files list
 - [ ] Reuse closed "untitled" numbers instead of always incrementing
+- [ ] Export / import settings as a `.json` file (toolbar config, language) — easy
+      to share ("use my setup"), no cloud needed
+
+## Considering — philosophy calls (not committed)
+
+Ideas that fit "your data local" but stretch "small & fast" — decide before building.
+
+- [ ] **Local history** — on save, keep a quiet local timeline of versions with
+      diff + one-click restore. Same "automatic safety-net undo" idea that worked
+      well in cli2ui; a candidate flagship feature, but adds scope.
+- [ ] **Single-shot AI on a selection (BYOK)** — "summarize / explain this" with
+      the user's own API key. Lines up with the core use case (reading the `.md`
+      Claude Code generates), but steps beyond "small, fast, local" — needs a call.
+
+## Positioning — who we're actually up against
+
+Notes on the competitive landscape, so the differentiation stays sharp.
+
+- **Not a real competitor: Bear (and note apps like it).** Bear is a *note
+  manager* — it stores your writing in its own library (SQLite + iCloud sync),
+  Apple-only, subscription. MRDown opens *plain `.md` files that already exist on
+  disk*, anywhere, no library or lock-in. Different job. You don't drop someone
+  else's `.md` folder into Bear to read it.
+- **Direct competitors: local Markdown editors** — Typora, MacDown, Mark Text.
+  Same "open a `.md` on disk" job. Win on speed, no lock-in, and the "read a
+  whole set" features.
+- **The real incumbent for our core use case: VS Code's Markdown preview** —
+  that's what people use today to read what Claude Code emits. Beating it means
+  being lighter and more pleasant for *just reading*.
+- **Closest in philosophy: Obsidian** — also treats a local `.md` folder as the
+  unit (a vault). As MRDown grows folder + tree support it converges here, so
+  Obsidian is a closer reference than Bear. Stay differentiated by being *small,
+  fast, zero-config* — no plugins, no vault ceremony.
 
 ## Distribution / 1.0
 

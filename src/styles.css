@@ -269,7 +269,7 @@ body.sidebar-hidden #sidebar { display: none; }
   background: rgba(13, 110, 253, 0.06);
 }
 
-#output { max-width: 750px; margin: 0 auto; line-height: 1.55; display: none; }
+#output { max-width: var(--preview-width, none); margin: 0 auto; line-height: 1.55; display: none; }
 #output h1, #output h2, #output h3, #output h4 { color: #e2e2e2; margin: 1.5em 0 0.5em; }
 #output h1 { font-size: 2em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
 #output h2 { font-size: 1.5em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
@@ -384,6 +384,13 @@ body.sidebar-hidden #sidebar { display: none; }
 #lang-options input { accent-color: #0d6efd; width: 15px; height: 15px; flex-shrink: 0; }
 .opt-icon { display: inline-flex; width: 18px; color: #9a9a9a; }
 .opt-icon svg { width: 16px; height: 16px; }
+#width-option { padding: 4px 8px; }
+#width-option .width-value { font-size: 13px; color: #ccc; margin-bottom: 8px; }
+#width-option input[type="range"] {
+  width: 100%;
+  accent-color: #0d6efd;
+  cursor: pointer;
+}
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

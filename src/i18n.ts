@@ -27,6 +27,8 @@ const DICT = {
     // settings
     settingsTitle: '設定',
     toolbarSection: 'ツールバーに表示するボタン',
+    widthSection: 'プレビューの幅',
+    widthFull: '全幅',
     langSection: '言語',
     langSystem: 'システムに従う',
     groupInline: 'インライン',
@@ -74,6 +76,8 @@ const DICT = {
     recentTitle: 'Recent Files',
     settingsTitle: 'Settings',
     toolbarSection: 'Toolbar buttons',
+    widthSection: 'Preview width',
+    widthFull: 'Full',
     langSection: 'Language',
     langSystem: 'Use system language',
     groupInline: 'Inline',

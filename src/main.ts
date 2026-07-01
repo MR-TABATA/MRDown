@@ -36,6 +36,7 @@ const settingsOverlay = document.getElementById('settings-overlay') as HTMLEleme
 const settingsClose = document.getElementById('settings-close')!;
 const toolbarOptions = document.getElementById('toolbar-options')!;
 const langOptions = document.getElementById('lang-options')!;
+const widthOption = document.getElementById('width-option')!;
 const output = document.getElementById('output')!;
 const emptyState = document.getElementById('empty-state')!;
 const recentBox = document.getElementById('recent')!;
@@ -709,6 +710,54 @@ function buildToolbarOptions() {
   }
 }
 
+// Preview width: a slider from a readable column up to full width. The slider's
+// top maps to the actual content-area width (so the whole travel is meaningful
+// on any window size) and means "no limit"; anything below centres a fixed-width
+// column. Stored in localStorage as a pixel number or 'full'; defaults to full.
+const WIDTH_KEY = 'mrdown.previewWidth';
+const WIDTH_MIN = 480;
+const WIDTH_STEP = 20;
+type PreviewWidth = number | 'full';
+
+function storedWidth(): PreviewWidth {
+  const raw = localStorage.getItem(WIDTH_KEY);
+  if (raw === null || raw === 'full') return 'full';
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= WIDTH_MIN ? n : 'full';
+}
+
+function applyPreviewWidth(val: PreviewWidth) {
+  document.documentElement.style.setProperty('--preview-width', val === 'full' ? 'none' : `${val}px`);
+}
+
+function buildWidthOption() {
+  // Largest useful column: the content area minus its horizontal padding.
+  const maxW = Math.max(WIDTH_MIN + WIDTH_STEP, Math.round(contentArea.clientWidth) - 80);
+  const stored = storedWidth();
+  const current = stored === 'full' ? maxW : Math.min(stored, maxW);
+  const atFull = (v: number) => v >= maxW;
+  const label = (v: number) => (atFull(v) ? t('widthFull') : `${v}px`);
+
+  widthOption.innerHTML = '';
+  const value = document.createElement('div');
+  value.className = 'width-value';
+  value.textContent = label(current);
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = String(WIDTH_MIN);
+  slider.max = String(maxW);
+  slider.step = String(WIDTH_STEP);
+  slider.value = String(current);
+  slider.addEventListener('input', () => {
+    const v = Number(slider.value);
+    const next: PreviewWidth = atFull(v) ? 'full' : v;
+    value.textContent = label(v);
+    localStorage.setItem(WIDTH_KEY, String(next));
+    applyPreviewWidth(next);
+  });
+  widthOption.append(value, slider);
+}
+
 // Language picker: System (follow the OS) / 日本語 / English.
 function buildLangOptions() {
   const choices: Array<{ value: Lang | 'system'; label: string }> = [
@@ -759,6 +808,7 @@ function applyI18n() {
 function openSettings() {
   buildToolbarOptions();
   buildLangOptions();
+  buildWidthOption();
   settingsOverlay.hidden = false;
 }
 function closeSettings() {
@@ -772,6 +822,7 @@ settingsOverlay.addEventListener('click', (e) => {
 });
 
 applyI18n();
+applyPreviewWidth(storedWidth());
 
 // --- Sidebar visibility (default shown, persisted when hidden) ---
 const SIDEBAR_KEY = 'mrdown.sidebar';
