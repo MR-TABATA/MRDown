@@ -42,6 +42,12 @@ const emptyState = document.getElementById('empty-state')!;
 const recentBox = document.getElementById('recent')!;
 const filepath = document.getElementById('filepath')!;
 const divider = document.getElementById('divider')!;
+const historyBtn = document.getElementById('history-btn') as HTMLButtonElement;
+const historyOverlay = document.getElementById('history-overlay') as HTMLElement;
+const historyClose = document.getElementById('history-close')!;
+const historyList = document.getElementById('history-list')!;
+const historyPreview = document.getElementById('history-preview')!;
+const historyRestore = document.getElementById('history-restore') as HTMLButtonElement;
 const appWindow = getCurrentWindow();
 
 // Home directory, used to abbreviate paths to ~ (resolved once on startup).
@@ -197,6 +203,7 @@ function showEmpty() {
   editBtn.disabled = true;
   saveBtn.disabled = true;
   deleteBtn.disabled = true;
+  historyBtn.disabled = true;
   filepath.textContent = '';
   appWindow.setTitle('MRDown').catch(() => {});
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
@@ -207,8 +214,9 @@ function updateStatus() {
   const dirty = active ? isDirty(active) : false;
   saveBtn.disabled = !dirty;
   saveBtn.classList.toggle('dirty', dirty);
-  // Delete acts on the on-disk file, so it's only available once saved.
+  // Delete and History act on the on-disk file, so they're only available once saved.
   deleteBtn.disabled = !(active && active.path);
+  historyBtn.disabled = !(active && active.path);
   filepath.textContent = '';
   // Window title shows the file name; the toolbar shows the full (~) path.
   appWindow.setTitle(active ? active.name : 'MRDown').catch(() => {});
@@ -387,12 +395,22 @@ function newDoc() {
 // all the UI/session state that depends on the saved location.
 async function persistTo(path: string) {
   if (!active) return;
+  const saved = active.workingText;
   try {
-    await invoke('save_file', { path, content: active.workingText });
+    await invoke('save_file', { path, content: saved });
   } catch (e) {
     filepath.textContent = t('saveFailed', { e: String(e) });
     return;
   }
+
+  // Local History: record this saved version (out of band — a history failure
+  // must never break a successful save). The backend dedupes and prunes; refresh
+  // an open panel only once the snapshot is actually written.
+  invoke('snapshot_version', { path, content: saved })
+    .then(() => {
+      if (historyPanelOpen && active?.path === path) refreshHistory();
+    })
+    .catch(() => {});
 
   active.path = path;
   active.name = basename(path);
@@ -821,6 +839,117 @@ settingsOverlay.addEventListener('click', (e) => {
   if (e.target === settingsOverlay) closeSettings();
 });
 
+// --- Local History (saved versions, restore) ---
+
+interface Version {
+  id: number; // epoch ms, also the snapshot id
+  bytes: number;
+}
+
+let historyPanelOpen = false;
+let selectedVersion: number | null = null;
+
+// Human-friendly relative time ("3 minutes ago"), localized via the OS locale.
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms;
+  const rtf = new Intl.RelativeTimeFormat(getLang(), { numeric: 'auto' });
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ['day', 86400000],
+    ['hour', 3600000],
+    ['minute', 60000],
+  ];
+  for (const [unit, span] of units) {
+    if (diff >= span) return rtf.format(-Math.floor(diff / span), unit);
+  }
+  return rtf.format(0, 'second'); // "now"
+}
+
+async function refreshHistory() {
+  const path = active?.path;
+  if (!path) return;
+  const versions = await invoke<Version[]>('list_versions', { path }).catch(() => []);
+  historyList.innerHTML = '';
+  if (versions.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'history-empty';
+    li.textContent = t('historyEmpty');
+    historyList.appendChild(li);
+    historyPreview.textContent = '';
+    historyRestore.disabled = true;
+    selectedVersion = null;
+    return;
+  }
+  // Keep a valid selection across refreshes; default to the newest.
+  if (!versions.some((v) => v.id === selectedVersion)) selectedVersion = versions[0].id;
+  for (const v of versions) {
+    const li = document.createElement('li');
+    li.dataset.id = String(v.id);
+    li.classList.toggle('selected', v.id === selectedVersion);
+    li.title = new Date(v.id).toLocaleString(getLang());
+    const when = document.createElement('span');
+    when.className = 'history-when';
+    when.textContent = relativeTime(v.id);
+    li.append(when);
+    li.addEventListener('click', () => selectVersion(v.id));
+    historyList.appendChild(li);
+  }
+  await selectVersion(selectedVersion!);
+}
+
+async function selectVersion(id: number) {
+  const path = active?.path;
+  if (!path) return;
+  selectedVersion = id;
+  historyList.querySelectorAll('li').forEach((li) => {
+    li.classList.toggle('selected', (li as HTMLElement).dataset.id === String(id));
+  });
+  const content = await invoke<string>('read_version', { path, id }).catch(() => null);
+  if (content === null) {
+    historyPreview.textContent = t('historyReadFailed');
+    historyRestore.disabled = true;
+    return;
+  }
+  historyPreview.textContent = content;
+  // Restoring to the exact current buffer would be a no-op.
+  historyRestore.disabled = content === active?.workingText;
+}
+
+function openHistory() {
+  if (!active?.path) return;
+  historyPanelOpen = true;
+  historyOverlay.hidden = false;
+  refreshHistory();
+}
+function closeHistory() {
+  historyPanelOpen = false;
+  historyOverlay.hidden = true;
+}
+
+historyBtn.addEventListener('click', openHistory);
+historyClose.addEventListener('click', closeHistory);
+historyOverlay.addEventListener('click', (e) => {
+  if (e.target === historyOverlay) closeHistory();
+});
+historyRestore.addEventListener('click', async () => {
+  const path = active?.path;
+  if (!path || selectedVersion === null) return;
+  const content = await invoke<string>('read_version', { path, id: selectedVersion }).catch(
+    () => null,
+  );
+  if (content === null || !active) return;
+  // Non-destructive: load the old version into the working buffer and mark it
+  // dirty. Nothing is written until the user saves, so a restore is undoable by
+  // simply not saving (or with ⌘Z once we route through the editor).
+  active.workingText = content;
+  editor.value = content;
+  await renderSource(content, active.path ?? '');
+  updateStatus();
+  renderSidebar();
+  saveSession();
+  closeHistory();
+  if (!isEditing) setEditing(true);
+});
+
 applyI18n();
 applyPreviewWidth(storedWidth());
 
@@ -836,6 +965,10 @@ sidebarBtn.addEventListener('click', () => {
 // Most shortcuts (⌘N/O/S/R/W/E/1/,) are owned by the native menu accelerators
 // now; only editor-context keys that no menu item claims live here.
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !historyOverlay.hidden) {
+    closeHistory();
+    return;
+  }
   if (e.key === 'Escape' && !settingsOverlay.hidden) {
     closeSettings();
     return;

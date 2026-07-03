@@ -229,6 +229,129 @@ fn apply_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     Ok(())
 }
 
+// ── Local History ───────────────────────────────────────────────────────────
+// On every successful save we keep a timestamped copy of the file's content in
+// the app's data dir — never next to the file itself, which would litter the
+// user's Git repos (the very repos the diff features care about). Users can then
+// list past versions and restore or diff them. No Git required.
+
+const MAX_HISTORY: usize = 50;
+
+/// Stable, dependency-free FNV-1a hash of the absolute path, hex-encoded, used
+/// as a per-file folder name. Deliberately not `DefaultHasher` (whose output is
+/// not guaranteed stable across Rust releases) so history survives app updates.
+fn path_key(path: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in path.as_bytes() {
+        hash ^= *b as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+fn history_dir(app: &tauri::AppHandle, path: &str) -> Option<std::path::PathBuf> {
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|dir| dir.join("history").join(path_key(path)))
+}
+
+#[derive(serde::Serialize)]
+struct Version {
+    /// Epoch-ms timestamp; doubles as the snapshot's filename stem.
+    id: u64,
+    bytes: u64,
+}
+
+/// Parse a snapshot filename like "1719900000000.snap" into its numeric id.
+/// Rejects anything else, so junk files are ignored and the id can never carry
+/// path separators.
+fn parse_version_id(name: &str) -> Option<u64> {
+    name.strip_suffix(".snap").and_then(|s| s.parse::<u64>().ok())
+}
+
+/// Given ids sorted newest-first, return the ones beyond `max` (to delete).
+fn prune_ids(sorted_desc: &[u64], max: usize) -> Vec<u64> {
+    if sorted_desc.len() <= max {
+        Vec::new()
+    } else {
+        sorted_desc[max..].to_vec()
+    }
+}
+
+fn version_ids(dir: &std::path::Path) -> Vec<u64> {
+    let mut ids: Vec<u64> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| parse_version_id(e.file_name().to_str()?))
+        .collect();
+    ids.sort_unstable_by(|a, b| b.cmp(a)); // newest first
+    ids
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Record a saved version. Skips a snapshot identical to the latest one, keeps
+/// ids monotonic (guards against same-ms saves / clock skew), and prunes to the
+/// newest `MAX_HISTORY`.
+#[tauri::command]
+fn snapshot_version(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
+    let dir = history_dir(&app, &path).ok_or("no data dir")?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let mut ids = version_ids(&dir);
+    if let Some(&latest) = ids.first() {
+        if std::fs::read_to_string(dir.join(format!("{latest}.snap"))).ok() == Some(content.clone())
+        {
+            return Ok(()); // no change since last save — nothing to record
+        }
+    }
+
+    let id = match ids.first() {
+        Some(&latest) if now_ms() <= latest => latest + 1,
+        _ => now_ms(),
+    };
+    std::fs::write(dir.join(format!("{id}.snap")), &content).map_err(|e| e.to_string())?;
+    // The folder name is a hash; keep the human path for display/debugging.
+    let _ = std::fs::write(dir.join("path"), &path);
+
+    ids.insert(0, id);
+    for old in prune_ids(&ids, MAX_HISTORY) {
+        let _ = std::fs::remove_file(dir.join(format!("{old}.snap")));
+    }
+    Ok(())
+}
+
+/// Past versions of `path`, newest first.
+#[tauri::command]
+fn list_versions(app: tauri::AppHandle, path: String) -> Vec<Version> {
+    let Some(dir) = history_dir(&app, &path) else {
+        return Vec::new();
+    };
+    version_ids(&dir)
+        .into_iter()
+        .map(|id| {
+            let bytes = std::fs::metadata(dir.join(format!("{id}.snap")))
+                .map(|m| m.len())
+                .unwrap_or(0);
+            Version { id, bytes }
+        })
+        .collect()
+}
+
+/// Content of one past version. `id` is a `u64`, so it cannot escape the dir.
+#[tauri::command]
+fn read_version(app: tauri::AppHandle, path: String, id: u64) -> Result<String, String> {
+    let dir = history_dir(&app, &path).ok_or("no data dir")?;
+    std::fs::read_to_string(dir.join(format!("{id}.snap"))).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -243,7 +366,10 @@ pub fn run() {
             get_recent_files,
             add_recent_file,
             get_pending_file,
-            apply_menu
+            apply_menu,
+            snapshot_version,
+            list_versions,
+            read_version
         ])
         .on_menu_event(|app, event| {
             // Forward our custom item ids to the frontend, which maps them to
@@ -334,5 +460,34 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert!(save_file("/tmp/x.png".to_string(), "data".to_string()).is_err());
+    }
+
+    #[test]
+    fn path_key_is_stable_and_distinct() {
+        let a = path_key("/Users/x/notes/a.md");
+        assert_eq!(a.len(), 16);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        // Deterministic across calls, and different paths differ.
+        assert_eq!(a, path_key("/Users/x/notes/a.md"));
+        assert_ne!(a, path_key("/Users/x/notes/b.md"));
+    }
+
+    #[test]
+    fn parse_version_id_accepts_only_snap_numbers() {
+        assert_eq!(parse_version_id("1719900000000.snap"), Some(1719900000000));
+        assert_eq!(parse_version_id("0.snap"), Some(0));
+        assert_eq!(parse_version_id("path"), None); // the stored path file
+        assert_eq!(parse_version_id("abc.snap"), None);
+        assert_eq!(parse_version_id("123"), None);
+        assert_eq!(parse_version_id("../evil.snap"), None); // no traversal
+    }
+
+    #[test]
+    fn prune_keeps_newest_max() {
+        // newest-first input
+        let ids = [50u64, 40, 30, 20, 10];
+        assert_eq!(prune_ids(&ids, 5), Vec::<u64>::new());
+        assert_eq!(prune_ids(&ids, 10), Vec::<u64>::new());
+        assert_eq!(prune_ids(&ids, 3), vec![20, 10]);
     }
 }

@@ -60,6 +60,13 @@
         <line x1="14" y1="11" x2="14" y2="17"/>
       </svg>
     </button>
+    <button id="history-btn" data-i18n-title="btnHistory" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 3v5h5"/>
+        <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+        <path d="M12 7v5l3 2"/>
+      </svg>
+    </button>
     <span id="filepath"></span>
     <button id="settings-btn" data-i18n-title="btnSettings">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -112,6 +119,26 @@
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="toolbarSection">ツールバーに表示するボタン</div>
         <div id="toolbar-options"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="history-overlay" class="overlay" hidden>
+    <div class="history-panel" role="dialog" aria-label="History">
+      <div class="settings-head">
+        <h2 data-i18n="historyTitle">履歴</h2>
+        <button id="history-close" data-i18n-title="close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="history-body">
+        <ul id="history-list"></ul>
+        <div class="history-detail">
+          <pre id="history-preview"></pre>
+          <div class="history-actions">
+            <button id="history-restore" disabled data-i18n="historyRestore">この版に戻す</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
