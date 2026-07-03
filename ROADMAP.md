@@ -26,6 +26,34 @@ turn MRDown from a single-file viewer into something you actually navigate.
       get ids, so this is cheap
 - [ ] **Find (`⌘F`) and Replace (`⌘⌥F`)** — in-document first, then across open docs
 
+## Planned — flagship axis: the time machine ("what changed?")
+
+The sharpest differentiation MRDown can carry, and the one no lightweight Mac
+Markdown editor (MacDown / Typora / MarkText) has: **read Markdown by its
+changes.** Every pillar answers the same question — *what changed, and (later)
+why?* — which fits the core use case of reading the `.md` that Claude Code and
+other AI keep rewriting. Cherry-picked from the `MrEditor` backlog; the
+giant-file / log / remote parts of that backlog stay over there (there is no
+10 GB Markdown — those don't belong here).
+
+Build order matters: **Local History is the foundation**, and it hands the diff
+renderer to the other two nearly for free.
+
+1. [ ] **Local History** ★ — on save, keep a quiet local timeline of versions;
+   pick any two versions → diff → one-click restore. **No Git required**, so it
+   helps *every* user, not just those inside a repo. This is the retention
+   feature (the "safety net" that worked well in cli2ui), and building it gives
+   us the two-version diff renderer the next pillar reuses.
+2. [ ] **Git diff** — `HEAD` vs working tree of the open `.md`, add/remove
+   highlight in the preview, toggle diff-mode ⇄ normal preview. Once Local
+   History exists this is almost free: feed the same diff renderer a different
+   pair of versions. (Bonus: extend the existing auto-reload-on-disk-change to
+   flash the changed lines — cheapest first taste.)
+3. [ ] **AI explains the diff (BYOK)** — with the user's own API key, narrate
+   *what changed and why* in a revision. Plain AI summary is crowded; "AI that
+   explains what your AI just changed" is MRDown-specific and finishes the
+   story. Zero cost to us (BYOK). Heaviest to wire, so it goes last.
+
 ## Planned — editor depth
 
 - [x] Code-block syntax highlighting (highlight.js, lazy-loaded common bundle)
@@ -69,12 +97,37 @@ that backlog is a separate product and does not belong here.)
 
 Ideas that fit "your data local" but stretch "small & fast" — decide before building.
 
-- [ ] **Local history** — on save, keep a quiet local timeline of versions with
-      diff + one-click restore. Same "automatic safety-net undo" idea that worked
-      well in cli2ui; a candidate flagship feature, but adds scope.
-- [ ] **Single-shot AI on a selection (BYOK)** — "summarize / explain this" with
-      the user's own API key. Lines up with the core use case (reading the `.md`
-      Claude Code generates), but steps beyond "small, fast, local" — needs a call.
+- **Local History / AI** — decided: promoted to the committed "time machine"
+  flagship axis above (Local History → Git diff → AI-explains-diff). Kept here
+  only as a pointer.
+- [ ] **Single-shot AI on a selection (BYOK)** — "summarize / explain this"
+      selection (distinct from the diff-narration pillar above), with the user's
+      own API key. Lines up with reading the `.md` Claude Code generates, but
+      stretches "small, fast, local" — still a philosophy call.
+
+## Business model — freemium (aligned with MrEditor)
+
+MRDown uses the **same freemium line as its brand sibling MrEditor**, so the two
+products teach users one consistent rule. Two axes, same boundary:
+
+- **Local = free / Remote = Pro.**
+- **"Change how it's shown" = free / "reduce the content or hand you an answer" = Pro.**
+
+What that means concretely for MRDown:
+
+- **Free (local core):** open/render, edit, folder + tree, outline, find/replace,
+  themes, text transforms, **Local History**, and **local Git diff** (`HEAD` vs
+  working tree — Git is still local). The complete local tool.
+- **Pro (remote + answers):** **remote Markdown over SSH** (browse/read/diff a
+  remote box's `.md` tree — a *different job* from MrEditor's remote *log* tailing,
+  so they coexist), **GitHub remote / PR diff review**, and the **AI-explains-the-diff /
+  AI-summarize** features (that's "hand you an answer", the Pro side of the second axis).
+- **The line to hold:** never ship SSH/remote for free — MrEditor sells remote as
+  its Pro flagship, and giving it away here would undercut our own paywall.
+
+Remote transport (SSH, Git/GitHub) is fine for MRDown because the brand split is
+by **job** (Markdown docs vs logs), not by pipe; MrEditor keeps the log/giant-file/
+S3/DB remotes. See [[mrdown-brand-family-not-merge]] — bundle by brand, don't merge code.
 
 ## Positioning — who we're actually up against
 
