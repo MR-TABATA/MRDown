@@ -112,18 +112,32 @@ products teach users one consistent rule. Two axes, same boundary:
 
 - **Local = free / Remote = Pro.**
 - **"Change how it's shown" = free / "reduce the content or hand you an answer" = Pro.**
+- **Reach:** one/open document = free; act across the *whole project* = Pro.
+
+One line to teach: **look at & edit what's in front of you = free; reach across a
+whole corpus, cross an auth boundary, or have AI answer = Pro.**
 
 What that means concretely for MRDown:
 
-- **Free (local core):** open/render, edit, folder + tree, outline, find/replace,
-  themes, text transforms, **Local History**, and **local Git diff** (`HEAD` vs
-  working tree — Git is still local). The complete local tool.
-- **Pro (remote + answers):** **remote Markdown over SSH** (browse/read/diff a
-  remote box's `.md` tree — a *different job* from MrEditor's remote *log* tailing,
-  so they coexist), **GitHub remote / PR diff review**, and the **AI-explains-the-diff /
-  AI-summarize** features (that's "hand you an answer", the Pro side of the second axis).
-- **The line to hold:** never ship SSH/remote for free — MrEditor sells remote as
-  its Pro flagship, and giving it away here would undercut our own paywall.
+- **Free (local core):** open/render, edit, folder + tree, outline, **in-document
+  and open-tab find/replace**, themes, text transforms, **Local History**, **local
+  Git diff** (`HEAD` vs working tree — Git is still local), HTML/PDF export, and
+  opening a **public URL / raw file** (anonymous one-off read — Glow does this free,
+  so we match it rather than look stingier than a terminal tool). The complete local
+  reader/editor.
+- **Pro (remote, whole-project reach, + answers):** **remote Markdown over SSH**
+  (browse/read/diff a remote box's `.md` tree — a *different job* from MrEditor's
+  remote *log* tailing, so they coexist), **GitHub remote / PR diff review** and
+  **private repos**, **project-wide `vault-grep`** (ripgrep a whole folder incl.
+  unopened files, regex/lookaround, cross-file replace — the heavy multi-doc reach),
+  and the **AI-explains-the-diff / AI-summarize** features (BYOK; "hand you an answer").
+- **The line to hold:** never ship SSH/private-remote for free — MrEditor sells
+  remote as its Pro flagship, and giving it away here would undercut our own paywall.
+  (Public/anonymous/one-off reads are the one carve-out; authenticated/private/
+  persistent remote stays Pro.)
+- **Launch:** 1.0 ships **all-free** — no Pro feature or licensing exists yet, so the
+  paywall (licensing + first Pro feature) lands after 1.0. The line is drawn now so
+  every feature we add falls on the right side.
 
 Remote transport (SSH, Git/GitHub) is fine for MRDown because the brand split is
 by **job** (Markdown docs vs logs), not by pipe; MrEditor keeps the log/giant-file/
