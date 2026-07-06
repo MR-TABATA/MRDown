@@ -82,6 +82,31 @@
       <ul id="doc-list"></ul>
     </aside>
     <div class="content-area">
+      <div id="find-bar" hidden>
+        <div class="find-row">
+          <input id="find-input" type="text" spellcheck="false" data-i18n-placeholder="findPlaceholder" placeholder="検索" />
+          <span id="find-count"></span>
+          <div class="find-opts">
+            <button id="opt-case" class="opt" data-i18n-title="optCase">Aa</button>
+            <button id="opt-word" class="opt" data-i18n-title="optWord">W</button>
+            <button id="opt-regex" class="opt" data-i18n-title="optRegex">.*</button>
+          </div>
+          <button id="find-prev" data-i18n-title="findPrev">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+          </button>
+          <button id="find-next" data-i18n-title="findNext">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <button id="find-close" data-i18n-title="close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="find-row" id="replace-row">
+          <input id="replace-input" type="text" spellcheck="false" data-i18n-placeholder="replacePlaceholder" placeholder="置換" />
+          <button id="replace-one" class="text-btn" data-i18n="replaceOne">置換</button>
+          <button id="replace-all" class="text-btn" data-i18n="replaceAll">すべて置換</button>
+        </div>
+      </div>
       <div class="empty-state" id="empty-state">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -93,7 +118,10 @@
       </div>
       <div class="editor-pane">
         <div id="format-bar"></div>
-        <textarea id="editor" spellcheck="false"></textarea>
+        <div class="editor-area">
+          <div id="editor-backdrop" aria-hidden="true"><div id="editor-highlights"></div></div>
+          <textarea id="editor" spellcheck="false"></textarea>
+        </div>
       </div>
       <div id="divider"></div>
       <div id="output"></div>

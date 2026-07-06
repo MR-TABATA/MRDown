@@ -9,6 +9,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { SUPPORTED, isSupported, basename, tildify, resolveImagePath, sanitizeFilename } from './paths';
 import { slugify, firstHeadingTitle } from './markdown';
+import { buildMatcher, findMatches, sliceMatches, type FindOpts } from './find';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
 import {
   toggleWrap,
@@ -30,6 +31,7 @@ const editLabel = document.getElementById('edit-label')!;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement;
 const editor = document.getElementById('editor') as HTMLTextAreaElement;
+const editorHighlights = document.getElementById('editor-highlights')!;
 const formatBar = document.getElementById('format-bar')!;
 const settingsBtn = document.getElementById('settings-btn')!;
 const settingsOverlay = document.getElementById('settings-overlay') as HTMLElement;
@@ -48,6 +50,18 @@ const historyClose = document.getElementById('history-close')!;
 const historyList = document.getElementById('history-list')!;
 const historyPreview = document.getElementById('history-preview')!;
 const historyRestore = document.getElementById('history-restore') as HTMLButtonElement;
+const findBar = document.getElementById('find-bar') as HTMLElement;
+const findInput = document.getElementById('find-input') as HTMLInputElement;
+const findCount = document.getElementById('find-count')!;
+const findPrevBtn = document.getElementById('find-prev')!;
+const findNextBtn = document.getElementById('find-next')!;
+const findCloseBtn = document.getElementById('find-close')!;
+const replaceInput = document.getElementById('replace-input') as HTMLInputElement;
+const replaceOneBtn = document.getElementById('replace-one')!;
+const replaceAllBtn = document.getElementById('replace-all')!;
+const optCaseBtn = document.getElementById('opt-case')!;
+const optWordBtn = document.getElementById('opt-word')!;
+const optRegexBtn = document.getElementById('opt-regex')!;
 const appWindow = getCurrentWindow();
 
 // Home directory, used to abbreviate paths to ~ (resolved once on startup).
@@ -182,6 +196,9 @@ async function renderSource(source: string, filePath: string) {
   resolveLocalImages(filePath);
   await highlightCode();
   await renderMermaid();
+  // A re-render wipes the preview highlights; rebuild them if the find bar is
+  // open in preview mode. (Source mode searches the editor, not this pane.)
+  if (!findBar.hidden && !isEditing && findInput.value) runFind(true);
 }
 
 // --- Session UI state ---
@@ -204,6 +221,7 @@ function showEmpty() {
   saveBtn.disabled = true;
   deleteBtn.disabled = true;
   historyBtn.disabled = true;
+  findBar.hidden = true;
   filepath.textContent = '';
   appWindow.setTitle('MRDown').catch(() => {});
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
@@ -235,6 +253,8 @@ function setEditing(on: boolean) {
   contentArea.classList.toggle('editing', on);
   editLabel.textContent = on ? t('preview') : t('edit');
   if (on) editor.focus();
+  // Find switches between source (editor) and preview search with the mode.
+  if (!findBar.hidden) runFind();
 }
 
 // --- Sidebar (open documents) ---
@@ -533,6 +553,8 @@ editor.addEventListener('input', () => {
     lastActiveDirty = isDirty(active);
     renderSidebar();
   }
+  // Keep the find count live as the source changes, without moving the caret.
+  if (!findBar.hidden && isEditing && findInput.value) refreshSourceMatches();
   clearTimeout(previewTimer);
   previewTimer = window.setTimeout(() => {
     if (active) renderSource(active.workingText, active.path ?? '');
@@ -813,6 +835,9 @@ function applyI18n() {
   document.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((el) => {
     el.title = t(el.dataset.i18nTitle as Key);
   });
+  document.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder as Key);
+  });
   renderFormatBar();
   editLabel.textContent = isEditing ? t('preview') : t('edit');
   if (active) renderSidebar();
@@ -950,6 +975,343 @@ historyRestore.addEventListener('click', async () => {
   if (!isEditing) setEditing(true);
 });
 
+// --- In-document find & replace (⌘F) ---
+// Two modes driven by `isEditing`: in preview mode we search the rendered pane
+// and wrap matches in <mark>s (spanning tag boundaries); in source mode we
+// search the editor buffer, select matches in the textarea, and allow replace.
+// Both share one matcher (literal/regex, case, whole-word) from ./find.
+
+const FIND_OPTS_KEY = 'mrdown.findOpts';
+let findOpts: FindOpts = loadFindOpts();
+// The current match list, in the coordinate space of whichever mode is active
+// (character offsets into the editor buffer, or into the preview haystack).
+let findMatchList: { start: number; end: number }[] = [];
+let findIdx = -1;
+// Preview marks grouped by match index, so a match split across tags highlights
+// (and scrolls) as one unit.
+let findMarks: HTMLElement[][] = [];
+
+function loadFindOpts(): FindOpts {
+  try {
+    const o = JSON.parse(localStorage.getItem(FIND_OPTS_KEY) || '{}');
+    return { regex: !!o.regex, caseSensitive: !!o.caseSensitive, wholeWord: !!o.wholeWord };
+  } catch {
+    return { regex: false, caseSensitive: false, wholeWord: false };
+  }
+}
+
+// Inline elements don't introduce a text break; anything else does. Used to
+// decide where a phrase may legitimately span a tag boundary vs. where two
+// blocks should stay separate (so "ab" across two paragraphs isn't a match).
+const INLINE_TAGS = new Set([
+  'A', 'ABBR', 'B', 'BDI', 'BDO', 'CITE', 'CODE', 'DATA', 'DEL', 'DFN', 'EM', 'I',
+  'INS', 'KBD', 'MARK', 'Q', 'S', 'SAMP', 'SMALL', 'SPAN', 'STRONG', 'SUB', 'SUP',
+  'TIME', 'U', 'VAR', 'WBR',
+]);
+function blockOf(node: Node): Node {
+  let el = node.parentElement;
+  while (el && el !== output && INLINE_TAGS.has(el.tagName)) el = el.parentElement;
+  return el ?? output;
+}
+
+// Flatten the preview into one searchable string plus a map back to the source
+// text nodes. A newline is inserted between nodes in different blocks so a query
+// can span inline tags but never silently merge across block boundaries.
+function buildPreviewHay(): { hay: string; segs: { node: Text; start: number }[] } {
+  const walker = document.createTreeWalker(output, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.nodeValue ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+  });
+  const segs: { node: Text; start: number }[] = [];
+  let hay = '';
+  let prevBlock: Node | null = null;
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const node = n as Text;
+    const block = blockOf(node);
+    if (segs.length && block !== prevBlock) hay += '\n';
+    segs.push({ node, start: hay.length });
+    hay += node.nodeValue as string;
+    prevBlock = block;
+  }
+  return { hay, segs };
+}
+
+// Remove any highlight <mark>s, merging their text back into the surrounding node.
+function clearFindHighlights() {
+  for (const m of output.querySelectorAll('mark.find-hit')) {
+    const parent = m.parentNode;
+    if (!parent) continue;
+    parent.replaceChild(document.createTextNode(m.textContent || ''), m);
+    parent.normalize();
+  }
+  findMarks = [];
+}
+
+function updateFindCount() {
+  const q = findInput.value;
+  const invalid = !!q && buildMatcher(q, findOpts) === null;
+  findBar.classList.toggle('no-results', !!q && (invalid || findMatchList.length === 0));
+  findCount.textContent = findMatchList.length
+    ? `${findIdx + 1}/${findMatchList.length}`
+    : q
+      ? '0/0'
+      : '';
+}
+
+// Wrap every preview match in <mark>s, splitting each match across the text
+// nodes it touches so tag-spanning matches highlight fully.
+function renderPreviewHighlights() {
+  clearFindHighlights();
+  const matcher = buildMatcher(findInput.value, findOpts);
+  const { hay, segs } = buildPreviewHay();
+  findMatchList = findMatches(hay, matcher);
+  if (!findMatchList.length) return;
+
+  const perNode = new Map<Text, { s: number; e: number; mid: number }[]>();
+  for (const slice of sliceMatches(segs.map((seg) => ({ start: seg.start, len: seg.node.length })), findMatchList)) {
+    const node = segs[slice.seg].node;
+    let ranges = perNode.get(node);
+    if (!ranges) perNode.set(node, (ranges = []));
+    ranges.push({ s: slice.s, e: slice.e, mid: slice.mid });
+  }
+
+  findMarks = findMatchList.map(() => []);
+  for (const [node, ranges] of perNode) {
+    ranges.sort((a, b) => a.s - b.s);
+    const text = node.nodeValue as string;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    for (const r of ranges) {
+      if (r.s > last) frag.appendChild(document.createTextNode(text.slice(last, r.s)));
+      const mark = document.createElement('mark');
+      mark.className = 'find-hit';
+      mark.textContent = text.slice(r.s, r.e);
+      frag.appendChild(mark);
+      findMarks[r.mid].push(mark);
+      last = r.e;
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode?.replaceChild(frag, node);
+  }
+}
+
+function setCurrentPreview(scroll = true) {
+  findMarks.forEach((marks, i) => {
+    for (const m of marks) m.classList.toggle('find-hit-current', i === findIdx);
+  });
+  const cur = findMarks[findIdx]?.[0];
+  if (cur && scroll) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  updateFindCount();
+}
+
+// Scroll the editor so the line containing `pos` sits roughly centered.
+function scrollEditorTo(pos: number) {
+  const line = editor.value.slice(0, pos).split('\n').length - 1;
+  const cs = getComputedStyle(editor);
+  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
+  editor.scrollTop = Math.max(0, line * lh - editor.clientHeight / 2);
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
+}
+
+// Keep the highlight layer scrolled in lockstep with the textarea.
+function syncEditorHighlights() {
+  editorHighlights.style.transform = `translateY(${-editor.scrollTop}px)`;
+}
+
+// Paint every source match onto the backdrop layer behind the textarea. The
+// layer's text is transparent — only the <mark> rects show, under the real
+// text. Width is pinned to the textarea's content box so wrapping lines up.
+function renderSourceHighlights() {
+  if (findBar.hidden || !isEditing) {
+    editorHighlights.innerHTML = '';
+    return;
+  }
+  editorHighlights.style.width = `${editor.clientWidth}px`;
+  const text = editor.value;
+  let html = '';
+  let last = 0;
+  findMatchList.forEach((m, i) => {
+    html += escapeHtml(text.slice(last, m.start));
+    const cls = i === findIdx ? 'find-hit find-hit-current' : 'find-hit';
+    html += `<mark class="${cls}">${escapeHtml(text.slice(m.start, m.end))}</mark>`;
+    last = m.end;
+  });
+  // Trailing "\n" keeps the layer's height in step with the textarea when the
+  // document ends on a newline.
+  editorHighlights.innerHTML = html + escapeHtml(text.slice(last)) + '\n';
+  syncEditorHighlights();
+}
+
+function selectSourceMatch(scroll = true) {
+  const mt = findMatchList[findIdx];
+  if (mt) {
+    editor.setSelectionRange(mt.start, mt.end);
+    if (scroll) scrollEditorTo(mt.start);
+  }
+  renderSourceHighlights();
+  updateFindCount();
+}
+
+// Recompute source matches without disturbing the caret (used on live edits).
+function refreshSourceMatches() {
+  findMatchList = findMatches(editor.value, buildMatcher(findInput.value, findOpts));
+  if (findIdx >= findMatchList.length) findIdx = findMatchList.length - 1;
+  renderSourceHighlights();
+  updateFindCount();
+}
+
+editor.addEventListener('scroll', syncEditorHighlights);
+// The split divider or window can resize the editor; re-pin width/wrapping.
+new ResizeObserver(() => {
+  if (!findBar.hidden && isEditing) renderSourceHighlights();
+}).observe(editor);
+
+// Rebuild the match list for the current query and mode. Keeps the current
+// index when asked (e.g. re-run after an edit), otherwise resets to the first.
+function runFind(keepIdx = false) {
+  const prevIdx = findIdx;
+  const source = isEditing;
+  findBar.classList.toggle('replace-mode', source);
+  if (source) {
+    clearFindHighlights();
+    findMatchList = findMatches(editor.value, buildMatcher(findInput.value, findOpts));
+  } else {
+    editorHighlights.innerHTML = '';
+    renderPreviewHighlights();
+  }
+  if (findMatchList.length) {
+    findIdx = keepIdx ? Math.min(Math.max(prevIdx, 0), findMatchList.length - 1) : 0;
+    if (source) selectSourceMatch(!keepIdx);
+    else setCurrentPreview(!keepIdx);
+  } else {
+    findIdx = -1;
+    if (source) renderSourceHighlights();
+    updateFindCount();
+  }
+}
+
+function stepFind(dir: 1 | -1) {
+  if (!findMatchList.length) return;
+  findIdx = (findIdx + dir + findMatchList.length) % findMatchList.length;
+  if (isEditing) selectSourceMatch();
+  else setCurrentPreview();
+}
+
+// Push replaced text into the editor via the shared helper so it lands on the
+// native undo stack, then update state and re-render the preview.
+function applyEditorReplace(newText: string, caret = 0) {
+  if (!active) return;
+  replaceEditorText(newText, caret, caret);
+  active.workingText = editor.value;
+  updateStatus();
+  if (isDirty(active) !== lastActiveDirty) {
+    lastActiveDirty = isDirty(active);
+    renderSidebar();
+  }
+  renderSource(active.workingText, active.path ?? '');
+}
+
+// For regex mode, expand $1/$& in the replacement against the matched text;
+// literal mode inserts the replacement verbatim.
+function expandReplacement(matched: string, matcher: RegExp, replacement: string): string {
+  if (!findOpts.regex) return replacement;
+  return matched.replace(new RegExp(matcher.source, matcher.flags.replace('g', '')), replacement);
+}
+
+function doReplaceOne() {
+  if (!isEditing || !active) return;
+  const matcher = buildMatcher(findInput.value, findOpts);
+  const mt = findMatchList[findIdx];
+  if (!matcher || !mt) return;
+  const text = editor.value;
+  const rep = expandReplacement(text.slice(mt.start, mt.end), matcher, replaceInput.value);
+  const caret = mt.start + rep.length;
+  applyEditorReplace(text.slice(0, mt.start) + rep + text.slice(mt.end), caret);
+  // Recompute and jump to the next match at or after the replacement.
+  findMatchList = findMatches(editor.value, matcher);
+  findIdx = findMatchList.findIndex((m) => m.start >= caret);
+  if (findIdx < 0) findIdx = findMatchList.length ? 0 : -1;
+  if (findIdx >= 0) selectSourceMatch();
+  else updateFindCount();
+}
+
+function doReplaceAll() {
+  if (!isEditing || !active) return;
+  const matcher = buildMatcher(findInput.value, findOpts);
+  if (!matcher) return;
+  const text = editor.value;
+  const newText = findOpts.regex
+    ? text.replace(matcher, replaceInput.value)
+    : text.replace(matcher, () => replaceInput.value);
+  if (newText === text) return;
+  applyEditorReplace(newText);
+  findMatchList = findMatches(editor.value, buildMatcher(findInput.value, findOpts));
+  findIdx = findMatchList.length ? 0 : -1;
+  if (findIdx >= 0) selectSourceMatch(false);
+  else updateFindCount();
+}
+
+function reflectOpts() {
+  optCaseBtn.classList.toggle('active', findOpts.caseSensitive);
+  optWordBtn.classList.toggle('active', findOpts.wholeWord);
+  optRegexBtn.classList.toggle('active', findOpts.regex);
+}
+function toggleOpt(key: keyof FindOpts) {
+  findOpts[key] = !findOpts[key];
+  localStorage.setItem(FIND_OPTS_KEY, JSON.stringify(findOpts));
+  reflectOpts();
+  runFind();
+  findInput.focus();
+}
+
+function openFind() {
+  if (!active) return;
+  findBar.hidden = false;
+  reflectOpts();
+  findInput.focus();
+  findInput.select();
+  runFind();
+}
+
+function closeFind() {
+  findBar.hidden = true;
+  clearFindHighlights();
+  editorHighlights.innerHTML = '';
+  findMatchList = [];
+  findIdx = -1;
+  if (isEditing) editor.focus();
+}
+
+findInput.addEventListener('input', () => runFind());
+findInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    stepFind(e.shiftKey ? -1 : 1);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeFind();
+  }
+});
+replaceInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    doReplaceOne();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeFind();
+  }
+});
+findPrevBtn.addEventListener('click', () => stepFind(-1));
+findNextBtn.addEventListener('click', () => stepFind(1));
+findCloseBtn.addEventListener('click', closeFind);
+replaceOneBtn.addEventListener('click', doReplaceOne);
+replaceAllBtn.addEventListener('click', doReplaceAll);
+optCaseBtn.addEventListener('click', () => toggleOpt('caseSensitive'));
+optWordBtn.addEventListener('click', () => toggleOpt('wholeWord'));
+optRegexBtn.addEventListener('click', () => toggleOpt('regex'));
+
 applyI18n();
 applyPreviewWidth(storedWidth());
 
@@ -973,8 +1335,17 @@ document.addEventListener('keydown', (e) => {
     closeSettings();
     return;
   }
+  if (e.key === 'Escape' && !findBar.hidden) {
+    closeFind();
+    return;
+  }
   const mod = e.metaKey || e.ctrlKey;
   if (!mod) return;
+  if (e.key === 'f' && active) {
+    e.preventDefault();
+    openFind();
+    return;
+  }
   if (e.key === 'b' && active && isEditing) {
     e.preventDefault();
     applyFmt('bold');

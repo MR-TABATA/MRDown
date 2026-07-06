@@ -125,6 +125,87 @@ body.sidebar-hidden #sidebar { display: none; }
   padding: 40px;
 }
 
+/* In-document find bar (⌘F) — floats at the top-right of the content area */
+#find-bar {
+  position: fixed;
+  top: 54px;
+  right: 28px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+#find-bar[hidden] { display: none; }
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+/* The replace row only appears while editing (source search). */
+#replace-row { display: none; }
+#find-bar.replace-mode #replace-row { display: flex; }
+#find-input,
+#replace-input {
+  background: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  color: #eee;
+  border-radius: 5px;
+  padding: 4px 8px;
+  width: 180px;
+  font-size: 13px;
+}
+#find-input:focus,
+#replace-input:focus { outline: none; border-color: #4a7fbf; }
+#find-count {
+  color: #888;
+  font-size: 12px;
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.find-opts {
+  display: flex;
+  gap: 2px;
+  margin: 0 2px;
+}
+#find-bar button {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  padding: 3px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+}
+#find-bar button:hover { background: #383838; color: #fff; }
+#find-bar .opt {
+  border: 1px solid transparent;
+  font: 600 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-width: 22px;
+  align-items: center;
+  justify-content: center;
+}
+#find-bar .opt.active {
+  background: rgba(74, 127, 191, 0.22);
+  border-color: #4a7fbf;
+  color: #cfe0ff;
+}
+#find-bar .text-btn {
+  color: #ccc;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+#replace-input { flex: 1; }
+#find-bar.no-results #find-input { border-color: #b04a4a; }
+#find-bar.no-results #find-count { color: #b06a6a; }
+mark.find-hit { background: #5a4a00; color: inherit; border-radius: 2px; padding: 0 1px; }
+mark.find-hit-current { background: #e0a400; color: #000; }
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -190,21 +271,59 @@ body.sidebar-hidden #sidebar { display: none; }
   margin: 0 5px;
   flex-shrink: 0;
 }
-.content-area.editing #editor {
-  display: block;
+/* The editor sits above a backdrop layer that draws find highlights, since a
+   <textarea> can't hold styled spans. Both share identical typography so the
+   highlight rects line up under the text; JS syncs width and scroll. */
+.content-area.editing .editor-area {
+  position: relative;
   flex: 1 1 0;
-  width: 100%;
   min-height: 0;
-  resize: none;
-  border: none;
-  outline: none;
+  overflow: hidden;
   background: #1a1a1a;
-  color: #d4d4d4;
+}
+#editor-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+#editor-highlights {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: transparent;
+  will-change: transform;
+}
+#editor-highlights mark.find-hit {
+  background: #5a4a00;
+  color: transparent;
+  border-radius: 2px;
+}
+#editor-highlights mark.find-hit-current { background: #e0a400; }
+.content-area.editing #editor,
+#editor-highlights {
+  box-sizing: border-box;
+  margin: 0;
   padding: 24px 28px;
   font-family: 'SF Mono', Menlo, monospace;
   font-size: 13.5px;
   line-height: 1.7;
   tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.content-area.editing #editor {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #d4d4d4;
+  z-index: 1;
 }
 .content-area.editing #output {
   flex: 1 1 0;
