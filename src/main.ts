@@ -73,6 +73,11 @@ homeDir()
   })
   .catch(() => {});
 const docList = document.getElementById('doc-list')!;
+const folderBtn = document.getElementById('folder-btn')!;
+const folderTree = document.getElementById('folder-tree') as HTMLElement;
+const folderHead = document.getElementById('folder-head') as HTMLElement;
+const folderName = document.getElementById('folder-name')!;
+const folderCloseBtn = document.getElementById('folder-close-btn') as HTMLButtonElement;
 const contentArea = document.querySelector('.content-area') as HTMLElement;
 
 // A document open in the session. `workingText` is the editor buffer, which
@@ -298,6 +303,151 @@ function renderSidebar() {
   }
 }
 
+// --- Folder tree (open a folder, browse its Markdown as a set) ---
+
+interface TreeEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+}
+
+const FOLDER_KEY = 'mrdown.folder';
+let folderRoot: string | null = null;
+// Expanded subfolders (by absolute path) and a cache of each listed directory's
+// children, so re-rendering the tree never re-hits the disk.
+const expandedFolders = new Set<string>();
+const treeChildren = new Map<string, TreeEntry[]>();
+
+const listDir = (dir: string) => invoke<TreeEntry[]>('read_dir', { dir }).catch(() => []);
+
+function saveFolderState() {
+  if (!folderRoot) {
+    localStorage.removeItem(FOLDER_KEY);
+    return;
+  }
+  try {
+    localStorage.setItem(
+      FOLDER_KEY,
+      JSON.stringify({ root: folderRoot, expanded: [...expandedFolders] }),
+    );
+  } catch {
+    // Non-fatal: a lost folder state just means the tree starts collapsed.
+  }
+}
+
+// Open (or restore) a folder as the tree root. Fetches the root listing plus any
+// still-expanded subfolders up front so the restored tree renders in one pass.
+async function loadFolder(root: string, expanded: string[] = []) {
+  folderRoot = root;
+  expandedFolders.clear();
+  treeChildren.clear();
+  await Promise.all([root, ...expanded].map(async (d) => treeChildren.set(d, await listDir(d))));
+  for (const p of expanded) expandedFolders.add(p);
+  updateFolderHeader();
+  renderTree();
+}
+
+function closeFolder() {
+  folderRoot = null;
+  expandedFolders.clear();
+  treeChildren.clear();
+  updateFolderHeader();
+  renderTree();
+  saveFolderState();
+}
+
+function updateFolderHeader() {
+  // The header (folder name + close) only exists while a folder is open; opening
+  // is driven by the labeled toolbar button, so there's nothing to show when none.
+  folderHead.hidden = !folderRoot;
+  if (folderRoot) {
+    folderName.textContent = basename(folderRoot);
+    folderName.title = folderRoot;
+  }
+}
+
+async function toggleFolder(path: string) {
+  if (expandedFolders.has(path)) {
+    expandedFolders.delete(path);
+  } else {
+    expandedFolders.add(path);
+    if (!treeChildren.has(path)) treeChildren.set(path, await listDir(path));
+  }
+  saveFolderState();
+  renderTree();
+}
+
+const TREE_CHEVRON =
+  '<svg class="tree-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>';
+const TREE_FOLDER =
+  '<svg class="tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+const TREE_FILE =
+  '<svg class="tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+
+// Rebuild the whole tree from the cache (synchronous). Only expanded folders
+// recurse, so collapsed branches cost nothing.
+function renderTree() {
+  folderTree.innerHTML = '';
+  folderTree.hidden = !folderRoot;
+  if (!folderRoot) return;
+  const roots = treeChildren.get(folderRoot) ?? [];
+  if (roots.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'tree-empty';
+    li.textContent = t('folderEmpty');
+    folderTree.appendChild(li);
+    return;
+  }
+  for (const entry of roots) appendTreeRows(entry, 0);
+}
+
+function appendTreeRows(entry: TreeEntry, depth: number) {
+  const li = document.createElement('li');
+  li.className = 'tree-row';
+  li.style.paddingLeft = `${6 + depth * 14}px`;
+  li.title = entry.path;
+  const label = `<span class="tree-name"></span>`;
+
+  if (entry.is_dir) {
+    if (expandedFolders.has(entry.path)) li.classList.add('expanded');
+    li.innerHTML = `${TREE_CHEVRON}${TREE_FOLDER}${label}`;
+    li.querySelector('.tree-name')!.textContent = entry.name;
+    li.addEventListener('click', () => toggleFolder(entry.path));
+    folderTree.appendChild(li);
+    if (expandedFolders.has(entry.path)) {
+      for (const child of treeChildren.get(entry.path) ?? []) appendTreeRows(child, depth + 1);
+    }
+  } else {
+    if (entry.path === active?.path) li.classList.add('active');
+    li.innerHTML = `<span class="tree-spacer"></span>${TREE_FILE}${label}`;
+    li.querySelector('.tree-name')!.textContent = entry.name;
+    li.addEventListener('click', () => openFile(entry.path));
+    folderTree.appendChild(li);
+  }
+}
+
+folderBtn.addEventListener('click', async () => {
+  const dir = await open({ directory: true, multiple: false });
+  if (typeof dir === 'string') {
+    await loadFolder(dir);
+    saveFolderState();
+  }
+});
+folderCloseBtn.addEventListener('click', closeFolder);
+
+// Restore a previously opened folder tree on startup.
+try {
+  const raw = localStorage.getItem(FOLDER_KEY);
+  if (raw) {
+    const saved = JSON.parse(raw) as { root?: unknown; expanded?: unknown };
+    if (typeof saved.root === 'string') {
+      loadFolder(saved.root, Array.isArray(saved.expanded) ? (saved.expanded as string[]) : []);
+    }
+  }
+} catch {
+  // Corrupt folder state: ignore and start with no tree.
+}
+
 const SESSION_KEY = 'mrdown.session';
 
 // Persist the full working state of every open document — untitled buffers and
@@ -344,6 +494,7 @@ async function setActive(doc: Doc) {
   showDocUI();
   updateStatus();
   renderSidebar();
+  renderTree();
   saveSession();
   contentArea.scrollTop = 0;
   if (isEditing) editor.focus();
@@ -372,6 +523,7 @@ async function openFile(path: string) {
   showDocUI();
   updateStatus();
   renderSidebar();
+  renderTree();
   saveSession();
   contentArea.scrollTop = 0;
   invoke<string[]>('add_recent_file', { path }).then(renderRecent).catch(() => {});
@@ -437,6 +589,7 @@ function newDoc() {
   setEditing(true);
   updateStatus();
   renderSidebar();
+  renderTree();
   saveSession();
   contentArea.scrollTop = 0;
 }
@@ -874,6 +1027,7 @@ function applyI18n() {
   renderFormatBar();
   editLabel.textContent = isEditing ? t('preview') : t('edit');
   if (active) renderSidebar();
+  updateFolderHeader();
   buildToolbarOptions();
   buildLangOptions();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});

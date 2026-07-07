@@ -35,6 +35,9 @@ const DICT = {
     historyReadFailed: 'この版を読み込めませんでした。',
     // sidebar
     sidebarHeader: '開いている文書',
+    folderOpen: 'フォルダを開く',
+    folderClose: 'フォルダを閉じる',
+    folderEmpty: 'Markdown ファイルがありません',
     close: '閉じる',
     // empty state
     emptyTitle: 'Markdownファイルを開いてください',
@@ -102,6 +105,9 @@ const DICT = {
     historyEmpty: 'No saved versions yet. Versions are recorded when you save.',
     historyReadFailed: 'Could not read this version.',
     sidebarHeader: 'Open Documents',
+    folderOpen: 'Open folder',
+    folderClose: 'Close folder',
+    folderEmpty: 'No Markdown files here',
     close: 'Close',
     emptyTitle: 'Open a Markdown file',
     emptyHint: '⌘O · button · drag & drop',

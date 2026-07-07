@@ -70,6 +70,48 @@ fn file_mtime(path: String) -> Result<u64, String> {
         .map_err(|e| e.to_string())
 }
 
+/// One immediate child of a directory in the folder tree.
+#[derive(serde::Serialize)]
+struct DirEntry {
+    name: String,
+    path: String,
+    is_dir: bool,
+}
+
+/// List the immediate children of `dir` for the folder tree: subdirectories and
+/// supported Markdown files only. Hidden entries (dotfiles like `.git`,
+/// `.obsidian`) are skipped, and the listing is one level deep — subfolders are
+/// fetched lazily on expand so large vaults never fan out eagerly. Sorted with
+/// folders first, then files, each case-insensitively by name.
+#[tauri::command]
+fn read_dir(dir: String) -> Result<Vec<DirEntry>, String> {
+    let mut entries: Vec<DirEntry> = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let Ok(entry) = entry else { continue };
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        let path = entry.path().to_string_lossy().into_owned();
+        if !is_dir && !is_supported(&path) {
+            continue;
+        }
+        entries.push(DirEntry { name, path, is_dir });
+    }
+    sort_dir_entries(&mut entries);
+    Ok(entries)
+}
+
+/// Order tree entries: folders first, then files, each case-insensitively by name.
+fn sort_dir_entries(entries: &mut [DirEntry]) {
+    entries.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+}
+
 const MAX_RECENT: usize = 10;
 
 fn recent_store(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
@@ -363,6 +405,7 @@ pub fn run() {
             save_file,
             delete_file,
             file_mtime,
+            read_dir,
             get_recent_files,
             add_recent_file,
             get_pending_file,
@@ -426,6 +469,19 @@ mod tests {
         assert!(is_supported("notes.txt"));
         assert!(!is_supported("image.png"));
         assert!(!is_supported("Makefile"));
+    }
+
+    #[test]
+    fn dir_entries_sort_folders_first_then_case_insensitive_name() {
+        let mut e = vec![
+            DirEntry { name: "zeta.md".into(), path: "zeta.md".into(), is_dir: false },
+            DirEntry { name: "Beta".into(), path: "Beta".into(), is_dir: true },
+            DirEntry { name: "alpha.md".into(), path: "alpha.md".into(), is_dir: false },
+            DirEntry { name: "apple".into(), path: "apple".into(), is_dir: true },
+        ];
+        sort_dir_entries(&mut e);
+        let order: Vec<&str> = e.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(order, vec!["apple", "Beta", "alpha.md", "zeta.md"]);
     }
 
     fn v(items: &[&str]) -> Vec<String> {
