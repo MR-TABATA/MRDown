@@ -40,6 +40,8 @@ const DICT = {
     emptyTitle: 'Markdownファイルを開いてください',
     emptyHint: '⌘O ・ボタン ・ドラッグ&ドロップ',
     recentTitle: '最近のファイル',
+    // preview
+    frontmatter: 'メタデータ',
     // settings
     settingsTitle: '設定',
     toolbarSection: 'ツールバーに表示するボタン',
@@ -104,6 +106,7 @@ const DICT = {
     emptyTitle: 'Open a Markdown file',
     emptyHint: '⌘O · button · drag & drop',
     recentTitle: 'Recent Files',
+    frontmatter: 'Metadata',
     settingsTitle: 'Settings',
     toolbarSection: 'Toolbar buttons',
     widthSection: 'Preview width',

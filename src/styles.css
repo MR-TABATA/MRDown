@@ -437,6 +437,32 @@ mark.find-hit-current { background: #e0a400; color: #000; }
 }
 #output .mermaid-error p { color: #e06c6c; font-size: 0.85em; margin: 0 0 8px; }
 #output hr { border: none; border-top: 1px solid #333; margin: 2em 0; }
+
+/* YAML frontmatter, shown as a compact collapsed metadata card (not an <hr>). */
+#output details.frontmatter {
+  margin: 0 0 1.5em; border: 1px solid #333; border-radius: 8px;
+  background: #252525; overflow: hidden;
+}
+#output details.frontmatter > summary {
+  cursor: pointer; padding: 8px 12px; color: #888; font-size: 0.85em;
+  user-select: none; list-style: none;
+}
+#output details.frontmatter > summary::-webkit-details-marker { display: none; }
+#output details.frontmatter > summary::before { content: '▸  '; }
+#output details.frontmatter[open] > summary::before { content: '▾  '; }
+#output details.frontmatter table { margin: 0; width: 100%; }
+#output details.frontmatter th, #output details.frontmatter td {
+  border: none; border-top: 1px solid #2d2d2d; padding: 6px 12px; font-size: 0.9em;
+  vertical-align: top;
+}
+#output details.frontmatter th {
+  background: transparent; color: #9cdcfe; text-align: left;
+  white-space: nowrap; width: 1%; font-weight: 500;
+}
+#output details.frontmatter td { color: #cfcfcf; }
+#output details.frontmatter tr:nth-child(even) td { background: transparent; }
+#output details.frontmatter code { background: none; padding: 0; color: #cfcfcf; }
+
 #output {
   -webkit-user-select: text;
   user-select: text;

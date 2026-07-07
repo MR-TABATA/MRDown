@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSupported, basename, dirname, tildify, resolveImagePath, sanitizeFilename } from './paths';
+import { isSupported, basename, dirname, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
 
 describe('isSupported', () => {
   it('accepts markdown extensions case-insensitively', () => {
@@ -77,5 +77,57 @@ describe('resolveImagePath', () => {
   it('uses backslash separators for windows documents', () => {
     expect(resolveImagePath('C:\\docs\\a.md', 'img/p.png')).toBe('C:\\docs\\img\\p.png');
     expect(resolveImagePath('C:\\docs\\a.md', 'D:\\x\\p.png')).toBe('D:\\x\\p.png');
+  });
+});
+
+describe('resolveDocLink', () => {
+  const doc = '/home/u/notes/readme.md';
+
+  it('resolves relative Markdown links against the document directory', () => {
+    expect(resolveDocLink(doc, './other.md')).toBe('/home/u/notes/other.md');
+    expect(resolveDocLink(doc, 'sub/deep.md')).toBe('/home/u/notes/sub/deep.md');
+    expect(resolveDocLink(doc, 'other.md')).toBe('/home/u/notes/other.md');
+  });
+  it('collapses . and .. segments', () => {
+    expect(resolveDocLink(doc, '../top.md')).toBe('/home/u/top.md');
+    expect(resolveDocLink(doc, '../a/../b/c.md')).toBe('/home/u/b/c.md');
+    expect(resolveDocLink(doc, './x/./y.md')).toBe('/home/u/notes/x/y.md');
+  });
+  it('keeps absolute Markdown links, still normalized', () => {
+    expect(resolveDocLink(doc, '/abs/a.md')).toBe('/abs/a.md');
+    expect(resolveDocLink(doc, '/abs/../a.md')).toBe('/a.md');
+  });
+  it('strips a #fragment or ?query before resolving', () => {
+    expect(resolveDocLink(doc, './other.md#heading')).toBe('/home/u/notes/other.md');
+    expect(resolveDocLink(doc, './other.md?v=2')).toBe('/home/u/notes/other.md');
+  });
+  it('decodes percent-encoded paths', () => {
+    expect(resolveDocLink(doc, './my%20notes.md')).toBe('/home/u/notes/my notes.md');
+  });
+  it('accepts file:// URLs as local paths', () => {
+    expect(resolveDocLink(doc, 'file:///abs/a.md')).toBe('/abs/a.md');
+  });
+  it('accepts the other supported extensions', () => {
+    expect(resolveDocLink(doc, './log.txt')).toBe('/home/u/notes/log.txt');
+    expect(resolveDocLink(doc, './readme.markdown')).toBe('/home/u/notes/readme.markdown');
+  });
+  it('returns null for in-page anchors', () => {
+    expect(resolveDocLink(doc, '#section')).toBeNull();
+  });
+  it('returns null for remote and non-file schemes (even .md)', () => {
+    expect(resolveDocLink(doc, 'https://x/y.md')).toBeNull();
+    expect(resolveDocLink(doc, 'mailto:a@b.com')).toBeNull();
+    expect(resolveDocLink(doc, 'data:text/plain,hi')).toBeNull();
+  });
+  it('returns null for file types we do not open', () => {
+    expect(resolveDocLink(doc, './pic.png')).toBeNull();
+    expect(resolveDocLink(doc, './archive.zip')).toBeNull();
+  });
+  it('returns null when there is no base directory to resolve against', () => {
+    expect(resolveDocLink('', './other.md')).toBeNull();
+  });
+  it('resolves against a windows document with backslash separators', () => {
+    expect(resolveDocLink('C:\\docs\\a.md', 'sub\\b.md')).toBe('C:\\docs\\sub\\b.md');
+    expect(resolveDocLink('C:\\docs\\a.md', '..\\c.md')).toBe('C:\\c.md');
   });
 });

@@ -7,8 +7,8 @@ import { open, save as saveDialog, confirm as confirmDialog } from '@tauri-apps/
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { SUPPORTED, isSupported, basename, tildify, resolveImagePath, sanitizeFilename } from './paths';
-import { slugify, firstHeadingTitle } from './markdown';
+import { SUPPORTED, isSupported, basename, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
+import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml } from './markdown';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts } from './find';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
 import {
@@ -190,7 +190,11 @@ function resolveLocalImages(filePath: string) {
 
 // Render Markdown source into the preview pane (no disk I/O).
 async function renderSource(source: string, filePath: string) {
-  const html = await marked.parse(source);
+  // Pull any leading YAML frontmatter out so it renders as a tidy collapsed
+  // panel instead of the broken <hr> + text marked would make of `--- … ---`.
+  const { frontmatter, body } = extractFrontmatter(source);
+  const meta = frontmatter ? frontmatterToHtml(frontmatter, t('frontmatter')) : '';
+  const html = meta + (await marked.parse(body));
   output.innerHTML = DOMPurify.sanitize(html);
   addHeadingIds();
   resolveLocalImages(filePath);
@@ -295,12 +299,38 @@ function renderSidebar() {
 }
 
 const SESSION_KEY = 'mrdown.session';
+
+// Persist the full working state of every open document — untitled buffers and
+// unsaved edits included — so a quit or crash never loses a draft. `savedSource`
+// travels alongside `workingText` so restore can tell a draft from a clean file
+// even if that file later changed on disk or vanished.
 function saveSession() {
-  // Only on-disk documents can be restored; untitled buffers are not persisted.
-  const paths = docs.map((d) => d.path).filter((p): p is string => p !== null);
-  const data = { paths, active: active?.path ?? null };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  const openDocs = docs.map((d) => ({
+    path: d.path,
+    name: d.name,
+    workingText: d.workingText,
+    savedSource: d.savedSource,
+    mtime: d.mtime,
+  }));
+  try {
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ docs: openDocs, activeIndex: active ? docs.indexOf(active) : -1 }),
+    );
+  } catch {
+    // localStorage full/unavailable: a lost session is non-fatal, so swallow it.
+  }
 }
+
+// While typing we only need to checkpoint the draft occasionally; debounce so a
+// long editing burst isn't one localStorage write per keystroke.
+let sessionSaveTimer: number | undefined;
+function scheduleSessionSave() {
+  clearTimeout(sessionSaveTimer);
+  sessionSaveTimer = window.setTimeout(saveSession, 400);
+}
+// Last-chance flush so the final keystrokes before a close survive the debounce.
+window.addEventListener('beforeunload', saveSession);
 
 async function setActive(doc: Doc) {
   if (active === doc) {
@@ -553,6 +583,8 @@ editor.addEventListener('input', () => {
     lastActiveDirty = isDirty(active);
     renderSidebar();
   }
+  // Checkpoint the draft so unsaved edits survive a quit/crash.
+  scheduleSessionSave();
   // Keep the find count live as the source changes, without moving the caret.
   if (!findBar.hidden && isEditing && findInput.value) refreshSourceMatches();
   clearTimeout(previewTimer);
@@ -704,6 +736,7 @@ function applyFmt(id: string) {
     lastActiveDirty = isDirty(active);
     renderSidebar();
   }
+  scheduleSessionSave();
   renderSource(active.workingText, active.path ?? '');
 }
 
@@ -1210,6 +1243,7 @@ function applyEditorReplace(newText: string, caret = 0) {
     lastActiveDirty = isDirty(active);
     renderSidebar();
   }
+  scheduleSessionSave();
   renderSource(active.workingText, active.path ?? '');
 }
 
@@ -1360,8 +1394,9 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Keep clicks inside the document: external links open in the default browser,
-// internal anchors scroll, so the webview never navigates away from the app.
+// Keep clicks inside the document: internal anchors scroll, links to local
+// Markdown files open in the app, everything else opens in the default browser,
+// so the webview never navigates away from the app.
 output.addEventListener('click', async (e) => {
   const anchor = (e.target as HTMLElement).closest('a');
   if (!anchor) return;
@@ -1371,6 +1406,14 @@ output.addEventListener('click', async (e) => {
   if (href.startsWith('#')) {
     const target = document.getElementById(decodeURIComponent(href.slice(1)));
     target?.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+  // A relative/absolute link to a local Markdown file we can open resolves
+  // against the active document's folder and opens in-app; anything else
+  // (remote URLs, mailto, non-Markdown files) goes to the default handler.
+  const localDoc = active?.path ? resolveDocLink(active.path, href) : null;
+  if (localDoc) {
+    await openFile(localDoc);
   } else {
     await openUrl(href);
   }
@@ -1426,29 +1469,100 @@ setInterval(async () => {
   }
 }, 1500);
 
+// A document's persisted form (see saveSession).
+interface StoredDoc {
+  path: string | null;
+  name: string;
+  workingText: string;
+  savedSource: string;
+  mtime: number;
+}
+
+// New untitled documents are numbered "untitled", "untitled 2", …; recover the
+// index from a name so restored buffers keep their number and new ones don't collide.
+function untitledIndex(name: string): number {
+  if (name === 'untitled') return 1;
+  const m = /^untitled (\d+)$/.exec(name);
+  return m ? Number(m[1]) : 0;
+}
+
 // Restore the previous session, then handle a file the app was launched with.
+// Untitled buffers and unsaved edits are brought back verbatim; on-disk files
+// are re-read so external changes show, unless there's a draft to preserve.
 async function restoreSession() {
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return;
-  let data: { paths?: string[]; active?: string | null };
+  let data: { docs?: StoredDoc[]; activeIndex?: number; paths?: string[]; active?: string | null };
   try {
     data = JSON.parse(raw);
   } catch {
     return;
   }
-  for (const p of data.paths ?? []) {
-    try {
-      const content = await invoke<string>('read_file', { path: p });
-      const mtime = await invoke<number>('file_mtime', { path: p }).catch(() => 0);
-      docs.push({ path: p, name: basename(p), savedSource: content, workingText: content, mtime });
-    } catch {
-      // Skip files that no longer exist.
-    }
+
+  // Upgrade a legacy session (paths only) to the per-document shape; empty
+  // working/saved text means "not a draft", so it re-reads cleanly from disk.
+  const stored: StoredDoc[] = Array.isArray(data.docs)
+    ? data.docs
+    : (data.paths ?? []).map((p) => ({ path: p, name: basename(p), workingText: '', savedSource: '', mtime: 0 }));
+
+  let activeDoc: Doc | null = null;
+
+  // Number a rescued draft above every existing untitled buffer so the name
+  // (and any later save) never collides with a real untitled document.
+  let nextUntitled = 0;
+  for (const s of stored) {
+    if (s.path == null) nextUntitled = Math.max(nextUntitled, untitledIndex(s.name));
   }
-  const target = docs.find((d) => d.path === data.active) ?? docs[0] ?? null;
+  const newUntitledName = () => {
+    nextUntitled += 1;
+    return nextUntitled === 1 ? 'untitled' : `untitled ${nextUntitled}`;
+  };
+
+  for (let i = 0; i < stored.length; i++) {
+    const s = stored[i];
+    const hadDraft = s.workingText !== s.savedSource;
+    let doc: Doc | null = null;
+
+    if (s.path == null) {
+      // Untitled buffer: nothing on disk, so bring the draft back as-is.
+      doc = { path: null, name: s.name, savedSource: s.savedSource, workingText: s.workingText, mtime: 0 };
+    } else {
+      const disk = await invoke<string>('read_file', { path: s.path }).catch(() => null);
+      if (disk == null) {
+        // The file is gone. Rescue an unsaved draft as a fresh untitled buffer so
+        // the work isn't lost; a clean doc has nothing to preserve, so drop it.
+        // A new "untitled" name (not the old basename) keeps it from masquerading
+        // as a saved file and avoids a doubled ".md.md" in the save dialog.
+        if (hadDraft) {
+          doc = { path: null, name: newUntitledName(), savedSource: '', workingText: s.workingText, mtime: 0 };
+        }
+      } else if (hadDraft) {
+        // Keep the unsaved draft over the disk content. Preserve the baseline the
+        // user was editing against so the dirty state stays meaningful; auto-reload
+        // is paused while dirty, so any newer disk version waits until they resolve it.
+        doc = { path: s.path, name: basename(s.path), savedSource: s.savedSource, workingText: s.workingText, mtime: s.mtime };
+      } else {
+        // No unsaved work: adopt the current disk content (picks up external edits).
+        const mtime = await invoke<number>('file_mtime', { path: s.path }).catch(() => 0);
+        doc = { path: s.path, name: basename(s.path), savedSource: disk, workingText: disk, mtime };
+      }
+    }
+
+    if (!doc) continue;
+    docs.push(doc);
+    if (i === data.activeIndex) activeDoc = doc;
+  }
+
+  // Number new untitled docs above anything restored (or rescued) so names never collide.
+  untitledCount = Math.max(untitledCount, nextUntitled);
+
+  const target = activeDoc
+    ?? docs.find((d) => d.path != null && d.path === data.active)
+    ?? docs[0]
+    ?? null;
   if (target) {
     active = target;
-    lastActiveDirty = false;
+    lastActiveDirty = isDirty(target);
     editor.value = target.workingText;
     await renderSource(target.workingText, target.path ?? '');
     showDocUI();

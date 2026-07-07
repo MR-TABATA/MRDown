@@ -57,3 +57,65 @@ export function resolveImagePath(filePath: string, src: string): string | null {
     rel.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(rel) || rel.startsWith('\\\\');
   return isAbsolute ? rel : `${dir}${sep}${rel.split('/').join(sep)}`;
 }
+
+/** Collapse `.` and `..` segments, preserving a POSIX/`C:`/UNC absolute prefix. */
+function normalizeSegments(path: string, sep: string): string {
+  let prefix = '';
+  let rest = path;
+  const drive = /^([a-zA-Z]:)[\\/]/.exec(path);
+  if (path.startsWith('/')) {
+    prefix = sep;
+    rest = path.slice(1);
+  } else if (drive) {
+    prefix = drive[1] + sep;
+    rest = path.slice(drive[0].length);
+  } else if (path.startsWith('\\\\')) {
+    prefix = sep + sep;
+    rest = path.slice(2);
+  }
+  const out: string[] = [];
+  for (const part of rest.split(/[\\/]+/)) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      if (out.length && out[out.length - 1] !== '..') out.pop();
+      else if (!prefix) out.push('..');
+    } else {
+      out.push(part);
+    }
+  }
+  return prefix + out.join(sep);
+}
+
+/**
+ * Resolve a Markdown link `href` to a local document this app can open.
+ *
+ * Returns an absolute filesystem path (with any `#fragment`/`?query` stripped,
+ * `.`/`..` collapsed) when the href points at a supported local file to open
+ * in-app, or `null` when it's an in-page anchor, a remote/non-file URL, a file
+ * type we don't open, or an unresolvable relative link (no base directory) —
+ * those are left to the caller to scroll to or open externally.
+ */
+export function resolveDocLink(filePath: string, href: string): string | null {
+  if (!href || href.startsWith('#')) return null;
+  let raw = href;
+  if (/^file:\/\//i.test(raw)) {
+    raw = raw.replace(/^file:\/\//i, '');
+  } else if (/^[a-z][a-z0-9+.-]*:/i.test(raw) && !/^[a-zA-Z]:[\\/]/.test(raw)) {
+    return null; // remote/non-file scheme (http, mailto, data, tauri, …) — not a drive letter
+  }
+  raw = raw.split('#')[0].split('?')[0];
+  let path: string;
+  try {
+    path = decodeURIComponent(raw);
+  } catch {
+    path = raw;
+  }
+  if (!path || !isSupported(path)) return null;
+  const sep = filePath.includes('\\') ? '\\' : '/';
+  const isAbsolute =
+    path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path) || path.startsWith('\\\\');
+  if (isAbsolute) return normalizeSegments(path, sep);
+  const dir = filePath.slice(0, Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\')));
+  if (!dir) return null; // no base to resolve a relative link against (e.g. an untitled doc)
+  return normalizeSegments(`${dir}${sep}${path}`, sep);
+}
