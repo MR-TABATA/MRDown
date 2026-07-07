@@ -14,13 +14,15 @@ A minimal, fast Markdown viewer built with Tauri + TypeScript.
 - Customise the toolbar in Settings (`⌘,`): turn any of the 14 Markdown actions (strikethrough, ordered/checklist, code block, image, table, horizontal rule, …) on or off; the choice is remembered
 - Japanese / English UI: follows your OS language by default and can be switched in Settings; the native menu (File / Edit / View) is localized too
 - Keep multiple documents open in a sidebar (BBEdit-style): click to switch, close with the circled × (`⌘W`), toggle the sidebar with `⌘1`; the open set is restored on next launch
+- Never lose unsaved work: in-progress edits (and untitled documents that were never written to disk) are continuously kept as drafts and restored on next launch, so a quit or crash won't discard what you were writing
 - Open files by double-clicking or "Open With" (registered as a handler for those extensions), the button, `⌘O` / `Ctrl+O`, or by dragging a file onto the window
 - Auto-reloads when the open file changes on disk (scroll position preserved)
 - Recent files list on the start screen for quick reopening
 - Renders tables, code blocks, quotes, and local images (relative paths resolve against the file)
+- Renders a document's YAML frontmatter (the leading `---` … `---` block) as a tidy collapsed metadata card instead of leaking `title:`/`tags:` lines into the body
 - Syntax-highlights fenced code blocks with [highlight.js](https://highlightjs.org/) (lazy-loaded common bundle; tuned to the dark theme)
 - Renders [Mermaid](https://mermaid.js.org/) diagrams in ```` ```mermaid ```` code blocks (lazy-loaded; falls back to source on syntax errors)
-- Links stay in the app: external links open in your browser, in-document anchors scroll
+- Links stay in the app: external links open in your browser, in-document anchors scroll, and links to local Markdown files (`[text](./other.md)`) open that file right in the app instead of leaving it
 - HTML output sanitized with DOMPurify and locked down with a strict CSP (safe to open untrusted files)
 - Reload the current file (`⌘R` / `Ctrl+R`)
 
