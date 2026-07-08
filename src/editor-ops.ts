@@ -235,3 +235,22 @@ export function autoPair(s: Sel, ch: string): Sel | null {
   }
   return null;
 }
+
+const URL_RE = /^(https?:\/\/|mailto:)\S+$/i;
+
+/**
+ * Pasting a bare URL over selected text turns it into a Markdown link
+ * (`[selection](url)`), caret after the link. Returns null when there's no
+ * selection or the clipboard text isn't a single URL, so paste stays default.
+ */
+export function linkFromPaste(s: Sel, pasted: string): Sel | null {
+  const url = pasted.trim();
+  if (s.start === s.end || !URL_RE.test(url)) return null;
+  const label = s.text.slice(s.start, s.end);
+  const caret = s.start + label.length + url.length + 4; // [label](url)
+  return {
+    text: s.text.slice(0, s.start) + `[${label}](${url})` + s.text.slice(s.end),
+    start: caret,
+    end: caret,
+  };
+}

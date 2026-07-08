@@ -22,6 +22,7 @@ import {
   listContinue,
   listIndent,
   autoPair,
+  linkFromPaste,
   type Sel,
 } from './editor-ops';
 
@@ -891,6 +892,17 @@ editor.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) r = listContinue(s);
   else if (e.key === 'Tab') r = listIndent(s, e.shiftKey);
   else if (e.key.length === 1) r = autoPair(s, e.key);
+  if (r) {
+    e.preventDefault();
+    replaceEditorText(r.text, r.start, r.end);
+  }
+});
+
+// Pasting a URL over selected text turns the selection into a Markdown link.
+editor.addEventListener('paste', (e) => {
+  const pasted = e.clipboardData?.getData('text') ?? '';
+  const s: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
+  const r = linkFromPaste(s, pasted);
   if (r) {
     e.preventDefault();
     replaceEditorText(r.text, r.start, r.end);

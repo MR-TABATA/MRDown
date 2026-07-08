@@ -10,6 +10,7 @@ import {
   listContinue,
   listIndent,
   autoPair,
+  linkFromPaste,
   type Sel,
 } from './editor-ops';
 
@@ -176,5 +177,23 @@ describe('autoPair', () => {
   });
   it('returns null for a plain character', () => {
     expect(autoPair(at('a|b'), 'x')).toBeNull();
+  });
+});
+
+describe('linkFromPaste', () => {
+  it('wraps the selection as a link when a URL is pasted', () => {
+    const r = linkFromPaste(at('see |docs| here'), 'https://example.com/x');
+    expect(r?.text).toBe('see [docs](https://example.com/x) here');
+    expect(r?.start).toBe(r?.end);
+  });
+  it('trims surrounding whitespace on the pasted URL', () => {
+    expect(linkFromPaste(at('|a|'), '  https://e.com  ')?.text).toBe('[a](https://e.com)');
+  });
+  it('returns null without a selection', () => {
+    expect(linkFromPaste(at('x|y'), 'https://e.com')).toBeNull();
+  });
+  it('returns null when the paste is not a single URL', () => {
+    expect(linkFromPaste(at('|a|'), 'not a url')).toBeNull();
+    expect(linkFromPaste(at('|a|'), 'https://e.com and more')).toBeNull();
   });
 });
