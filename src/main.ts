@@ -104,7 +104,7 @@ let untitledCount = 0;
 
 const isDirty = (d: Doc) => d.workingText !== d.savedSource;
 
-// Give headings ids so in-document anchor links (and a future TOC) work.
+// Give headings ids so in-document anchor links (and the outline) work.
 function addHeadingIds() {
   const used = new Set<string>();
   output.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6').forEach((h) => {
@@ -116,6 +116,118 @@ function addHeadingIds() {
     h.id = id;
   });
 }
+
+// --- Outline / TOC (left sidebar) — the active document's headings, with
+// click-to-scroll and a scroll-spy that marks the heading you're reading. ---
+const outlineHead = document.getElementById('outline-head')!;
+const outlineList = document.getElementById('outline-list')!;
+const OUTLINE_KEY = 'mrdown.outlineCollapsed';
+let outlineCollapsed = localStorage.getItem(OUTLINE_KEY) === '1';
+let outlineHeads: HTMLElement[] = [];
+let outlineScrollEl: HTMLElement | null = null;
+let outlineRaf = 0;
+let outlineClickLock = 0;
+
+function markOutlineActive(id: string) {
+  for (const li of Array.from(outlineList.children) as HTMLElement[]) {
+    li.classList.toggle('active', li.dataset.id === id);
+  }
+}
+
+// Scroll-spy: highlight the heading you're reading. The active one is the last
+// whose top has passed a line just below the viewport top; near the bottom the
+// trailing headings can't reach that line, so clamp to the final heading (keeps
+// a click on the last outline item highlighted). rAF-throttled.
+function updateOutlineActive() {
+  outlineRaf = 0;
+  // A click sets the active item and smooth-scrolls; keep the clicked item lit
+  // through that scroll instead of letting the spy override it mid-flight.
+  if (Date.now() - outlineClickLock < 600) return;
+  const root = outlineScrollEl;
+  if (!root || outlineHeads.length === 0) return;
+  const rootTop = root.getBoundingClientRect().top;
+  let id = outlineHeads[0].id;
+  for (const h of outlineHeads) {
+    if (h.getBoundingClientRect().top - rootTop <= 90) id = h.id;
+    else break;
+  }
+  if (root.scrollTop + root.clientHeight >= root.scrollHeight - 4) {
+    id = outlineHeads[outlineHeads.length - 1].id;
+  }
+  markOutlineActive(id);
+}
+
+function onOutlineScroll() {
+  if (!outlineRaf) outlineRaf = requestAnimationFrame(updateOutlineActive);
+}
+
+// Bind the scroll-spy to the active scroll container — the content area in
+// preview, the #output pane while editing (they differ) — so it is re-bound on
+// every rebuild and whenever the edit/preview mode flips.
+function bindOutlineSpy() {
+  outlineScrollEl?.removeEventListener('scroll', onOutlineScroll);
+  if (outlineHeads.length === 0) {
+    outlineScrollEl = null;
+    return;
+  }
+  outlineScrollEl = isEditing ? output : contentArea;
+  outlineScrollEl.addEventListener('scroll', onOutlineScroll, { passive: true });
+  updateOutlineActive();
+}
+
+function applyOutlineCollapsed() {
+  outlineHead.classList.toggle('collapsed', outlineCollapsed);
+  outlineList.hidden = outlineCollapsed || outlineHeads.length === 0;
+}
+
+// Rebuild from the rendered headings. Called after every render (open, reload,
+// debounced live edit) so the outline always mirrors the current document.
+function buildOutline() {
+  outlineHeads = Array.from(output.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'));
+  outlineList.innerHTML = '';
+  if (outlineHeads.length === 0) {
+    outlineHead.hidden = true;
+    outlineList.hidden = true;
+    bindOutlineSpy();
+    return;
+  }
+  outlineHead.hidden = false;
+  // Indent relative to the shallowest heading present, so a doc that starts at
+  // ## isn't pushed in needlessly.
+  const minLevel = Math.min(...outlineHeads.map((h) => Number(h.tagName[1])));
+  for (const h of outlineHeads) {
+    const level = Number(h.tagName[1]);
+    const li = document.createElement('li');
+    li.className = 'outline-item';
+    li.dataset.id = h.id;
+    li.dataset.level = String(level);
+    li.style.paddingLeft = `${10 + (level - minLevel) * 14}px`;
+    li.textContent = h.textContent || '';
+    li.title = li.textContent;
+    li.addEventListener('click', () => {
+      markOutlineActive(h.id);
+      outlineClickLock = Date.now();
+      document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    outlineList.appendChild(li);
+  }
+  applyOutlineCollapsed();
+  bindOutlineSpy();
+}
+
+function clearOutline() {
+  outlineHeads = [];
+  outlineList.innerHTML = '';
+  outlineHead.hidden = true;
+  outlineList.hidden = true;
+  bindOutlineSpy();
+}
+
+outlineHead.addEventListener('click', () => {
+  outlineCollapsed = !outlineCollapsed;
+  localStorage.setItem(OUTLINE_KEY, outlineCollapsed ? '1' : '0');
+  applyOutlineCollapsed();
+});
 
 // Lazily load Mermaid only when a document actually contains a diagram, so the
 // large dependency never slows down opening plain Markdown.
@@ -207,6 +319,7 @@ async function renderSource(source: string, filePath: string) {
   const html = meta + (await marked.parse(body));
   output.innerHTML = DOMPurify.sanitize(html);
   addHeadingIds();
+  buildOutline();
   resolveLocalImages(filePath);
   await highlightCode();
   await renderMermaid();
@@ -226,6 +339,7 @@ function showDocUI() {
 
 function showEmpty() {
   setEditing(false);
+  clearOutline();
   output.style.display = 'none';
   output.innerHTML = '';
   editor.value = '';
@@ -267,6 +381,8 @@ function setEditing(on: boolean) {
   contentArea.classList.toggle('editing', on);
   editLabel.textContent = on ? t('preview') : t('edit');
   if (on) editor.focus();
+  // The outline's scroll-spy watches a different scroll container per mode.
+  bindOutlineSpy();
   // Find switches between source (editor) and preview search with the mode.
   if (!findBar.hidden) runFind();
 }

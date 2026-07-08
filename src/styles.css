@@ -250,6 +250,45 @@ body.sidebar-hidden #sidebar { display: none; }
   font-style: italic;
 }
 
+/* Outline / TOC — the active document's headings, styled to match the tree
+   and open-docs lists above it. */
+#sidebar .sidebar-title.outline-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+#sidebar .sidebar-title.outline-head[hidden] { display: none; }
+.outline-chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--mrd-faint);
+  transition: transform 0.1s ease;
+}
+.outline-head.collapsed .outline-chevron { transform: rotate(-90deg); }
+#outline-list { list-style: none; margin-bottom: 4px; }
+#outline-list[hidden] { display: none; }
+.outline-item {
+  padding: 3px 10px;
+  cursor: pointer;
+  color: var(--mrd-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+}
+.outline-item[data-level="1"] { font-weight: 600; color: var(--mrd-text); }
+.outline-item:hover { background: var(--mrd-surface); color: var(--mrd-text); }
+.outline-item.active {
+  background: var(--mrd-surface);
+  color: var(--mrd-text);
+  border-left-color: var(--mrd-accent);
+}
+
 .content-area {
   flex: 1;
   min-width: 0;
