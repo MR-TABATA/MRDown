@@ -135,3 +135,103 @@ export function insertHr(s: Sel): Sel {
   const caret = bodyStart + 3;
   return { text, start: caret, end: caret };
 }
+
+// --- Typing behaviours (wired to the editor's keydown) ------------------------
+
+/**
+ * Enter inside a list item continues the list on the next line: unordered
+ * markers repeat, ordered numbers increment, task items start unchecked, and
+ * the indent is preserved. Pressing Enter on an *empty* item clears the marker
+ * instead (exiting the list). Returns null when the caret isn't in a list line
+ * (or a range is selected), so the caller lets the default Enter happen.
+ */
+export function listContinue(s: Sel): Sel | null {
+  if (s.start !== s.end) return null;
+  const { text, start } = s;
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  let lineEnd = text.indexOf('\n', start);
+  if (lineEnd === -1) lineEnd = text.length;
+  const line = text.slice(lineStart, lineEnd);
+
+  const task = /^(\s*)([-*+]) \[([ xX])\] (.*)$/.exec(line);
+  const ul = /^(\s*)([-*+]) (.*)$/.exec(line);
+  const ol = /^(\s*)(\d+)([.)]) (.*)$/.exec(line);
+  let indent: string, marker: string, content: string;
+  if (task) [indent, marker, content] = [task[1], `${task[2]} [ ] `, task[4]];
+  else if (ul) [indent, marker, content] = [ul[1], `${ul[2]} `, ul[3]];
+  else if (ol) [indent, marker, content] = [ol[1], `${Number(ol[2]) + 1}${ol[3]} `, ol[4]];
+  else return null;
+
+  // Empty item → drop the marker, leaving a blank line (exit the list).
+  if (content.trim() === '') {
+    return { text: text.slice(0, lineStart) + text.slice(lineEnd), start: lineStart, end: lineStart };
+  }
+  const insert = '\n' + indent + marker;
+  return { text: text.slice(0, start) + insert + text.slice(start), start: start + insert.length, end: start + insert.length };
+}
+
+const INDENT = '  ';
+const LIST_LINE = /^\s*([-*+]|\d+[.)]) /;
+
+/**
+ * Tab / Shift-Tab indents or outdents the list lines touched by the selection
+ * (by two spaces). Returns null when the block isn't a list, so Tab keeps its
+ * default behaviour outside lists.
+ */
+export function listIndent(s: Sel, outdent: boolean): Sel | null {
+  const { text, start, end } = s;
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  let lineEnd = text.indexOf('\n', end);
+  if (lineEnd === -1) lineEnd = text.length;
+  const lines = text.slice(lineStart, lineEnd).split('\n');
+  if (!lines.some((l) => LIST_LINE.test(l))) return null;
+
+  let firstDelta = 0;
+  let totalDelta = 0;
+  const out = lines
+    .map((l, i) => {
+      if (outdent) {
+        const removed = l.startsWith(INDENT) ? INDENT.length : l.startsWith('\t') ? 1 : 0;
+        if (i === 0) firstDelta = -removed;
+        totalDelta -= removed;
+        return l.slice(removed);
+      }
+      if (i === 0) firstDelta = INDENT.length;
+      totalDelta += INDENT.length;
+      return INDENT + l;
+    })
+    .join('\n');
+
+  return {
+    text: text.slice(0, lineStart) + out + text.slice(lineEnd),
+    start: Math.max(lineStart, start + firstDelta),
+    end: end + totalDelta,
+  };
+}
+
+const OPEN_CLOSE: Record<string, string> = { '[': ']', '(': ')', '`': '`' };
+const WRAP: Record<string, string> = { '[': ']', '(': ')', '`': '`', '*': '*', '_': '_' };
+
+/**
+ * Bracket/quote auto-pairing for a typed character. With a selection it wraps
+ * the text (`[`→`[sel]`, `` ` ``→`` `sel` ``, `*`→`*sel*` …). With a collapsed
+ * caret it inserts the matching close for `[ ( ` ``, and "types over" an existing
+ * close when the caret already sits on it. Returns null to type normally.
+ */
+export function autoPair(s: Sel, ch: string): Sel | null {
+  const { text, start, end } = s;
+  if (start !== end && ch in WRAP) {
+    const sel = text.slice(start, end);
+    return { text: text.slice(0, start) + ch + sel + WRAP[ch] + text.slice(end), start: start + 1, end: end + 1 };
+  }
+  if (start === end) {
+    // Type over the matching close instead of inserting a second one.
+    if ((ch === ']' || ch === ')' || ch === '`') && text[start] === ch) {
+      return { text, start: start + 1, end: start + 1 };
+    }
+    if (ch in OPEN_CLOSE) {
+      return { text: text.slice(0, start) + ch + OPEN_CLOSE[ch] + text.slice(start), start: start + 1, end: start + 1 };
+    }
+  }
+  return null;
+}

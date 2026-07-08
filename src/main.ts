@@ -19,6 +19,9 @@ import {
   insertFence,
   insertTable,
   insertHr,
+  listContinue,
+  listIndent,
+  autoPair,
   type Sel,
 } from './editor-ops';
 
@@ -865,6 +868,23 @@ editor.addEventListener('input', () => {
   previewTimer = window.setTimeout(() => {
     if (active) renderSource(active.workingText, active.path ?? '');
   }, 250);
+});
+
+// Editor typing niceties: list auto-continue (Enter), list indent (Tab), and
+// bracket/quote auto-pairing. Each pure transform returns the new text+selection
+// (or null to fall through to the default keypress); applying it through
+// replaceEditorText keeps the change on the native undo stack and fires `input`.
+editor.addEventListener('keydown', (e) => {
+  if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return; // leave IME & shortcuts alone
+  const s: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
+  let r: Sel | null = null;
+  if (e.key === 'Enter' && !e.shiftKey) r = listContinue(s);
+  else if (e.key === 'Tab') r = listIndent(s, e.shiftKey);
+  else if (e.key.length === 1) r = autoPair(s, e.key);
+  if (r) {
+    e.preventDefault();
+    replaceEditorText(r.text, r.start, r.end);
+  }
 });
 
 // Replace the editor's text through execCommand so the change lands on the
