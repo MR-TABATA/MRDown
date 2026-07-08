@@ -57,11 +57,11 @@ renderer to the other two nearly for free.
 ## Planned — editor depth
 
 - [x] Code-block syntax highlighting (highlight.js, lazy-loaded common bundle)
-- [ ] Editor ⇄ preview scroll sync
-- [ ] List auto-continue (Enter continues `- `), Tab / Shift-Tab indent
-- [ ] Auto-close pairs (`**`, `` ` ``, `[`, `(`)
-- [ ] Paste a URL onto a selection → link; paste an image → save + insert
-- [ ] Word / character count, reading time
+- [x] Editor ⇄ preview scroll sync (proportional)
+- [x] List auto-continue (Enter continues `- `), Tab / Shift-Tab indent
+- [x] Auto-close pairs (`` ` ``, `[`, `(`; wrap the selection, type-over the close)
+- [x] Paste a URL onto a selection → link; paste an image → save + insert
+- [x] Word / character count, reading time
 - [ ] Focus / Zen mode; font size & line-width settings; word-wrap toggle
 
 ## Planned — text transforms (act on the selection)
