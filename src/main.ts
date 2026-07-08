@@ -940,6 +940,31 @@ editor.addEventListener('paste', (e) => {
   }
 });
 
+// Editor ⇄ preview scroll sync (edit mode only). Proportional: match the
+// scrolled fraction of one pane onto the other. Exact source-line mapping is
+// impractical against a soft-wrapping <textarea>, and proportional tracks well
+// for prose (it only drifts around tall images / code blocks). A "driver" pane
+// is latched while it scrolls so its echo on the other pane doesn't feed back.
+let scrollDriver: HTMLElement | null = null;
+let scrollDriverTimer: number | undefined;
+function bindScrollSync(from: HTMLElement, to: HTMLElement) {
+  from.addEventListener(
+    'scroll',
+    () => {
+      if (!isEditing || (scrollDriver && scrollDriver !== from)) return;
+      scrollDriver = from;
+      clearTimeout(scrollDriverTimer);
+      scrollDriverTimer = window.setTimeout(() => (scrollDriver = null), 120);
+      const fromMax = from.scrollHeight - from.clientHeight;
+      const toMax = to.scrollHeight - to.clientHeight;
+      to.scrollTop = fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
+    },
+    { passive: true }
+  );
+}
+bindScrollSync(editor, output);
+bindScrollSync(output, editor);
+
 // Replace the editor's text through execCommand so the change lands on the
 // WebView's native undo stack — assigning `editor.value` directly would wipe
 // it, breaking ⌘Z and Edit ▸ Undo. Only the differing middle span is replaced
