@@ -39,6 +39,11 @@ const settingsClose = document.getElementById('settings-close')!;
 const toolbarOptions = document.getElementById('toolbar-options')!;
 const langOptions = document.getElementById('lang-options')!;
 const widthOption = document.getElementById('width-option')!;
+const accentOption = document.getElementById('accent-option')!;
+const bgOption = document.getElementById('bg-option')!;
+const textOption = document.getElementById('text-option')!;
+const fontOption = document.getElementById('font-option')!;
+const fontsizeOption = document.getElementById('fontsize-option')!;
 const output = document.getElementById('output')!;
 const emptyState = document.getElementById('empty-state')!;
 const recentBox = document.getElementById('recent')!;
@@ -1011,6 +1016,157 @@ function buildLangOptions() {
   }
 }
 
+// --- Appearance: accent colour, reading background/text, content font & size.
+// Each override is stored as a value in localStorage and applied as an inline
+// custom property on <html>; a missing key means "use the default", which we
+// express by clearing the inline property so the stylesheet's :root value wins
+// (System accent, dark background, the SF stack, 16px). The derived surface and
+// hover tokens in styles.css are computed from these, so they follow along. ---
+const ACCENT_KEY = 'mrdown.accent';
+const BG_KEY = 'mrdown.bg';
+const TEXT_KEY = 'mrdown.text';
+const FONT_KEY = 'mrdown.contentFont';
+const FONTSIZE_KEY = 'mrdown.contentSize';
+
+// Preset swatches. Accent mirrors the macOS accent choices; background/text are
+// a few coherent pairings, but any two can be combined (or a custom colour set).
+const ACCENT_PRESETS = ['#007aff', '#bf5af2', '#ff2d55', '#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#8e8e93'];
+const BG_PRESETS = ['#1e1e1e', '#000000', '#282c34', '#f4ecd8', '#ffffff'];
+const TEXT_PRESETS = ['#d4d4d4', '#ffffff', '#c9d1d9', '#5b4636', '#24292f'];
+
+const FONT_CHOICES: Array<{ id: string; labelKey: Key; stack: string }> = [
+  { id: 'system', labelKey: 'fontSystem', stack: '' },
+  { id: 'serif', labelKey: 'fontSerif', stack: "'New York', 'Iowan Old Style', Georgia, 'Times New Roman', serif" },
+  { id: 'rounded', labelKey: 'fontRounded', stack: "'SF Pro Rounded', ui-rounded, 'Hiragino Maru Gothic ProN', -apple-system, sans-serif" },
+];
+const FONTSIZE_MIN = 13;
+const FONTSIZE_MAX = 22;
+const FONTSIZE_DEFAULT = 16;
+
+// Set (or, for null, clear) an inline custom property on the document root.
+function applyVar(cssVar: string, value: string | null) {
+  if (value === null || value === '') document.documentElement.style.removeProperty(cssVar);
+  else document.documentElement.style.setProperty(cssVar, value);
+}
+
+function applyContentFont(id: string | null) {
+  const choice = FONT_CHOICES.find((f) => f.id === id);
+  applyVar('--mrd-content-font', choice ? choice.stack : null);
+}
+function applyContentSize(px: string | null) {
+  const n = Number(px);
+  applyVar('--mrd-content-size', Number.isFinite(n) && n > 0 ? `${n}px` : null);
+}
+
+// Read the persisted appearance overrides and push them onto <html>. Called once
+// at startup so a customised look is in place before the first document renders.
+function applyStoredAppearance() {
+  applyVar('--mrd-accent', localStorage.getItem(ACCENT_KEY));
+  applyVar('--mrd-bg', localStorage.getItem(BG_KEY));
+  applyVar('--mrd-text', localStorage.getItem(TEXT_KEY));
+  applyContentFont(localStorage.getItem(FONT_KEY));
+  applyContentSize(localStorage.getItem(FONTSIZE_KEY));
+}
+
+// Build one colour row: a "reset to default" chip, preset swatches, and a custom
+// picker. `resetKey` labels the chip (System for accent, Default for bg/text).
+function buildColorOption(
+  container: HTMLElement,
+  opts: { storageKey: string; cssVar: string; presets: string[]; resetKey: Key }
+) {
+  const stored = localStorage.getItem(opts.storageKey); // null => default
+  const isPreset = stored !== null && opts.presets.includes(stored);
+  container.innerHTML = '';
+
+  const select = (value: string | null) => {
+    if (value === null) localStorage.removeItem(opts.storageKey);
+    else localStorage.setItem(opts.storageKey, value);
+    applyVar(opts.cssVar, value);
+    buildColorOption(container, opts); // re-render to move the selection ring
+  };
+
+  const reset = document.createElement('button');
+  reset.className = 'color-reset' + (stored === null ? ' selected' : '');
+  reset.textContent = t(opts.resetKey);
+  reset.addEventListener('click', () => select(null));
+  container.appendChild(reset);
+
+  for (const c of opts.presets) {
+    const sw = document.createElement('button');
+    sw.className = 'color-swatch' + (stored === c ? ' selected' : '');
+    sw.style.background = c;
+    sw.title = c;
+    sw.addEventListener('click', () => select(c));
+    container.appendChild(sw);
+  }
+
+  // Custom picker — selected whenever a non-preset colour is stored.
+  const custom = stored !== null && !isPreset;
+  const wrap = document.createElement('label');
+  wrap.className = 'color-custom' + (custom ? ' selected has-value' : '');
+  wrap.title = t('colorCustom');
+  const picker = document.createElement('input');
+  picker.type = 'color';
+  picker.value = custom ? stored : (stored ?? '#888888');
+  if (custom) wrap.style.background = stored;
+  picker.addEventListener('input', () => select(picker.value));
+  wrap.appendChild(picker);
+  container.appendChild(wrap);
+}
+
+function buildFontOption() {
+  const current = localStorage.getItem(FONT_KEY) ?? 'system';
+  fontOption.innerHTML = '';
+  for (const f of FONT_CHOICES) {
+    const label = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'content-font';
+    radio.checked = f.id === current;
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      if (f.id === 'system') localStorage.removeItem(FONT_KEY);
+      else localStorage.setItem(FONT_KEY, f.id);
+      applyContentFont(f.id);
+    });
+    const name = document.createElement('span');
+    name.textContent = t(f.labelKey);
+    label.append(radio, name);
+    fontOption.appendChild(label);
+  }
+}
+
+function buildFontSizeOption() {
+  const stored = Number(localStorage.getItem(FONTSIZE_KEY));
+  const current = Number.isFinite(stored) && stored > 0 ? stored : FONTSIZE_DEFAULT;
+  fontsizeOption.innerHTML = '';
+  const value = document.createElement('div');
+  value.className = 'fontsize-value';
+  value.textContent = `${current}px`;
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = String(FONTSIZE_MIN);
+  slider.max = String(FONTSIZE_MAX);
+  slider.step = '1';
+  slider.value = String(current);
+  slider.addEventListener('input', () => {
+    const v = Number(slider.value);
+    value.textContent = `${v}px`;
+    if (v === FONTSIZE_DEFAULT) localStorage.removeItem(FONTSIZE_KEY);
+    else localStorage.setItem(FONTSIZE_KEY, String(v));
+    applyContentSize(String(v));
+  });
+  fontsizeOption.append(value, slider);
+}
+
+function buildAppearanceOptions() {
+  buildColorOption(accentOption, { storageKey: ACCENT_KEY, cssVar: '--mrd-accent', presets: ACCENT_PRESETS, resetKey: 'colorSystem' });
+  buildColorOption(bgOption, { storageKey: BG_KEY, cssVar: '--mrd-bg', presets: BG_PRESETS, resetKey: 'colorDefault' });
+  buildColorOption(textOption, { storageKey: TEXT_KEY, cssVar: '--mrd-text', presets: TEXT_PRESETS, resetKey: 'colorDefault' });
+  buildFontOption();
+  buildFontSizeOption();
+}
+
 // Re-localise the whole UI: static [data-i18n]/[data-i18n-title] nodes plus the
 // pieces built in JS. Called on startup and whenever the language changes.
 function applyI18n() {
@@ -1030,6 +1186,7 @@ function applyI18n() {
   updateFolderHeader();
   buildToolbarOptions();
   buildLangOptions();
+  buildAppearanceOptions();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
   invoke('apply_menu', { lang: getLang() }).catch(() => {});
@@ -1039,6 +1196,7 @@ function openSettings() {
   buildToolbarOptions();
   buildLangOptions();
   buildWidthOption();
+  buildAppearanceOptions();
   settingsOverlay.hidden = false;
 }
 function closeSettings() {
@@ -1502,6 +1660,7 @@ optRegexBtn.addEventListener('click', () => toggleOpt('regex'));
 
 applyI18n();
 applyPreviewWidth(storedWidth());
+applyStoredAppearance();
 
 // --- Sidebar visibility (default shown, persisted when hidden) ---
 const SIDEBAR_KEY = 'mrdown.sidebar';
