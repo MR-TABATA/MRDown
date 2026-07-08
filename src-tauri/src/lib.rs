@@ -36,6 +36,25 @@ fn save_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// Write pasted image bytes to disk (creating the parent folder if needed), used
+/// when the user pastes an image into the editor. Guards the extension to common
+/// image types so the command can't be coerced into writing arbitrary files.
+#[tauri::command]
+fn save_image(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    if !["png", "jpg", "jpeg", "gif", "webp"].contains(&ext.as_str()) {
+        return Err("Unsupported image type".to_string());
+    }
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())
+}
+
 /// Move a Markdown file to the OS trash (the Delete of CRUD) and drop it from
 /// the recent-files list. Uses the trash, not an unrecoverable delete, so a
 /// misclick is recoverable from the system's Trash/Recycle Bin.
@@ -403,6 +422,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_file,
             save_file,
+            save_image,
             delete_file,
             file_mtime,
             read_dir,

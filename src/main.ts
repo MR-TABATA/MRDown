@@ -7,7 +7,7 @@ import { open, save as saveDialog, confirm as confirmDialog } from '@tauri-apps/
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { SUPPORTED, isSupported, basename, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
+import { SUPPORTED, isSupported, basename, dirname, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
 import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml, docStats } from './markdown';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts } from './find';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
@@ -898,11 +898,42 @@ editor.addEventListener('keydown', (e) => {
   }
 });
 
-// Pasting a URL over selected text turns the selection into a Markdown link.
+// Save a pasted image next to the document (in an `assets/` folder) and insert
+// a relative `![]()` so the existing image resolver renders it.
+async function pasteImage(file: File, docPath: string) {
+  try {
+    const ext = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1] || 'png';
+    const name = `pasted-${Date.now()}.${ext}`;
+    const sep = docPath.includes('\\') ? '\\' : '/';
+    const abs = `${dirname(docPath)}${sep}assets${sep}${name}`;
+    const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+    await invoke('save_image', { path: abs, bytes });
+    const s: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
+    const md = `![${s.text.slice(s.start, s.end)}](assets/${name})`;
+    const caret = s.start + md.length;
+    replaceEditorText(s.text.slice(0, s.start) + md + s.text.slice(s.end), caret, caret);
+  } catch (err) {
+    console.error('image paste failed', err);
+  }
+}
+
+// Paste handling: an image is saved and linked; otherwise a URL pasted over a
+// selection becomes a Markdown link. Anything else pastes normally.
 editor.addEventListener('paste', (e) => {
-  const pasted = e.clipboardData?.getData('text') ?? '';
+  const img = [...(e.clipboardData?.items ?? [])].find(
+    (it) => it.kind === 'file' && it.type.startsWith('image/')
+  );
+  if (img) {
+    const file = img.getAsFile();
+    // Images need a folder to live next to, so only handle a saved document.
+    if (file && active?.path) {
+      e.preventDefault();
+      void pasteImage(file, active.path);
+    }
+    return;
+  }
   const s: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
-  const r = linkFromPaste(s, pasted);
+  const r = linkFromPaste(s, e.clipboardData?.getData('text') ?? '');
   if (r) {
     e.preventDefault();
     replaceEditorText(r.text, r.start, r.end);
