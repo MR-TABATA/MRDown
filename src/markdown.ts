@@ -12,6 +12,24 @@ export function slugify(text: string): string {
     .replace(/[^\p{L}\p{N}-]/gu, '');
 }
 
+// Ranges covering CJK ideographs, kana and full-width punctuation — counted per
+// character (no spaces between "words"), unlike space-delimited scripts.
+const CJK = /[぀-ヿ㐀-䶿一-鿿＀-￯]/g;
+
+/**
+ * Character count, (space-delimited) word count and an estimated reading time
+ * for a document. CJK characters are counted individually and read at ~500/min;
+ * the remaining space-delimited words at ~200/min, so mixed JA/EN text is
+ * estimated sensibly. Reading time is at least a minute for any non-empty text.
+ */
+export function docStats(text: string): { chars: number; words: number; minutes: number } {
+  const chars = [...text].length;
+  const cjk = (text.match(CJK) || []).length;
+  const words = (text.replace(CJK, ' ').match(/\S+/g) || []).length;
+  const minutes = chars === 0 ? 0 : Math.max(1, Math.round(cjk / 500 + words / 200));
+  return { chars, words, minutes };
+}
+
 /**
  * Text of the first ATX heading (`# ...` through `###### ...`) in a document,
  * with any trailing `#` closers stripped. Returns null when there is none —

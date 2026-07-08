@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml } from './markdown';
+import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml, docStats } from './markdown';
 
 describe('slugify', () => {
   it('lowercases and hyphenates whitespace', () => {
@@ -68,5 +68,31 @@ describe('frontmatterToHtml', () => {
     expect(html).toContain('<td colspan="2"><code>tags:</code></td>');
     expect(html).toContain('<td colspan="2"><code>  - a</code></td>');
     expect(html).not.toContain('<th>tags</th>');
+  });
+});
+
+describe('docStats', () => {
+  it('counts words and characters for space-delimited text', () => {
+    const s = docStats('the quick brown fox');
+    expect(s.chars).toBe(19);
+    expect(s.words).toBe(4);
+  });
+  it('counts CJK characters individually (no word split)', () => {
+    const s = docStats('日本語のテスト');
+    expect(s.chars).toBe(7);
+    expect(s.words).toBe(0);
+  });
+  it('counts code points, not UTF-16 units', () => {
+    expect(docStats('😀😀').chars).toBe(2);
+  });
+  it('is zero for empty text', () => {
+    expect(docStats('')).toEqual({ chars: 0, words: 0, minutes: 0 });
+  });
+  it('rounds reading time up to at least one minute', () => {
+    expect(docStats('hello world').minutes).toBe(1);
+  });
+  it('estimates longer reading time from volume', () => {
+    const words = Array(600).fill('word').join(' ');
+    expect(docStats(words).minutes).toBe(3); // 600 / 200 wpm
   });
 });

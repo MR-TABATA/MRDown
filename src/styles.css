@@ -110,6 +110,15 @@ button:disabled { opacity: 0.3; cursor: default; }
   flex: 1;
 }
 
+#doc-stats {
+  font-size: 11px;
+  color: var(--mrd-faint);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+#doc-stats:empty { display: none; }
+
 .body-row {
   flex: 1;
   display: flex;

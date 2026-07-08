@@ -8,7 +8,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { SUPPORTED, isSupported, basename, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
-import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml } from './markdown';
+import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml, docStats } from './markdown';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts } from './find';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
 import {
@@ -48,6 +48,7 @@ const textOption = document.getElementById('text-option')!;
 const fontOption = document.getElementById('font-option')!;
 const fontsizeOption = document.getElementById('fontsize-option')!;
 const output = document.getElementById('output')!;
+const docStatsEl = document.getElementById('doc-stats')!;
 const emptyState = document.getElementById('empty-state')!;
 const recentBox = document.getElementById('recent')!;
 const filepath = document.getElementById('filepath')!;
@@ -359,6 +360,14 @@ function showEmpty() {
 }
 
 // Reflect the active document + dirty state in the toolbar.
+// Toolbar reading stats for the active document, e.g. "1,234 字 · 約2分" /
+// "1,234 chars · ~2 min". Empty for an empty document.
+function formatDocStats(text: string): string {
+  const { chars, minutes } = docStats(text);
+  if (chars === 0) return '';
+  return `${chars.toLocaleString()} ${t('statsChars')} · ${t('statsReadPrefix')}${minutes}${t('statsMin')}`;
+}
+
 function updateStatus() {
   const dirty = active ? isDirty(active) : false;
   saveBtn.disabled = !dirty;
@@ -367,6 +376,7 @@ function updateStatus() {
   deleteBtn.disabled = !(active && active.path);
   historyBtn.disabled = !(active && active.path);
   filepath.textContent = '';
+  docStatsEl.textContent = active ? formatDocStats(active.workingText) : '';
   // Window title shows the file name; the toolbar shows the full (~) path.
   appWindow.setTitle(active ? active.name : 'MRDown').catch(() => {});
   if (!active) return;
@@ -1318,6 +1328,7 @@ function applyI18n() {
   });
   renderFormatBar();
   editLabel.textContent = isEditing ? t('preview') : t('edit');
+  updateStatus();
   if (active) renderSidebar();
   updateFolderHeader();
   buildToolbarOptions();
