@@ -46,3 +46,11 @@ jobs:
 
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # A stale notices file is a license violation, not a formatting nit —
+      # fail the build rather than ship a binary whose attributions are wrong.
+      - name: Third-party notices are up to date
+        run: |
+          npm run notice
+          git diff --exit-code -- THIRD-PARTY-NOTICES.md \
+            || { echo '::error::THIRD-PARTY-NOTICES.md is stale — run `npm run notice` and commit the result.'; exit 1; }

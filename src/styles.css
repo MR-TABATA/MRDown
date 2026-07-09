@@ -802,6 +802,18 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 }
 .opt-group-title { font-size: 11px; color: var(--mrd-faint); margin: 14px 0 4px; }
 .opt-group-title:first-child { margin-top: 4px; }
+
+/* A settings row that reads as a link but is a real button. */
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--mrd-accent);
+  cursor: pointer;
+}
+.link-btn:hover { text-decoration: underline; }
 #toolbar-options label,
 #lang-options label {
   display: flex;

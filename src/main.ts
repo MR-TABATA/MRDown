@@ -2,7 +2,7 @@ import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { homeDir } from '@tauri-apps/api/path';
+import { homeDir, resolveResource } from '@tauri-apps/api/path';
 import { open, save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
@@ -731,7 +731,9 @@ async function setActive(doc: Doc) {
   if (isEditing) editor.focus();
 }
 
-async function openFile(path: string) {
+// `recent: false` opens a document without listing it on the start screen —
+// for files that live inside the app bundle, whose path changes on every update.
+async function openFile(path: string, opts: { recent?: boolean } = {}) {
   const existing = docs.find((d) => d.path === path);
   if (existing) {
     await setActive(existing);
@@ -757,7 +759,7 @@ async function openFile(path: string) {
   renderTree();
   saveSession();
   contentArea.scrollTop = 0;
-  invoke<string[]>('add_recent_file', { path }).then(renderRecent).catch(() => {});
+  if (opts.recent !== false) invoke<string[]>('add_recent_file', { path }).then(renderRecent).catch(() => {});
 }
 
 // Drop a document from the session (no prompting), switching away if it was
@@ -1590,6 +1592,15 @@ function openSettings() {
 function closeSettings() {
   settingsOverlay.hidden = true;
 }
+
+// The bundled notices are Markdown, so show them in the viewer itself.
+const licensesBtn = document.getElementById('licenses-btn') as HTMLButtonElement;
+licensesBtn.addEventListener('click', async () => {
+  const path = await resolveResource('THIRD-PARTY-NOTICES.md').catch(() => null);
+  if (!path) return;
+  closeSettings();
+  await openFile(path, { recent: false });
+});
 
 settingsBtn.addEventListener('click', openSettings);
 settingsClose.addEventListener('click', closeSettings);

@@ -70,6 +70,14 @@ npm run tauri dev
 npm run tauri build
 ```
 
+## ライセンス / License
+
+MRDown 本体は [MIT ライセンス](LICENSE)です。ただし **MRDown の名称とロゴはライセンスに含まれません**。フォークを配布する場合は別の名前とアイコンをお使いください。
+MRDown itself is [MIT licensed](LICENSE). **The MRDown name and logo are not covered by that license** — please rename and re-icon any fork you distribute.
+
+配布物には第三者のオープンソースソフトウェアを同梱しています。その一覧と著作権表示は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にあり、アプリの設定（`⌘,`）からも読めます。この一覧は `npm run notice` で生成されます。
+The binaries bundle third-party open-source software; its inventory and copyright notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), also readable from Settings (`⌘,`) inside the app. Regenerate it with `npm run notice`.
+
 ## 推奨 IDE 構成 / Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)

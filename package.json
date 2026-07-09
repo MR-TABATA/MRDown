@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "notice": "node scripts/gen-notice.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
