@@ -30,6 +30,43 @@ export function docStats(text: string): { chars: number; words: number; minutes:
   return { chars, words, minutes };
 }
 
+const FENCE = /^\s{0,3}(```|~~~)/;
+const TASK = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
+
+/**
+ * Flip the `[ ]`/`[x]` of the `index`-th task-list item, counting the same items
+ * the renderer turns into checkboxes: fenced code blocks and a leading YAML
+ * frontmatter block are skipped, so a `- [ ]` inside either can't shift the
+ * mapping between a clicked checkbox and its source line. Returns the new source,
+ * or null when there is no such item.
+ */
+export function toggleTaskListItem(source: string, index: number): string | null {
+  const lines = source.split('\n');
+  let start = 0;
+  if (/^---\s*$/.test(lines[0] ?? '')) {
+    const close = lines.findIndex((l, i) => i > 0 && /^(---|\.\.\.)\s*$/.test(l));
+    if (close !== -1) start = close + 1;
+  }
+
+  let fenced = false;
+  let seen = 0;
+  for (let i = start; i < lines.length; i++) {
+    if (FENCE.test(lines[i])) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced || !TASK.test(lines[i])) continue;
+    if (seen === index) {
+      lines[i] = lines[i].replace(TASK, (_m, open: string, mark: string, close: string) =>
+        `${open}${mark === ' ' ? 'x' : ' '}${close}`
+      );
+      return lines.join('\n');
+    }
+    seen++;
+  }
+  return null;
+}
+
 /**
  * Text of the first ATX heading (`# ...` through `###### ...`) in a document,
  * with any trailing `#` closers stripped. Returns null when there is none —

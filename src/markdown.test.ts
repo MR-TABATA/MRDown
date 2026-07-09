@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml, docStats } from './markdown';
+import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml, docStats, toggleTaskListItem } from './markdown';
 
 describe('slugify', () => {
   it('lowercases and hyphenates whitespace', () => {
@@ -94,5 +94,34 @@ describe('docStats', () => {
   it('estimates longer reading time from volume', () => {
     const words = Array(600).fill('word').join(' ');
     expect(docStats(words).minutes).toBe(3); // 600 / 200 wpm
+  });
+});
+
+describe('toggleTaskListItem', () => {
+  it('checks an unchecked item', () => {
+    expect(toggleTaskListItem('- [ ] a', 0)).toBe('- [x] a');
+  });
+  it('unchecks a checked item, preserving the marker style', () => {
+    expect(toggleTaskListItem('* [x] a', 0)).toBe('* [ ] a');
+    expect(toggleTaskListItem('- [X] a', 0)).toBe('- [ ] a');
+  });
+  it('targets the nth item and leaves the others alone', () => {
+    const src = '- [ ] a\n- [ ] b\n- [ ] c';
+    expect(toggleTaskListItem(src, 1)).toBe('- [ ] a\n- [x] b\n- [ ] c');
+  });
+  it('preserves indentation of nested items', () => {
+    expect(toggleTaskListItem('- [ ] a\n  - [ ] b', 1)).toBe('- [ ] a\n  - [x] b');
+  });
+  it('ignores task syntax inside fenced code blocks', () => {
+    const src = '```\n- [ ] not a task\n```\n- [ ] real';
+    expect(toggleTaskListItem(src, 0)).toBe('```\n- [ ] not a task\n```\n- [x] real');
+  });
+  it('ignores task syntax inside leading frontmatter', () => {
+    const src = '---\nlist:\n- [ ] meta\n---\n- [ ] real';
+    expect(toggleTaskListItem(src, 0)).toBe('---\nlist:\n- [ ] meta\n---\n- [x] real');
+  });
+  it('returns null when the index is out of range', () => {
+    expect(toggleTaskListItem('- [ ] a', 3)).toBeNull();
+    expect(toggleTaskListItem('no tasks here', 0)).toBeNull();
   });
 });

@@ -136,3 +136,13 @@ export function stripFindHighlights(root: HTMLElement): void {
     m.replaceWith(document.createTextNode(m.textContent ?? ''));
   });
 }
+
+/**
+ * Remove the app's interactive affordances from the copy being exported: the
+ * copy buttons are chrome, and a task checkbox has no source to rewrite once
+ * the document has left the app.
+ */
+export function stripInteractive(root: HTMLElement): void {
+  root.querySelectorAll('.code-copy').forEach((b) => b.remove());
+  root.querySelectorAll('input[type="checkbox"]').forEach((c) => c.setAttribute('disabled', ''));
+}

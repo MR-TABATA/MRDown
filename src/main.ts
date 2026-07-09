@@ -11,7 +11,14 @@ import markedKatex from 'marked-katex-extension';
 import 'katex/dist/katex.min.css';
 import DOMPurify from 'dompurify';
 import { SUPPORTED, isSupported, basename, dirname, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
-import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml, docStats } from './markdown';
+import {
+  slugify,
+  firstHeadingTitle,
+  extractFrontmatter,
+  frontmatterToHtml,
+  docStats,
+  toggleTaskListItem,
+} from './markdown';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts } from './find';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
 import {
@@ -34,6 +41,7 @@ import {
   inlineCssUrls,
   inlineImages,
   stripFindHighlights,
+  stripInteractive,
 } from './export';
 
 // Markdown extensions, registered once. Footnotes (`[^1]`) render as a linked
@@ -135,6 +143,71 @@ function addHeadingIds() {
     for (let i = 2; used.has(id); i++) id = `${base}-${i}`;
     used.add(id);
     h.id = id;
+  });
+}
+
+// Copy the text of a code block. `navigator.clipboard` needs a secure context,
+// which the webview may not report, so fall back to a hidden textarea + execCommand.
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const scratch = document.createElement('textarea');
+    scratch.value = text;
+    scratch.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(scratch);
+    scratch.select();
+    const ok = document.execCommand('copy');
+    scratch.remove();
+    return ok;
+  }
+}
+
+// Give every rendered code block a copy button. Re-run after each render, since
+// the preview's innerHTML is replaced wholesale.
+function addCopyButtons() {
+  output.querySelectorAll('pre').forEach((pre) => {
+    const code = pre.querySelector('code');
+    if (!code) return; // Mermaid diagrams and the frontmatter card have no <code>
+    const btn = document.createElement('button');
+    btn.className = 'code-copy';
+    btn.type = 'button';
+    btn.textContent = t('copyCode');
+    btn.addEventListener('click', async () => {
+      if (!(await copyText(code.textContent ?? ''))) return;
+      btn.textContent = t('copied');
+      btn.classList.add('done');
+      setTimeout(() => {
+        btn.textContent = t('copyCode');
+        btn.classList.remove('done');
+      }, 1400);
+    });
+    pre.appendChild(btn);
+  });
+}
+
+// Task-list checkboxes render disabled; enable them and write a tick back into
+// the Markdown source. The nth checkbox maps to the nth task line (fenced code
+// and frontmatter are skipped on both sides), so no source positions are stored.
+function enableTaskCheckboxes() {
+  output.querySelectorAll<HTMLInputElement>('li > input[type="checkbox"]').forEach((box, index) => {
+    box.disabled = false;
+    box.addEventListener('change', () => {
+      const next = active && toggleTaskListItem(active.workingText, index);
+      if (!next) {
+        box.checked = !box.checked; // nothing to rewrite — don't lie about the source
+        return;
+      }
+      if (isEditing) {
+        // Route through the editor so the tick lands on the native undo stack.
+        const caret = editor.selectionStart;
+        replaceEditorText(next, caret, caret);
+      } else {
+        editor.value = next;
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
   });
 }
 
@@ -346,8 +419,11 @@ async function renderSource(source: string, filePath: string) {
   addHeadingIds();
   buildOutline();
   resolveLocalImages(filePath);
+  enableTaskCheckboxes();
   await highlightCode();
   await renderMermaid();
+  // After Mermaid, so a diagram's <pre> — now a <div> — gets no copy button.
+  addCopyButtons();
   // A re-render wipes the preview highlights; rebuild them if the find bar is
   // open in preview mode. (Source mode searches the editor, not this pane.)
   if (!findBar.hidden && !isEditing && findInput.value) runFind(true);
@@ -968,6 +1044,7 @@ async function exportHtml() {
   if (!active) return;
   const article = output.cloneNode(true) as HTMLElement;
   stripFindHighlights(article);
+  stripInteractive(article);
   await inlineImages(article);
 
   const needsKatex = !!article.querySelector('.katex');

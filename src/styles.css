@@ -590,7 +590,31 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 #output pre {
   background: var(--mrd-surface-2); border: 1px solid var(--mrd-border);
   border-radius: 8px; padding: 16px; overflow-x: auto; margin: 1em 0;
+  position: relative;
 }
+
+/* Copy button on a code block — revealed on hover, but always reachable by
+   keyboard. It rides along on the scroll of a wide <pre>, so pin it to the
+   top-right of the visible box. */
+#output pre .code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-family: var(--mrd-content-font);
+  color: var(--mrd-muted);
+  background: var(--mrd-bg);
+  border: 1px solid var(--mrd-border);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+#output pre:hover .code-copy,
+#output pre .code-copy:focus-visible { opacity: 1; }
+#output pre .code-copy:hover { color: var(--mrd-text); }
+#output pre .code-copy.done { opacity: 1; color: var(--mrd-accent); border-color: var(--mrd-accent); }
 #output pre code { background: none; padding: 0; color: var(--mrd-text); }
 /* highlight.js tokens — tuned to the surrounding VSCode-dark palette */
 #output .hljs-comment, #output .hljs-quote { color: #6a9955; font-style: italic; }
@@ -617,6 +641,8 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
    so drop the bullet and pull the item back over the vacated marker column. */
 #output li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
 #output li > input[type="checkbox"] { margin-right: 0.5em; accent-color: var(--mrd-accent); }
+/* Enabled at render time: ticking one rewrites the `- [ ]` in the source. */
+#output li > input[type="checkbox"]:not(:disabled) { cursor: pointer; }
 
 /* Footnotes — a linked section marked-footnote appends to the document. */
 #output .footnotes {
@@ -926,6 +952,9 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   #output .hljs-attr, #output .hljs-attribute, #output .hljs-variable, #output .hljs-property { color: #0b5cad; }
   #output .hljs-meta { color: #8250df; }
   #output .hljs-symbol, #output .hljs-bullet, #output .hljs-link { color: #7a4b00; }
+
+  /* Interactive affordances are UI, not document — never print them. */
+  #output pre .code-copy { display: none !important; }
 
   /* Search highlights are transient UI, not part of the document. */
   mark.find-hit, mark.find-hit-current { background: transparent !important; color: inherit !important; }
