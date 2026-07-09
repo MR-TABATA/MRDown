@@ -876,3 +876,57 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--mrd-border); border-radius: 3px; }
+
+/* --- Print / PDF export ----------------------------------------------------
+   File ▸ Export as PDF… opens the platform print dialog, which renders this
+   document. Strip the app chrome down to the rendered article and force a light
+   page: a dark PDF is unusable on paper, and the ink cost is real. */
+@media print {
+  :root {
+    --mrd-bg: #ffffff;
+    --mrd-text: #16181d;
+    --mrd-accent: #4f2fc9;
+  }
+
+  .titlebar, .toolbar, #sidebar, #find-bar, #format-bar,
+  #divider, .editor-pane, .empty-state, .overlay { display: none !important; }
+
+  body { height: auto; overflow: visible; background: #fff; }
+  .body-row { display: block; }
+  .content-area, .content-area.editing { display: block; overflow: visible; padding: 0; }
+  #output, .content-area.editing #output {
+    display: block !important;
+    max-width: none;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    background: #fff;
+  }
+  @page { margin: 16mm; }
+
+  /* Don't split a block across a page, and never strand a heading at the foot. */
+  #output pre, #output table, #output img, #output blockquote,
+  #output .mermaid-diagram, #output .katex-display { break-inside: avoid; }
+  #output h1, #output h2, #output h3, #output h4 { break-after: avoid; }
+
+  /* The syntax palette is tuned for the dark preview; swap in a light one so
+     code is legible on paper. */
+  #output pre { background: #f6f7f9; border-color: #dcdfe5; }
+  #output code { background: #f0f1f4; color: #b1341f; }
+  #output pre code { color: #16181d; }
+  #output a { color: #0b5cad; }
+  #output .hljs-comment, #output .hljs-quote { color: #667085; font-style: italic; }
+  #output .hljs-keyword, #output .hljs-built_in, #output .hljs-literal,
+  #output .hljs-tag, #output .hljs-name, #output .hljs-selector-tag { color: #0b5cad; }
+  #output .hljs-string, #output .hljs-regexp { color: #b1341f; }
+  #output .hljs-number { color: #7a4b00; }
+  #output .hljs-title, #output .hljs-title.function_, #output .hljs-section { color: #6f42c1; }
+  #output .hljs-title.class_, #output .hljs-type, #output .hljs-class .hljs-title { color: #0f766e; }
+  #output .hljs-attr, #output .hljs-attribute, #output .hljs-variable, #output .hljs-property { color: #0b5cad; }
+  #output .hljs-meta { color: #8250df; }
+  #output .hljs-symbol, #output .hljs-bullet, #output .hljs-link { color: #7a4b00; }
+
+  /* Search highlights are transient UI, not part of the document. */
+  mark.find-hit, mark.find-hit-current { background: transparent !important; color: inherit !important; }
+}
