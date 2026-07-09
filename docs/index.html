@@ -12,7 +12,7 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://mr-tabata.github.io/MRDown/">
 
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='680' height='680' viewBox='0 0 680 680' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='680' height='680' rx='145' fill='%230f1117'/%3E%3Ctext x='80' y='520' font-family='monospace' font-size='580' font-weight='700' fill='%231a1f2e'%3E%23%3C/text%3E%3Ctext x='332' y='430' font-family='sans-serif' font-size='240' font-weight='700' fill='white' text-anchor='middle' letter-spacing='-6'%3EMR%3C/text%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='23' fill='%236d5efc'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='30,40 50,55 70,40'/%3E%3Cpolyline points='30,56 50,71 70,56'/%3E%3C/g%3E%3C/svg%3E">
 
   <style>
     :root {
@@ -22,8 +22,8 @@
       --border: #333;
       --text: #d4d4d4;
       --text-dim: #888;
-      --accent: #0d6efd;
-      --accent-hover: #0b5ed7;
+      --accent: #6d5efc;
+      --accent-hover: #5a49e8;
       --link: #58a6ff;
       --code: #ce9178;
     }
@@ -64,7 +64,7 @@
     .hero {
       text-align: center;
       padding: 80px 0 70px;
-      background: radial-gradient(circle at 50% 0%, rgba(13,110,253,0.12), transparent 60%);
+      background: radial-gradient(circle at 50% 0%, rgba(109,94,252,0.16), transparent 60%);
     }
     .hero .logo { width: 96px; height: 96px; border-radius: 22px; margin-bottom: 28px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
     .hero h1 { font-size: 52px; line-height: 1.15; color: #fff; letter-spacing: -1px; margin-bottom: 18px; }
@@ -99,7 +99,7 @@
     .card:hover { border-color: #4a4a4a; transform: translateY(-3px); }
     .card .ico {
       width: 44px; height: 44px; border-radius: 11px;
-      background: rgba(13,110,253,0.15); color: #58a6ff;
+      background: rgba(109,94,252,0.16); color: #a79fff;
       display: flex; align-items: center; justify-content: center; margin-bottom: 16px;
     }
     .card .ico svg { width: 22px; height: 22px; }
@@ -144,10 +144,23 @@
 <body>
   <!-- Inline logo template -->
   <svg style="display:none">
-    <symbol id="logo" viewBox="0 0 680 680">
-      <rect width="680" height="680" rx="145" fill="#0f1117"/>
-      <text x="80" y="520" font-family="monospace" font-size="580" font-weight="700" fill="#1a1f2e">#</text>
-      <text x="332" y="430" font-family="-apple-system, sans-serif" font-size="240" font-weight="700" fill="white" text-anchor="middle" letter-spacing="-6">MR</text>
+    <defs>
+      <linearGradient id="logoBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7d6ff7"/>
+        <stop offset="1" stop-color="#4f2fc9"/>
+      </linearGradient>
+      <radialGradient id="logoGloss" cx="50%" cy="0%" r="80%">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+        <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <symbol id="logo" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="23" fill="url(#logoBg)"/>
+      <rect width="100" height="100" rx="23" fill="url(#logoGloss)"/>
+      <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="30,40 50,55 70,40"/>
+        <polyline points="30,56 50,71 70,56"/>
+      </g>
     </symbol>
   </svg>
 
@@ -236,6 +249,18 @@
           <h3>フォルダをまとめて</h3>
           <p>フォルダを開くと中の Markdown を左のツリーに一覧。クリックで切替、サブフォルダは展開／折りたたみ。開いたフォルダは次回起動時に復元。</p>
           <p class="en">Open a folder to list its Markdown in a left-hand tree — switch by click, expand/collapse subfolders, restored next launch.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>
+          <h3>アウトラインで飛ぶ</h3>
+          <p>見出しの目次をサイドバーに表示。クリックでその見出しへスクロールし、読んでいる位置が自動でハイライト。編集中もライブ追従。</p>
+          <p class="en">A heading outline in the sidebar — click to jump, and the heading you're reading highlights as you scroll. Live-updates while you edit.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>
+          <h3>書き味の効くエディタ</h3>
+          <p>Enter でリスト自動継続（採番・タスク・空行で解除）、Tab でインデント、括弧は自動で閉じる。URL を選択に貼ればリンク、画像を貼れば保存して挿入。文字数と読了時間、スクロール同期も。</p>
+          <p class="en">Enter continues lists, Tab indents, brackets auto-close. Paste a URL onto a selection to link it, paste an image to save &amp; insert it. Plus word count, reading time, and editor⇄preview scroll sync.</p>
         </div>
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div>
