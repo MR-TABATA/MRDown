@@ -6,6 +6,9 @@ import { homeDir } from '@tauri-apps/api/path';
 import { open, save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
+import markedFootnote from 'marked-footnote';
+import markedKatex from 'marked-katex-extension';
+import 'katex/dist/katex.min.css';
 import DOMPurify from 'dompurify';
 import { SUPPORTED, isSupported, basename, dirname, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
 import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml, docStats } from './markdown';
@@ -25,6 +28,12 @@ import {
   linkFromPaste,
   type Sel,
 } from './editor-ops';
+
+// Markdown extensions, registered once. Footnotes (`[^1]`) render as a linked
+// section at the end; `$…$` / `$$…$$` become KaTeX. A malformed formula is left
+// as plain text rather than throwing and losing the rest of the document.
+marked.use(markedFootnote());
+marked.use(markedKatex({ throwOnError: false }));
 
 const sidebarBtn = document.getElementById('sidebar-btn')!;
 const openBtn = document.getElementById('open-btn')!;
@@ -188,7 +197,11 @@ function applyOutlineCollapsed() {
 // Rebuild from the rendered headings. Called after every render (open, reload,
 // debounced live edit) so the outline always mirrors the current document.
 function buildOutline() {
-  outlineHeads = Array.from(output.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'));
+  // The footnotes section carries its own generated heading; it isn't part of
+  // the document's structure, so keep it out of the outline.
+  outlineHeads = Array.from(output.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')).filter(
+    (h) => !h.closest('.footnotes')
+  );
   outlineList.innerHTML = '';
   if (outlineHeads.length === 0) {
     outlineHead.hidden = true;

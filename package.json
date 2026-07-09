@@ -16,7 +16,10 @@
     "@tauri-apps/plugin-opener": "^2.5.4",
     "dompurify": "^3.4.11",
     "highlight.js": "^11.11.1",
+    "katex": "^0.16.47",
     "marked": "^18.0.5",
+    "marked-footnote": "^1.4.0",
+    "marked-katex-extension": "^5.1.10",
     "mermaid": "^11.15.0"
   },
   "devDependencies": {
