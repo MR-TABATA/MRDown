@@ -80,10 +80,11 @@ that backlog is a separate product and does not belong here.)
 
 ## Planned — output & preview
 
-- [ ] Export to HTML (standalone) and PDF / Print
+- [x] Export to HTML (standalone, everything embedded) and PDF via the print dialog
 - [ ] Copy as rich text / HTML
-- [ ] Math via KaTeX (already pulled in by Mermaid)
-- [ ] Footnotes; clickable task-list checkboxes in the preview
+- [x] Math via KaTeX (`$…$` inline, `$$…$$` display)
+- [x] Footnotes (`[^1]`), rendered as a cross-linked section
+- [ ] Clickable task-list checkboxes in the preview (they render, but are read-only)
 - [ ] Preview themes (e.g. GitHub light/dark), optional custom CSS
 
 ## Smaller polish (from the backlog)

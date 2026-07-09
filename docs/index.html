@@ -272,9 +272,15 @@
         </div>
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg></div>
-          <h3>表・コード・図</h3>
-          <p>テーブル、シンタックスハイライト付きコード、引用、ローカル画像に加え、Mermaid 図もそのまま描画。先頭の YAML frontmatter は畳んだメタ情報カードとして整理。</p>
-          <p class="en">Tables, syntax-highlighted code, quotes, local images, and Mermaid diagrams — plus YAML frontmatter tidied into a collapsed metadata card.</p>
+          <h3>表・コード・図・数式</h3>
+          <p>テーブル、シンタックスハイライト付きコード、引用、ローカル画像、Mermaid 図に加え、KaTeX の数式・脚注・タスクリストも描画。先頭の YAML frontmatter は畳んだメタ情報カードとして整理。</p>
+          <p class="en">Tables, syntax-highlighted code, quotes, local images, Mermaid diagrams, plus KaTeX maths, footnotes and task lists — with YAML frontmatter tidied into a collapsed metadata card.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+          <h3>HTML / PDF で書き出す</h3>
+          <p>⌘⇧E で自己完結した 1 枚の HTML に（スタイル・画像・数式フォントを埋め込み）。⌘P で印刷ダイアログから PDF 保存。印刷時は白地＋明るいコード配色に切替わり、ページ跨ぎで割れません。</p>
+          <p class="en">⌘⇧E writes one self-contained HTML file (styles, images and maths fonts embedded). ⌘P opens the print dialog to save a PDF — light page, light code palette, no blocks split across pages.</p>
         </div>
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></div>
@@ -312,6 +318,8 @@
         <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>F</kbd></div><span>検索・置換 / Find</span></div>
         <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>S</kbd></div><span>保存 / Save</span></div>
         <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>S</kbd></div><span>別名で保存 / Save As</span></div>
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>E</kbd></div><span>HTML 書き出し / Export HTML</span></div>
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>P</kbd></div><span>PDF 書き出し / Export PDF</span></div>
         <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>R</kbd></div><span>再読み込み / Reload</span></div>
       </div>
     </div>
