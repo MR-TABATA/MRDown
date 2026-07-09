@@ -28,6 +28,13 @@ import {
   linkFromPaste,
   type Sel,
 } from './editor-ops';
+import {
+  buildExportDocument,
+  collectCss,
+  inlineCssUrls,
+  inlineImages,
+  stripFindHighlights,
+} from './export';
 
 // Markdown extensions, registered once. Footnotes (`[^1]`) render as a linked
 // section at the end; `$…$` / `$$…$$` become KaTeX. A malformed formula is left
@@ -952,6 +959,45 @@ editor.addEventListener('paste', (e) => {
     replaceEditorText(r.text, r.start, r.end);
   }
 });
+
+// --- Export ---------------------------------------------------------------
+
+// Write the rendered document out as one self-contained HTML file: the preview's
+// own CSS, its images and (when there is maths) KaTeX's fonts are all embedded.
+async function exportHtml() {
+  if (!active) return;
+  const article = output.cloneNode(true) as HTMLElement;
+  stripFindHighlights(article);
+  await inlineImages(article);
+
+  const needsKatex = !!article.querySelector('.katex');
+  let css = collectCss(needsKatex);
+  if (needsKatex) css = await inlineCssUrls(css);
+
+  const title = firstHeadingTitle(active.workingText) || active.name;
+  const html = buildExportDocument({
+    lang: getLang(),
+    title,
+    css,
+    rootStyle: document.documentElement.getAttribute('style') ?? '',
+    body: article.innerHTML,
+  });
+
+  const path = await saveDialog({
+    defaultPath: `${sanitizeFilename(title)}.html`,
+    filters: [{ name: 'HTML', extensions: ['html'] }],
+  });
+  if (!path) return;
+  await invoke('export_file', { path, content: html });
+}
+
+// PDF goes through the platform's print dialog (macOS: "Save as PDF"), so no
+// PDF renderer has to be bundled. The @media print rules strip the app chrome
+// and force a light page — a dark PDF is unusable on paper.
+async function exportPdf() {
+  if (!active) return;
+  await invoke('print_document');
+}
 
 // Editor ⇄ preview scroll sync (edit mode only). Proportional: match the
 // scrolled fraction of one pane onto the other. Exact source-line mapping is
@@ -2162,6 +2208,8 @@ listen<string>('menu', (e) => {
     case 'open': openBtn.click(); break;
     case 'save': save(); break;
     case 'save_as': saveAs(); break;
+    case 'export_html': exportHtml(); break;
+    case 'export_pdf': exportPdf(); break;
     case 'reload': reload(); break;
     case 'delete': deleteActive(); break;
     case 'close': if (active) closeDoc(active); break;

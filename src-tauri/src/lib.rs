@@ -36,6 +36,29 @@ fn save_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// Write an exported document to disk. Guards the extension so this can't be
+/// used to write arbitrary files, mirroring `save_file`'s restriction.
+#[tauri::command]
+fn export_file(path: String, content: String) -> Result<(), String> {
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    if !["html", "htm"].contains(&ext.as_str()) {
+        return Err("Unsupported export type".to_string());
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+/// Open the native print dialog for the webview's contents. macOS routes this
+/// through NSPrintOperation, where "Save as PDF" is the standard destination —
+/// which is how MRDown exports PDF without bundling a renderer.
+#[tauri::command]
+fn print_document(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.print().map_err(|e| e.to_string())
+}
+
 /// Write pasted image bytes to disk (creating the parent folder if needed), used
 /// when the user pastes an image into the editor. Guards the extension to common
 /// image types so the command can't be coerced into writing arbitrary files.
@@ -237,6 +260,9 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
             &MenuItem::with_id(app, "save_as", pick("別名で保存…", "Save As…"), true, Some("CmdOrCtrl+Shift+S"))?,
             &MenuItem::with_id(app, "reload", pick("再読み込み", "Reload"), true, Some("CmdOrCtrl+R"))?,
             &sep()?,
+            &MenuItem::with_id(app, "export_html", pick("HTML として書き出す…", "Export as HTML…"), true, Some("CmdOrCtrl+Shift+E"))?,
+            &MenuItem::with_id(app, "export_pdf", pick("PDF として書き出す…", "Export as PDF…"), true, Some("CmdOrCtrl+P"))?,
+            &sep()?,
             // No accelerator: ⌘⌫ stays the editor's "delete to line start".
             &MenuItem::with_id(app, "delete", pick("ゴミ箱に移動", "Move to Trash"), true, None::<&str>)?,
             &MenuItem::with_id(app, "close", pick("閉じる", "Close"), true, Some("CmdOrCtrl+W"))?,
@@ -423,6 +449,8 @@ pub fn run() {
             read_file,
             save_file,
             save_image,
+            export_file,
+            print_document,
             delete_file,
             file_mtime,
             read_dir,
