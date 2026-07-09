@@ -142,8 +142,10 @@
   </style>
 </head>
 <body>
-  <!-- Inline logo template -->
-  <svg style="display:none">
+  <!-- Inline logo template. Kept out of flow with width/height 0 rather than
+       display:none — a display:none subtree does not resolve the gradient
+       (paint server) the logo tile references. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
     <defs>
       <linearGradient id="logoBg" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#7d6ff7"/>
