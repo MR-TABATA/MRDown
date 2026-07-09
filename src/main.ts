@@ -1263,6 +1263,16 @@ function applyVar(cssVar: string, value: string | null) {
   else document.documentElement.style.setProperty(cssVar, value);
 }
 
+// Stored value meaning "follow the macOS accent colour" rather than a fixed hex.
+const SYSTEM_ACCENT = 'AccentColor';
+
+// The accent also drives its own foreground. AccentColorText is only a legible
+// pairing for AccentColor, so any chosen colour falls back to the white default.
+function applyAccent(value: string | null) {
+  applyVar('--mrd-accent', value);
+  applyVar('--mrd-accent-text', value === SYSTEM_ACCENT ? 'AccentColorText' : null);
+}
+
 function applyContentFont(id: string | null) {
   const choice = FONT_CHOICES.find((f) => f.id === id);
   applyVar('--mrd-content-font', choice ? choice.stack : null);
@@ -1275,27 +1285,37 @@ function applyContentSize(px: string | null) {
 // Read the persisted appearance overrides and push them onto <html>. Called once
 // at startup so a customised look is in place before the first document renders.
 function applyStoredAppearance() {
-  applyVar('--mrd-accent', localStorage.getItem(ACCENT_KEY));
+  applyAccent(localStorage.getItem(ACCENT_KEY));
   applyVar('--mrd-bg', localStorage.getItem(BG_KEY));
   applyVar('--mrd-text', localStorage.getItem(TEXT_KEY));
   applyContentFont(localStorage.getItem(FONT_KEY));
   applyContentSize(localStorage.getItem(FONTSIZE_KEY));
 }
 
-// Build one colour row: a "reset to default" chip, preset swatches, and a custom
-// picker. `resetKey` labels the chip (System for accent, Default for bg/text).
+// Build one colour row: a "reset to default" chip, an optional System chip, the
+// preset swatches, and a custom picker. `apply` lets the accent row pair the
+// foreground colour with its fill; the others just set their variable.
 function buildColorOption(
   container: HTMLElement,
-  opts: { storageKey: string; cssVar: string; presets: string[]; resetKey: Key }
+  opts: {
+    storageKey: string;
+    cssVar: string;
+    presets: string[];
+    resetKey: Key;
+    systemKey?: Key;
+    apply?: (value: string | null) => void;
+  }
 ) {
   const stored = localStorage.getItem(opts.storageKey); // null => default
   const isPreset = stored !== null && opts.presets.includes(stored);
+  const isSystem = stored === SYSTEM_ACCENT;
+  const apply = opts.apply ?? ((v: string | null) => applyVar(opts.cssVar, v));
   container.innerHTML = '';
 
   const select = (value: string | null) => {
     if (value === null) localStorage.removeItem(opts.storageKey);
     else localStorage.setItem(opts.storageKey, value);
-    applyVar(opts.cssVar, value);
+    apply(value);
     buildColorOption(container, opts); // re-render to move the selection ring
   };
 
@@ -1304,6 +1324,16 @@ function buildColorOption(
   reset.textContent = t(opts.resetKey);
   reset.addEventListener('click', () => select(null));
   container.appendChild(reset);
+
+  // "System" follows the macOS accent colour — only offered where the WebView
+  // understands the AccentColor keyword.
+  if (opts.systemKey && CSS.supports('color', 'AccentColor')) {
+    const sys = document.createElement('button');
+    sys.className = 'color-reset' + (isSystem ? ' selected' : '');
+    sys.textContent = t(opts.systemKey);
+    sys.addEventListener('click', () => select(SYSTEM_ACCENT));
+    container.appendChild(sys);
+  }
 
   for (const c of opts.presets) {
     const sw = document.createElement('button');
@@ -1314,14 +1344,14 @@ function buildColorOption(
     container.appendChild(sw);
   }
 
-  // Custom picker — selected whenever a non-preset colour is stored.
-  const custom = stored !== null && !isPreset;
+  // Custom picker — selected whenever a stored colour is neither a preset nor System.
+  const custom = stored !== null && !isPreset && !isSystem;
   const wrap = document.createElement('label');
   wrap.className = 'color-custom' + (custom ? ' selected has-value' : '');
   wrap.title = t('colorCustom');
   const picker = document.createElement('input');
   picker.type = 'color';
-  picker.value = custom ? stored : (stored ?? '#888888');
+  picker.value = custom ? stored : isPreset ? stored : '#888888';
   if (custom) wrap.style.background = stored;
   picker.addEventListener('input', () => select(picker.value));
   wrap.appendChild(picker);
@@ -1374,7 +1404,14 @@ function buildFontSizeOption() {
 }
 
 function buildAppearanceOptions() {
-  buildColorOption(accentOption, { storageKey: ACCENT_KEY, cssVar: '--mrd-accent', presets: ACCENT_PRESETS, resetKey: 'colorSystem' });
+  buildColorOption(accentOption, {
+    storageKey: ACCENT_KEY,
+    cssVar: '--mrd-accent',
+    presets: ACCENT_PRESETS,
+    resetKey: 'colorDefault',
+    systemKey: 'colorSystem',
+    apply: applyAccent,
+  });
   buildColorOption(bgOption, { storageKey: BG_KEY, cssVar: '--mrd-bg', presets: BG_PRESETS, resetKey: 'colorDefault' });
   buildColorOption(textOption, { storageKey: TEXT_KEY, cssVar: '--mrd-text', presets: TEXT_PRESETS, resetKey: 'colorDefault' });
   buildFontOption();

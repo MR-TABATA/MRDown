@@ -6,11 +6,11 @@
    again. Background + text drive the whole window — document *and* chrome
    (toolbar, sidebar, panels) — through the derived tokens further down. */
 :root {
-  /* Accent — System (the macOS accent color) by default. AccentColor /
-     AccentColorText auto-pair the fill with a legible foreground, so a light
-     accent still reads; the plain hex is the fallback for older WebKit and
-     also what a user-picked custom color replaces inline. */
-  --mrd-accent: #0d6efd;
+  /* Accent — MRDown's brand indigo, matching the app icon and the site. The
+     "System" choice in Settings overrides this inline with AccentColor (the
+     macOS accent), pairing it with AccentColorText; every other choice is a
+     plain colour and keeps white as its foreground. */
+  --mrd-accent: #6d5efc;
   --mrd-accent-text: #fff;
 
   /* Reading surface — background + text drive every derived color below, so
@@ -21,9 +21,6 @@
   /* Content typography — the SF Pro stack by default; Settings can swap it. */
   --mrd-content-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif;
   --mrd-content-size: 16px;
-}
-@supports (color: AccentColor) {
-  :root { --mrd-accent: AccentColor; --mrd-accent-text: AccentColorText; }
 }
 /* Derived tokens — kept in a second block so they resolve against whatever
    --mrd-accent / --mrd-bg / --mrd-text end up being (default, System, or an
