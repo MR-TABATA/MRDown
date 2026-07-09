@@ -20,11 +20,12 @@ your data local.**
 The real use case is reading the `.md` files Claude Code generates. These three
 turn MRDown from a single-file viewer into something you actually navigate.
 
-- [ ] **Open a folder + file tree** — browse a project's `.md` files together
+- [x] **Open a folder + file tree** — browse a project's `.md` files together
       (biggest jump in substance)
-- [ ] **Outline / table-of-contents panel** — jump by heading; headings already
-      get ids, so this is cheap
-- [ ] **Find (`⌘F`) and Replace (`⌘⌥F`)** — in-document first, then across open docs
+- [x] **Outline / table-of-contents panel** — jump by heading, with a scroll-spy
+      that highlights the heading you're reading
+- [x] **Find (`⌘F`) and Replace** — in-document; searching across open docs is
+      still planned
 
 ## Planned — flagship axis: the time machine ("what changed?")
 
