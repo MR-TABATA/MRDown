@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MRDown — A minimal, fast Markdown viewer & editor</title>
+  <meta name="description" content="A minimal, fast and safe Markdown viewer & editor built with Tauri + TypeScript. Create, read, edit and save.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="MRDown">
+  <meta property="og:description" content="A minimal, fast and safe Markdown viewer & editor.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:url" content="https://mr-tabata.github.io/MRDown/index.en.html">
+
+  <link rel="canonical" href="https://mr-tabata.github.io/MRDown/index.en.html">
+  <link rel="alternate" hreflang="ja" href="https://mr-tabata.github.io/MRDown/index.ja.html">
+  <link rel="alternate" hreflang="en" href="https://mr-tabata.github.io/MRDown/index.en.html">
+  <link rel="alternate" hreflang="x-default" href="https://mr-tabata.github.io/MRDown/">
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='23' fill='%236d5efc'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='30,40 50,55 70,40'/%3E%3Cpolyline points='30,56 50,71 70,56'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="stylesheet" href="lp.css">
+</head>
+<body>
+  <!-- Inline logo template. Kept out of flow with width/height 0 rather than
+       display:none — a display:none subtree does not resolve the gradient
+       (paint server) the logo tile references. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="logoBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7d6ff7"/>
+        <stop offset="1" stop-color="#4f2fc9"/>
+      </linearGradient>
+      <radialGradient id="logoGloss" cx="50%" cy="0%" r="80%">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+        <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <symbol id="logo" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="23" fill="url(#logoBg)"/>
+      <rect width="100" height="100" rx="23" fill="url(#logoGloss)"/>
+      <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="30,40 50,55 70,40"/>
+        <polyline points="30,56 50,71 70,56"/>
+      </g>
+    </symbol>
+  </svg>
+
+  <nav>
+    <div class="brand"><svg><use href="#logo"/></svg> MRDown</div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#shortcuts">Shortcuts</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">GitHub</a>
+      <a class="lang-switch" href="index.ja.html" hreflang="ja" lang="ja">日本語</a>
+    </div>
+  </nav>
+
+  <!-- ===== Hero ===== -->
+  <header class="hero">
+    <div class="wrap">
+      <svg class="logo"><use href="#logo"/></svg>
+      <h1>Minimal and fast<br><span class="accent">Markdown viewer & editor</span></h1>
+      <p class="lead">A simple desktop Markdown app built with Tauri + TypeScript. Create, read, edit and save.</p>
+      <div class="btn-row">
+        <a class="btn btn-primary" href="https://github.com/MR-TABATA/MRDown/releases" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="attrs">
+        <span>Native Tauri build — tiny and instant</span>
+        <span>macOS / Windows / Linux</span>
+        <span>MIT licensed</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Features ===== -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-title">
+        <h2>Features</h2>
+        <p>What sets it apart.</p>
+      </div>
+
+      <!-- The four that carry the argument. -->
+      <div class="features primary">
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Roll back with history</h3>
+          <p>Every save quietly keeps a timestamped version — browse, preview and restore any of them in one click, non-destructively, with no Git required. Whatever rewrote your document, you can undo it.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <h3>Safe to open anything</h3>
+          <p>HTML is sanitized with DOMPurify and locked down with a strict CSP. Markdown you didn't write — or that was written seconds ago by something else — opens without a second thought.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+          <h3>Leave it open, it keeps up</h3>
+          <p>When the file changes on disk, the preview re-renders and holds your scroll position — so you can watch a document another tool keeps rewriting. Open by double-click, drag &amp; drop, or the recent-files list.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+          <h3>.md links stay in the app</h3>
+          <p>Links to local Markdown files open right here instead of the browser, so you can walk a set of cross-linked documents without ever leaving. External links go to your browser; heading anchors scroll.</p>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top: 72px;">
+        <h2 class="sub">Everything else you'd expect</h2>
+      </div>
+      <ul class="secondary">
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></div>
+          <div><h4>Edit with live preview</h4><p>Write on the left, see it on the right. ⌘S to save, drag the divider to resize.</p></div>
+        </li>
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
+          <div><h4>Find and replace</h4><p>⌘F searches the document, with regex, case and whole-word toggles. In preview, matches span inline formatting.</p></div>
+        </li>
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></div>
+          <div><h4>Several documents at once</h4><p>Open documents live in a sidebar — switch by click, close with the ×, restored next launch.</p></div>
+        </li>
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+          <div><h4>A whole folder at once</h4><p>Open a folder to list its Markdown in a left-hand tree, expanding and collapsing subfolders.</p></div>
+        </li>
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>
+          <div><h4>Jump by outline</h4><p>A heading outline in the sidebar. The heading you're reading highlights as you scroll, and it follows you while you edit.</p></div>
+        </li>
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>
+          <div><h4>An editor that keeps up</h4><p>Enter continues lists, Tab indents, brackets auto-close. Paste a URL onto a selection to link it; paste an image to save and insert it.</p></div>
+        </li>
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div>
+          <div><h4>Make it look yours</h4><p>Accent, background and text colors, body font and size. The background applies to the whole window.</p></div>
+        </li>
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg></div>
+          <div><h4>Tables, code, diagrams</h4><p>Tables, syntax-highlighted code, quotes, local images and Mermaid diagrams. YAML frontmatter is tidied into a collapsed metadata card.</p></div>
+        </li>
+        <li class="sec-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></div>
+          <div><h4>Never lose a draft</h4><p>In-progress edits and never-saved untitled docs are kept as drafts and restored on next launch.</p></div>
+        </li>
+        <!-- In `main` but not in the latest release. Drop `.soon` and the badge when v0.18.0 ships. -->
+        <li class="sec-item soon">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+          <div><h4>Maths, footnotes, task lists<span class="badge">Soon</span></h4><p>KaTeX typesets your formulas, footnotes render as a cross-linked section, and task lists become checkboxes.</p></div>
+        </li>
+        <li class="sec-item soon">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+          <div><h4>Export to HTML or PDF<span class="badge">Soon</span></h4><p>⌘⇧E writes one self-contained HTML file. ⌘P opens the print dialog to save a PDF.</p></div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Shortcuts ===== -->
+  <section id="shortcuts" style="background:#1a1a1a;">
+    <div class="wrap">
+      <div class="section-title">
+        <h2>Shortcuts</h2>
+        <p>Keep your hands on the keyboard.</p>
+      </div>
+      <div class="shortcuts">
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>N</kbd></div><span>New</span></div>
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>O</kbd></div><span>Open</span></div>
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>E</kbd></div><span>Edit</span></div>
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>F</kbd></div><span>Find &amp; replace</span></div>
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>S</kbd></div><span>Save</span></div>
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>S</kbd></div><span>Save As</span></div>
+        <div class="sc"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>R</kbd></div><span>Reload</span></div>
+        <div class="sc soon"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>E</kbd></div><span>Export HTML<span class="badge">Soon</span></span></div>
+        <div class="sc soon"><div class="keys"><kbd>⌘</kbd><span>/</span><kbd>Ctrl</kbd><kbd>P</kbd></div><span>Export PDF<span class="badge">Soon</span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Install ===== -->
+  <section id="install">
+    <div class="wrap">
+      <div class="section-title">
+        <h2>Get started</h2>
+        <p>Download a prebuilt binary</p>
+      </div>
+      <div class="btn-row" style="margin-bottom: 14px;">
+        <a class="btn btn-primary" href="https://github.com/MR-TABATA/MRDown/releases/latest" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+          Latest release
+        </a>
+      </div>
+      <p style="text-align:center; color: var(--text-dim); font-size: 13px; margin-bottom: 32px;">
+        Binaries for macOS, Windows and Linux. They are not notarized with an Apple Developer ID yet, so you'll need to get past your OS's first-launch warning (<a href="https://github.com/MR-TABATA/MRDown#%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB--install" target="_blank" rel="noopener">how to</a>).
+      </p>
+      <div class="section-title">
+        <p>Or build from source</p>
+      </div>
+      <div class="install">
+<pre><span class="c"># Clone</span>
+<span class="p">$</span> <span class="cmd">git clone https://github.com/MR-TABATA/MRDown.git</span>
+<span class="p">$</span> <span class="cmd">cd MRDown</span>
+
+<span class="c"># Install dependencies</span>
+<span class="p">$</span> <span class="cmd">npm install</span>
+
+<span class="c"># Run in dev</span>
+<span class="p">$</span> <span class="cmd">npm run tauri dev</span>
+
+<span class="c"># Build for release</span>
+<span class="p">$</span> <span class="cmd">npm run tauri build</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Footer ===== -->
+  <footer>
+    <div class="wrap">
+      <div class="brand"><svg style="width:24px;height:24px;border-radius:6px;"><use href="#logo"/></svg> MRDown</div>
+      <p>Built with Tauri + TypeScript · MIT License</p>
+      <p style="margin-top:8px;">Created by <a href="https://github.com/MR-TABATA" target="_blank" rel="noopener">TABATA Hitoshi</a> · <a href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">GitHub</a> · <a href="index.ja.html" hreflang="ja" lang="ja">日本語</a></p>
+      <p style="margin-top:6px; color:#4a4a4a;">© 2026 TABATA Hitoshi</p>
+    </div>
+  </footer>
+</body>
+</html>
