@@ -938,7 +938,12 @@ function renderRecent(list: string[]) {
     name.textContent = basename(p);
     const path = document.createElement('span');
     path.className = 'recent-path';
-    path.textContent = p;
+    // The box is `direction: rtl` so a long path is elided from the left. That
+    // flips the leading "/" of a path that fits to the far right, unless the
+    // text is bidi-isolated as its own (LTR) run.
+    const isolated = document.createElement('bdi');
+    isolated.textContent = p;
+    path.appendChild(isolated);
     li.append(name, path);
     li.addEventListener('click', () => openFile(p));
     ul.appendChild(li);
