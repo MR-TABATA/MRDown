@@ -132,8 +132,10 @@ section { padding: 60px 0; }
 .sec-item h4 { color: #fff; font-size: 14.5px; font-weight: 600; margin-bottom: 3px; }
 .sec-item p { color: var(--text-dim); font-size: 13px; line-height: 1.6; }
 
-/* Shipped in `main` but not in the latest release yet. Drop `.soon` and the
-   `<span class="badge">` from both translations when v0.18.0 goes out. */
+/* Marks a feature that is in `main` but not in the latest release, so the page
+   never advertises something a download can't do. Add `.soon` plus a
+   `<span class="badge">近日|Soon</span>` to BOTH translations, and strip them
+   from both the moment that release ships. Currently unused. */
 .soon { opacity: 0.45; }
 .badge {
   font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
