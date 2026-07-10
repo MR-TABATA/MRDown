@@ -173,6 +173,9 @@ function addCopyButtons() {
     const btn = document.createElement('button');
     btn.className = 'code-copy';
     btn.type = 'button';
+    // `applyI18n` relabels every [data-i18n] node, so the button follows a
+    // language switch without re-rendering the preview.
+    btn.dataset.i18n = 'copyCode';
     btn.textContent = t('copyCode');
     btn.addEventListener('click', async () => {
       if (!(await copyText(code.textContent ?? ''))) return;
