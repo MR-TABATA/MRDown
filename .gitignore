@@ -25,3 +25,6 @@ dist-ssr
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# Raw Playwright captures; the encoded results live in docs/media/
+demo/out/

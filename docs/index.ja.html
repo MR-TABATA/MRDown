@@ -12,6 +12,10 @@
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ja_JP">
   <meta property="og:url" content="https://mr-tabata.github.io/MRDown/index.ja.html">
+  <meta property="og:image" content="https://mr-tabata.github.io/MRDown/media/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
 
   <link rel="canonical" href="https://mr-tabata.github.io/MRDown/index.ja.html">
   <link rel="alternate" hreflang="ja" href="https://mr-tabata.github.io/MRDown/index.ja.html">
@@ -80,6 +84,21 @@
       </div>
     </div>
   </header>
+
+  <!-- ===== Demo ===== -->
+  <section class="demo">
+    <div class="wrap">
+      <div class="demo-frame">
+        <video id="demo" poster="media/demo-ja.jpg" width="1100" height="760"
+               autoplay muted loop playsinline preload="metadata"
+               aria-label="MRDown の操作デモ">
+          <source src="media/demo-ja.webm" type="video/webm">
+          <source src="media/demo-ja.mp4" type="video/mp4">
+        </video>
+      </div>
+      <p class="demo-caption">ドラッグ&ドロップで開く → 別のツールが書き換えて自動リロード → タスクを打つ → リンクを辿る → 履歴で巻き戻す</p>
+    </div>
+  </section>
 
   <!-- ===== Features ===== -->
   <section id="features">
@@ -231,5 +250,24 @@
       <p style="margin-top:6px; color:#4a4a4a;">© 2026 TABATA Hitoshi</p>
     </div>
   </footer>
+
+  <script>
+    // A looping autoplay video is motion the viewer didn't ask for, and some
+    // browsers refuse to autoplay anyway (iOS low-power mode). Either way the
+    // fallback is the same: keep the poster frame and hand over the controls.
+    (function () {
+      var v = document.getElementById('demo');
+      if (!v) return;
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        v.removeAttribute('autoplay');
+        v.removeAttribute('loop');
+        v.controls = true;
+        v.pause();
+        return;
+      }
+      var p = v.play();
+      if (p) p.catch(function () { v.controls = true; });
+    })();
+  </script>
 </body>
 </html>
