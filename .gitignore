@@ -28,3 +28,9 @@ dist-ssr
 
 # Raw Playwright captures; the encoded results live in docs/media/
 demo/out/
+
+# Strategy notes (freemium boundary, priorities). Deliberately not published —
+# this belongs in .gitignore rather than .git/info/exclude, which lives on one
+# machine only and would leave a fresh clone one `git add -A` away from
+# committing it.
+/notes/

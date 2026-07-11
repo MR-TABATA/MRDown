@@ -65,6 +65,9 @@ MRDown itself is [MIT licensed](LICENSE). **The MRDown name and logo are not cov
 配布物には第三者のオープンソースソフトウェアを同梱しています。その一覧と著作権表示は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にあり、アプリの設定（`⌘,`）からも読めます。この一覧は `npm run notice` で生成されます。
 The binaries bundle third-party open-source software; its inventory and copyright notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), also readable from Settings (`⌘,`) inside the app. Regenerate it with `npm run notice`.
 
+MRDown は open-core です。**このリポジトリにあるものが MRDown であり、すべて MIT で、これからも MIT です。** 将来の有料機能（AI による差分の説明、プロジェクト全体の横断検索、GitHub / SSH などの認証を伴うリモート）は別リポジトリに置かれ、ここには入りません。どこに線を引いているかは [CONTRIBUTING.md](CONTRIBUTING.md) に書いてあります。
+MRDown is open-core. **What is in this repository is MRDown, all of it MIT, and it stays MIT.** The paid features that are planned — AI explaining a diff, project-wide search, authenticated remotes like GitHub and SSH — will live in a separate repository and will not land here. [CONTRIBUTING.md](CONTRIBUTING.md) says exactly where the line is drawn.
+
 ## 推奨 IDE 構成 / Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
