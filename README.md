@@ -41,21 +41,11 @@ A minimal, fast Markdown viewer built with Tauri + TypeScript.
 各プラットフォーム向けのビルドは [Releases](https://github.com/MR-TABATA/MRDown/releases) ページからダウンロードできます。
 Download a build for your platform from the [Releases](https://github.com/MR-TABATA/MRDown/releases) page.
 
-バイナリはアドホック署名済みですが、**まだ Apple Developer ID による公証（notarization）は行っていません**。そのため初回起動時に OS が警告を出す場合があります。それでも実行するには：
-The binaries are ad-hoc signed but **not notarized with an Apple Developer ID yet**, so your OS may warn you on first launch. To run anyway:
+macOS 版バイナリは Apple Developer ID で署名・公証（notarization）済みなので、そのまま起動できます。
+The macOS binaries are signed and notarized with an Apple Developer ID, so they open normally.
 
-- **macOS** — まずアプリを右クリック（または Control＋クリック）して **開く** を選び、確認します。
-  First try right-clicking (or Control-clicking) the app and choosing **Open**, then confirm.
-
-  もし代わりに **「"MRDown.app" は壊れているため開けません。ゴミ箱に入れる必要があります」** と表示されても、実際に壊れているわけではなく、macOS がダウンロードされた未公証アプリをブロックしているだけです。**キャンセル**（「ゴミ箱に入れる」ではなく）をクリックし、ターミナルでダウンロード検疫フラグを外してから通常どおり開きます：
-  If instead you see **""MRDown.app" is damaged and can't be opened. You should move it to the Trash"**, the app isn't actually damaged — macOS is blocking the downloaded, un-notarized app. Click **Cancel** (not "Move to Trash"), then remove the download quarantine flag in Terminal and open it normally:
-
-  ```bash
-  xattr -dr com.apple.quarantine /Applications/MRDown.app
-  ```
-
-- **Windows** — SmartScreen のプロンプトで **詳細情報 → 実行** をクリックします。
-  On the SmartScreen prompt, click **More info → Run anyway**.
+Windows 版は署名していないため、SmartScreen のプロンプトで **詳細情報 → 実行** をクリックしてください。
+The Windows binaries are unsigned, so click **More info → Run anyway** on the SmartScreen prompt.
 
 ## 開発 / Development
 

@@ -169,8 +169,9 @@ Notes on the competitive landscape, so the differentiation stays sharp.
 
 Spending is gated on traction (a free article first); see the signing notes.
 
-- [ ] **v1.0**: Apple Developer ID signing + notarization (removes the Gatekeeper
-      warning). Requires the paid Apple Developer Program ($99/yr).
+- [x] **Apple Developer ID signing + notarization** (removes the Gatekeeper
+      warning). Shipped in v0.18.1; the macOS release build signs and notarizes
+      via the App Store Connect API key in CI.
 - [ ] At 1.0, go macOS-only (drop Windows/Linux release artifacts).
 - [ ] **Maybe later — Mac App Store**: needs App Sandbox. The blocker is that
       *recent files* and *session restore* reopen paths by string; under the
