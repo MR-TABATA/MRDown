@@ -72,6 +72,7 @@ const bgOption = document.getElementById('bg-option')!;
 const textOption = document.getElementById('text-option')!;
 const fontOption = document.getElementById('font-option')!;
 const fontsizeOption = document.getElementById('fontsize-option')!;
+const outlinePosOption = document.getElementById('outline-pos-option')!;
 const output = document.getElementById('output')!;
 const docStatsEl = document.getElementById('doc-stats')!;
 const emptyState = document.getElementById('empty-state')!;
@@ -214,8 +215,16 @@ function enableTaskCheckboxes() {
   });
 }
 
-// --- Outline / TOC (left sidebar) — the active document's headings, with
-// click-to-scroll and a scroll-spy that marks the heading you're reading. ---
+// --- Outline / TOC — the active document's headings, with click-to-scroll and
+// a scroll-spy that marks the heading you're reading.
+//
+// It lives in a column of its own to the right of the content (the default: in
+// the sidebar it had to share 230px with the folder tree and the open-documents
+// list, which left headings wrapping), or stacked inside the sidebar as it used
+// to. Switching position moves the one #outline node between the two parents. ---
+const bodyRow = document.querySelector<HTMLElement>('.body-row')!;
+const sidebar = document.getElementById('sidebar')!;
+const outlinePane = document.getElementById('outline')!;
 const outlineHead = document.getElementById('outline-head')!;
 const outlineList = document.getElementById('outline-list')!;
 const OUTLINE_KEY = 'mrdown.outlineCollapsed';
@@ -224,6 +233,31 @@ let outlineHeads: HTMLElement[] = [];
 let outlineScrollEl: HTMLElement | null = null;
 let outlineRaf = 0;
 let outlineClickLock = 0;
+
+type OutlinePos = 'left' | 'right';
+const OUTLINE_POS_KEY = 'mrdown.outlinePos';
+const OUTLINE_HIDDEN_KEY = 'mrdown.outlineHidden';
+let outlinePos: OutlinePos = localStorage.getItem(OUTLINE_POS_KEY) === 'left' ? 'left' : 'right';
+let outlineHidden = localStorage.getItem(OUTLINE_HIDDEN_KEY) === '1';
+
+function applyOutlinePos() {
+  document.body.classList.toggle('outline-right', outlinePos === 'right');
+  // index.html ships it in the right column, so "left" is the move. Appending is
+  // enough in both directions: the sidebar's outline sits below the open-docs
+  // list, and the right column is the last child of the row.
+  (outlinePos === 'left' ? sidebar : bodyRow).appendChild(outlinePane);
+  applyOutlineCollapsed();
+}
+
+function applyOutlineHidden() {
+  document.body.classList.toggle('outline-hidden', outlineHidden);
+}
+
+function toggleOutline() {
+  outlineHidden = !outlineHidden;
+  localStorage.setItem(OUTLINE_HIDDEN_KEY, outlineHidden ? '1' : '0');
+  applyOutlineHidden();
+}
 
 function markOutlineActive(id: string) {
   for (const li of Array.from(outlineList.children) as HTMLElement[]) {
@@ -272,9 +306,13 @@ function bindOutlineSpy() {
   updateOutlineActive();
 }
 
+// Collapsing only means something in the sidebar, where the outline is one
+// section among several. In the right column the pane is the outline, so ⌘2
+// takes it away wholesale and the chevron is hidden (see styles.css).
 function applyOutlineCollapsed() {
-  outlineHead.classList.toggle('collapsed', outlineCollapsed);
-  outlineList.hidden = outlineCollapsed || outlineHeads.length === 0;
+  const collapsed = outlinePos === 'left' && outlineCollapsed;
+  outlineHead.classList.toggle('collapsed', collapsed);
+  outlineList.hidden = collapsed || outlineHeads.length === 0;
 }
 
 // Rebuild from the rendered headings. Called after every render (open, reload,
@@ -325,6 +363,7 @@ function clearOutline() {
 }
 
 outlineHead.addEventListener('click', () => {
+  if (outlinePos !== 'left') return;
   outlineCollapsed = !outlineCollapsed;
   localStorage.setItem(OUTLINE_KEY, outlineCollapsed ? '1' : '0');
   applyOutlineCollapsed();
@@ -1362,6 +1401,32 @@ function buildWidthOption() {
   widthOption.append(value, slider);
 }
 
+// Outline placement: its own column on the right, or stacked in the sidebar.
+function buildOutlinePosOption() {
+  const choices: Array<{ value: OutlinePos; label: string }> = [
+    { value: 'right', label: t('outlinePosRight') },
+    { value: 'left', label: t('outlinePosLeft') },
+  ];
+  outlinePosOption.innerHTML = '';
+  for (const c of choices) {
+    const label = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'outline-pos';
+    radio.checked = c.value === outlinePos;
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      outlinePos = c.value;
+      localStorage.setItem(OUTLINE_POS_KEY, c.value);
+      applyOutlinePos();
+    });
+    const name = document.createElement('span');
+    name.textContent = c.label;
+    label.append(radio, name);
+    outlinePosOption.appendChild(label);
+  }
+}
+
 // Language picker: System (follow the OS) / 日本語 / English.
 function buildLangOptions() {
   const choices: Array<{ value: Lang | 'system'; label: string }> = [
@@ -1598,6 +1663,7 @@ function applyI18n() {
   buildToolbarOptions();
   buildLangOptions();
   buildAppearanceOptions();
+  buildOutlinePosOption();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
   invoke('apply_menu', { lang: getLang() }).catch(() => {});
@@ -1608,6 +1674,7 @@ function openSettings() {
   buildLangOptions();
   buildWidthOption();
   buildAppearanceOptions();
+  buildOutlinePosOption();
   settingsOverlay.hidden = false;
 }
 function closeSettings() {
@@ -2085,6 +2152,11 @@ applyStoredAppearance();
 // --- Sidebar visibility (default shown, persisted when hidden) ---
 const SIDEBAR_KEY = 'mrdown.sidebar';
 document.body.classList.toggle('sidebar-hidden', localStorage.getItem(SIDEBAR_KEY) === 'hidden');
+
+// Outline: same deal — placement and visibility are both restored here (⌘2 and
+// View ▸ Outline toggle it; Settings ▸ Appearance moves it).
+applyOutlinePos();
+applyOutlineHidden();
 sidebarBtn.addEventListener('click', () => {
   const hidden = !document.body.classList.contains('sidebar-hidden');
   document.body.classList.toggle('sidebar-hidden', hidden);
@@ -2323,6 +2395,7 @@ listen<string>('menu', (e) => {
     case 'delete': deleteActive(); break;
     case 'close': if (active) closeDoc(active); break;
     case 'sidebar': sidebarBtn.click(); break;
+    case 'outline': toggleOutline(); break;
     case 'edit': if (active) setEditing(!isEditing); break;
     case 'settings': openSettings(); break;
   }

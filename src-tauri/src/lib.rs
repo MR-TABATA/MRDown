@@ -225,7 +225,7 @@ fn handle_opened_file(app: &tauri::AppHandle, path: String) {
 /// Menu items that act on the active document, and so are dead without one.
 /// Their frontend handlers all bail out when nothing is open, which made them
 /// look clickable but do nothing; `set_doc_items_enabled` greys them out instead.
-const DOC_ITEMS: [&str; 8] = [
+const DOC_ITEMS: [&str; 9] = [
     "save",
     "save_as",
     "reload",
@@ -234,6 +234,7 @@ const DOC_ITEMS: [&str; 8] = [
     "delete",
     "close",
     "edit",
+    "outline",
 ];
 
 /// The OS language, narrowed to the two the menu speaks. The frontend re-applies
@@ -321,6 +322,7 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
         true,
         &[
             &MenuItem::with_id(app, "sidebar", pick("サイドバー", "Sidebar"), true, Some("CmdOrCtrl+1"))?,
+            &MenuItem::with_id(app, "outline", pick("アウトライン", "Outline"), has_doc, Some("CmdOrCtrl+2"))?,
             &MenuItem::with_id(app, "edit", pick("編集 / プレビュー", "Edit / Preview"), has_doc, Some("CmdOrCtrl+E"))?,
         ],
     )?;

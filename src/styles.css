@@ -133,7 +133,9 @@ button:disabled { opacity: 0.3; cursor: default; }
   padding: 8px 0;
 }
 body.sidebar-hidden #sidebar { display: none; }
-#sidebar .sidebar-title {
+/* Not scoped to #sidebar: the outline wears this too, and it can live outside
+   the sidebar (see #outline below). */
+.sidebar-title {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -256,16 +258,38 @@ body.sidebar-hidden #sidebar { display: none; }
   font-style: italic;
 }
 
-/* Outline / TOC — the active document's headings, styled to match the tree
-   and open-docs lists above it. */
-#sidebar .sidebar-title.outline-head {
+/* Outline / TOC — the active document's headings. It lives in one of two places
+   (see #outline in index.html), so these rules can't be scoped to the sidebar:
+   in "left" it's a section stacked under the open-docs list and reads like the
+   tree above it; in "right" it's a column of its own. ⌘2 hides it either way. */
+.sidebar-title.outline-head {
   display: flex;
   align-items: center;
   gap: 5px;
   cursor: pointer;
   user-select: none;
 }
-#sidebar .sidebar-title.outline-head[hidden] { display: none; }
+.sidebar-title.outline-head[hidden] { display: none; }
+body.outline-hidden #outline { display: none; }
+
+/* Right: its own column. The surface it sits on is the one the sidebar uses, so
+   hover and active have to step up a level to stay visible against it. */
+body.outline-right #outline {
+  width: 220px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: var(--mrd-surface);
+  border-left: 1px solid var(--mrd-border);
+  padding: 8px 0;
+}
+/* Collapsing is for the left placement, where the outline shares the sidebar
+   with other sections. On the right the pane *is* the outline — ⌘2 is the way
+   to get rid of it — so the chevron would be a second control for one job. */
+body.outline-right .outline-chevron { display: none; }
+body.outline-right .outline-head { cursor: default; }
+body.outline-right .outline-item:hover { background: var(--mrd-surface-2); }
+body.outline-right .outline-item.active { background: var(--mrd-surface-2); }
+
 .outline-chevron {
   width: 12px;
   height: 12px;

@@ -97,11 +97,6 @@
       <ul id="folder-tree" class="tree" hidden></ul>
       <div class="sidebar-title" data-i18n="sidebarHeader">開いている文書</div>
       <ul id="doc-list"></ul>
-      <div class="sidebar-title outline-head" id="outline-head" hidden>
-        <svg class="outline-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        <span data-i18n="outlineHeader">アウトライン</span>
-      </div>
-      <ul id="outline-list" hidden></ul>
     </aside>
     <div class="content-area">
       <div id="find-bar" hidden>
@@ -148,6 +143,16 @@
       <div id="divider"></div>
       <div id="output"></div>
     </div>
+    <!-- The outline sits here (its own column, right of the content) by default.
+         Set it to "left" and main.ts moves this node into the sidebar, where it
+         stacks under the open-documents list as it used to. -->
+    <aside id="outline">
+      <div class="sidebar-title outline-head" id="outline-head" hidden>
+        <svg class="outline-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        <span data-i18n="outlineHeader">アウトライン</span>
+      </div>
+      <ul id="outline-list" hidden></ul>
+    </aside>
   </div>
 
   <div id="settings-overlay" class="overlay" hidden>
@@ -174,6 +179,8 @@
         <div id="font-option"></div>
         <div class="opt-group-title" data-i18n="fontSizeLabel">本文サイズ</div>
         <div id="fontsize-option"></div>
+        <div class="opt-group-title" data-i18n="outlinePosLabel">アウトラインの位置</div>
+        <div id="outline-pos-option"></div>
       </div>
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="widthSection">プレビューの幅</div>

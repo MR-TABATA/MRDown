@@ -169,6 +169,8 @@ declare global {
     __dropHandler?: (event: { payload: { type: string; paths?: string[] } }) => void;
     /** Last `set_document_open` the app sent — a browser has no native menu to inspect. */
     __menuDocOpen?: boolean;
+    /** Fire a Tauri event the app listens for, e.g. `__emit('menu', 'outline')`. */
+    __emit?: (event: string, payload: unknown) => void;
   }
 }
 
