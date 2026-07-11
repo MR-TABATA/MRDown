@@ -1,7 +1,7 @@
 # MRDown
 
-Tauri + TypeScript で作られた、ミニマルで高速な Markdown ビューア。
-A minimal, fast Markdown viewer built with Tauri + TypeScript.
+Tauri + TypeScript で作られた、ミニマルで高速な Markdown ビューア & エディタ。
+A minimal, fast Markdown viewer & editor built with Tauri + TypeScript.
 
 ## 特徴 / Features
 
@@ -22,7 +22,7 @@ A minimal, fast Markdown viewer built with Tauri + TypeScript.
 - 「フォルダを開く」でフォルダ内の Markdown をまとめて閲覧：左のツリーからファイルを選んで切替、サブフォルダは展開／折りたたみできます。開いていたフォルダは次回起動時に復元。 / Open a folder to browse its Markdown files as a set: pick files from a left-hand tree and expand/collapse subfolders; the opened folder is restored on next launch.
 - 見出しのアウトライン（目次）を本文の右に独立した列で表示：クリックでその見出しへスクロールし、読んでいる位置の見出しが自動でハイライトされます。`⌘2` で開閉、編集中も内容にライブ追従。分割エディタにプレビューの幅を譲るため**編集中は既定で非表示**ですが、`⌘2` で出せばそのまま覚えます（表示状態はプレビュー／編集それぞれで記憶）。設定（`⌘,`）で左サイドバー内に戻すこともできます（そのときは折りたたみ可）。 / Outline (table of contents) in a column of its own, to the right of the document: click a heading to jump to it, and the heading you're reading is highlighted as you scroll. Toggle it with `⌘2`; it follows the document live while you edit. It's **hidden by default while editing**, so the split editor and preview keep their width — bring it back with `⌘2` and it stays (visibility is remembered separately for preview and edit). Settings (`⌘,`) can move it back into the left sidebar instead (where it stays collapsible).
 - 未保存の作業を失わない：編集中の内容（およびディスクに未書き出しの無題文書）は下書きとして継続的に保持され、次回起動時に復元。終了やクラッシュでも書きかけを失いません。 / Never lose unsaved work: in-progress edits (and untitled documents that were never written to disk) are continuously kept as drafts and restored on next launch, so a quit or crash won't discard what you were writing.
-- ダブルクリックや「このアプリで開く」（対象拡張子のハンドラとして登録）、ボタン、`⌘O` / `Ctrl+O`、ウィンドウへのドラッグでファイルを開けます。 / Open files by double-clicking or "Open With" (registered as a handler for those extensions), the button, `⌘O` / `Ctrl+O`, or by dragging a file onto the window.
+- ダブルクリックや「このアプリで開く」（対象拡張子のハンドラとして登録）、ボタン、`⌘O`、ウィンドウへのドラッグでファイルを開けます。 / Open files by double-clicking or "Open With" (registered as a handler for those extensions), the button, `⌘O`, or by dragging a file onto the window.
 - 開いているファイルがディスク上で変更されると自動リロード（スクロール位置は保持）。 / Auto-reloads when the open file changes on disk (scroll position preserved).
 - スタート画面に最近使ったファイル一覧を表示し、素早く再オープン。 / Recent files list on the start screen for quick reopening.
 - 表、コードブロック、引用、ローカル画像をレンダリング（相対パスはファイル基準で解決）。 / Renders tables, code blocks, quotes, and local images (relative paths resolve against the file).
@@ -34,7 +34,7 @@ A minimal, fast Markdown viewer built with Tauri + TypeScript.
 - **PDF として書き出す**（`⌘P`）：OS の印刷ダイアログを開き、「PDF として保存」で書き出します。印刷時は自動で白地・明るいコード配色に切り替わり、コードブロックや表・数式がページ跨ぎで割れません。 / **Export as PDF** (`⌘P`): opens the system print dialog — choose "Save as PDF". Printing switches to a light page with a light code palette, and keeps code blocks, tables and maths from splitting across pages.
 - リンクはアプリ内で完結：外部リンクはブラウザで開き、文書内アンカーはスクロール、ローカルの Markdown ファイルへのリンク（`[text](./other.md)`）はアプリ外に出ずそのままアプリ内で開きます。 / Links stay in the app: external links open in your browser, in-document anchors scroll, and links to local Markdown files (`[text](./other.md)`) open that file right in the app instead of leaving it.
 - HTML 出力は DOMPurify でサニタイズし、厳格な CSP でロックダウン（信頼できないファイルも安全に開けます）。 / HTML output sanitized with DOMPurify and locked down with a strict CSP (safe to open untrusted files).
-- 現在のファイルを再読み込み（`⌘R` / `Ctrl+R`）。 / Reload the current file (`⌘R` / `Ctrl+R`).
+- 現在のファイルを再読み込み（`⌘R`）。 / Reload the current file (`⌘R`).
 
 ## インストール / Install
 
