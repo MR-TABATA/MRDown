@@ -38,14 +38,11 @@ A minimal, fast Markdown viewer built with Tauri + TypeScript.
 
 ## インストール / Install
 
-各プラットフォーム向けのビルドは [Releases](https://github.com/MR-TABATA/MRDown/releases) ページからダウンロードできます。
-Download a build for your platform from the [Releases](https://github.com/MR-TABATA/MRDown/releases) page.
+macOS 版（Apple Silicon / Intel、macOS 10.15 以降）のビルドを [Releases](https://github.com/MR-TABATA/MRDown/releases) ページからダウンロードできます。
+Download the macOS build (Apple Silicon / Intel, macOS 10.15+) from the [Releases](https://github.com/MR-TABATA/MRDown/releases) page.
 
-macOS 版バイナリは Apple Developer ID で署名・公証（notarization）済みなので、そのまま起動できます。
-The macOS binaries are signed and notarized with an Apple Developer ID, so they open normally.
-
-Windows 版は署名していないため、SmartScreen のプロンプトで **詳細情報 → 実行** をクリックしてください。
-The Windows binaries are unsigned, so click **More info → Run anyway** on the SmartScreen prompt.
+バイナリは Apple Developer ID で署名・公証（notarization）済みなので、ダウンロードしてそのまま起動できます。
+The binaries are signed and notarized with an Apple Developer ID, so they open normally once downloaded.
 
 ## 開発 / Development
 
