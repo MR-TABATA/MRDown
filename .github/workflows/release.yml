@@ -40,8 +40,10 @@ jobs:
         include:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
+            arch: 'aarch64'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
+            arch: 'x64'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -150,11 +152,19 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          assets=(
-            src-tauri/target/*/release/bundle/dmg/*.dmg
-            src-tauri/target/*/release/bundle/macos/*.app.tar.gz
-          )
-          gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber
+          staged="$RUNNER_TEMP/assets"
+          mkdir -p "$staged"
+          # The DMG carries its architecture in the filename already.
+          for dmg in src-tauri/target/*/release/bundle/dmg/*.dmg; do
+            cp "$dmg" "$staged/"
+          done
+          # The .app tarball does not — every arch bundles it as MRDown.app.tar.gz,
+          # so uploading it as-is means the second job in the matrix clobbers the
+          # first and we ship one tarball of unknown architecture. Name it here.
+          for tgz in src-tauri/target/*/release/bundle/macos/*.app.tar.gz; do
+            cp "$tgz" "$staged/MRDown_${{ matrix.arch }}.app.tar.gz"
+          done
+          gh release upload "${GITHUB_REF_NAME}" "$staged"/* --clobber
 
   publish-release:
     permissions:
