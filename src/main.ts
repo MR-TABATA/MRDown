@@ -236,9 +236,22 @@ let outlineClickLock = 0;
 
 type OutlinePos = 'left' | 'right';
 const OUTLINE_POS_KEY = 'mrdown.outlinePos';
-const OUTLINE_HIDDEN_KEY = 'mrdown.outlineHidden';
 let outlinePos: OutlinePos = localStorage.getItem(OUTLINE_POS_KEY) === 'left' ? 'left' : 'right';
-let outlineHidden = localStorage.getItem(OUTLINE_HIDDEN_KEY) === '1';
+
+// Visibility is remembered per mode, because the two modes have very different
+// room for it. Editing splits the content area into editor + preview, so at the
+// default 1100px window an outline column leaves the preview about 320px wide —
+// narrow enough to break headings mid-word. So it starts hidden while editing
+// and shown in preview. ⌘2 overrides that for whichever mode you're in, and the
+// override sticks: on a wide display you turn it on once while editing and it
+// stays on, without a width threshold second-guessing you.
+const outlineHiddenKey = (editing: boolean) =>
+  editing ? 'mrdown.outlineHidden.edit' : 'mrdown.outlineHidden.preview';
+
+function outlineHiddenIn(editing: boolean): boolean {
+  const stored = localStorage.getItem(outlineHiddenKey(editing));
+  return stored === null ? editing : stored === '1';
+}
 
 function applyOutlinePos() {
   document.body.classList.toggle('outline-right', outlinePos === 'right');
@@ -250,12 +263,12 @@ function applyOutlinePos() {
 }
 
 function applyOutlineHidden() {
-  document.body.classList.toggle('outline-hidden', outlineHidden);
+  document.body.classList.toggle('outline-hidden', outlineHiddenIn(isEditing));
 }
 
 function toggleOutline() {
-  outlineHidden = !outlineHidden;
-  localStorage.setItem(OUTLINE_HIDDEN_KEY, outlineHidden ? '1' : '0');
+  const next = !outlineHiddenIn(isEditing);
+  localStorage.setItem(outlineHiddenKey(isEditing), next ? '1' : '0');
   applyOutlineHidden();
 }
 
@@ -545,6 +558,9 @@ function setEditing(on: boolean) {
   isEditing = on;
   contentArea.classList.toggle('editing', on);
   editLabel.textContent = on ? t('preview') : t('edit');
+  // The outline is remembered per mode (hidden while editing unless you asked
+  // for it there), so the mode flip has to re-read it.
+  applyOutlineHidden();
   if (on) editor.focus();
   // The outline's scroll-spy watches a different scroll container per mode.
   bindOutlineSpy();
