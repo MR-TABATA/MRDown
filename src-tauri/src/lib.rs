@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -9,6 +10,12 @@ const ALLOWED_EXTENSIONS: [&str; 3] = ["md", "markdown", "txt"];
 /// held until the frontend is ready to pick it up on startup.
 #[derive(Default)]
 struct PendingFile(Mutex<Option<String>>);
+
+/// Whether a document is currently open. Menu items that act on the active
+/// document are greyed out while this is false, and a menu rebuilt for a
+/// language switch has to come back in the same state.
+#[derive(Default)]
+struct DocOpen(AtomicBool);
 
 fn is_supported(path: &str) -> bool {
     std::path::Path::new(path)
@@ -215,10 +222,34 @@ fn handle_opened_file(app: &tauri::AppHandle, path: String) {
     let _ = app.emit("open-file", path);
 }
 
+/// Menu items that act on the active document, and so are dead without one.
+/// Their frontend handlers all bail out when nothing is open, which made them
+/// look clickable but do nothing; `set_doc_items_enabled` greys them out instead.
+const DOC_ITEMS: [&str; 8] = [
+    "save",
+    "save_as",
+    "reload",
+    "export_html",
+    "export_pdf",
+    "delete",
+    "close",
+    "edit",
+];
+
+/// The OS language, narrowed to the two the menu speaks. The frontend re-applies
+/// the menu in its own resolved language (which may be a saved override) as soon
+/// as it loads; this only keeps the first paint from being wrong.
+fn system_lang() -> &'static str {
+    match sys_locale::get_locale() {
+        Some(l) if l.to_lowercase().starts_with("ja") => "ja",
+        _ => "en",
+    }
+}
+
 /// Build the native menu in the given language ("ja" or anything else = en).
 /// Custom items carry stable ids that the frontend maps back to actions; the
 /// About item shows the compiled crate version so it can never go stale.
-fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Result<Menu<tauri::Wry>> {
     let ja = lang == "ja";
     let pick = |j: &'static str, e: &'static str| -> &'static str { if ja { j } else { e } };
     let sep = || PredefinedMenuItem::separator(app);
@@ -256,16 +287,16 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
             &MenuItem::with_id(app, "new", pick("新規", "New"), true, Some("CmdOrCtrl+N"))?,
             &MenuItem::with_id(app, "open", pick("開く…", "Open…"), true, Some("CmdOrCtrl+O"))?,
             &sep()?,
-            &MenuItem::with_id(app, "save", pick("保存", "Save"), true, Some("CmdOrCtrl+S"))?,
-            &MenuItem::with_id(app, "save_as", pick("別名で保存…", "Save As…"), true, Some("CmdOrCtrl+Shift+S"))?,
-            &MenuItem::with_id(app, "reload", pick("再読み込み", "Reload"), true, Some("CmdOrCtrl+R"))?,
+            &MenuItem::with_id(app, "save", pick("保存", "Save"), has_doc, Some("CmdOrCtrl+S"))?,
+            &MenuItem::with_id(app, "save_as", pick("別名で保存…", "Save As…"), has_doc, Some("CmdOrCtrl+Shift+S"))?,
+            &MenuItem::with_id(app, "reload", pick("再読み込み", "Reload"), has_doc, Some("CmdOrCtrl+R"))?,
             &sep()?,
-            &MenuItem::with_id(app, "export_html", pick("HTML として書き出す…", "Export as HTML…"), true, Some("CmdOrCtrl+Shift+E"))?,
-            &MenuItem::with_id(app, "export_pdf", pick("PDF として書き出す…", "Export as PDF…"), true, Some("CmdOrCtrl+P"))?,
+            &MenuItem::with_id(app, "export_html", pick("HTML として書き出す…", "Export as HTML…"), has_doc, Some("CmdOrCtrl+Shift+E"))?,
+            &MenuItem::with_id(app, "export_pdf", pick("PDF として書き出す…", "Export as PDF…"), has_doc, Some("CmdOrCtrl+P"))?,
             &sep()?,
             // No accelerator: ⌘⌫ stays the editor's "delete to line start".
-            &MenuItem::with_id(app, "delete", pick("ゴミ箱に移動", "Move to Trash"), true, None::<&str>)?,
-            &MenuItem::with_id(app, "close", pick("閉じる", "Close"), true, Some("CmdOrCtrl+W"))?,
+            &MenuItem::with_id(app, "delete", pick("ゴミ箱に移動", "Move to Trash"), has_doc, None::<&str>)?,
+            &MenuItem::with_id(app, "close", pick("閉じる", "Close"), has_doc, Some("CmdOrCtrl+W"))?,
         ],
     )?;
 
@@ -290,7 +321,7 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
         true,
         &[
             &MenuItem::with_id(app, "sidebar", pick("サイドバー", "Sidebar"), true, Some("CmdOrCtrl+1"))?,
-            &MenuItem::with_id(app, "edit", pick("編集 / プレビュー", "Edit / Preview"), true, Some("CmdOrCtrl+E"))?,
+            &MenuItem::with_id(app, "edit", pick("編集 / プレビュー", "Edit / Preview"), has_doc, Some("CmdOrCtrl+E"))?,
         ],
     )?;
 
@@ -308,12 +339,48 @@ fn build_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::W
 }
 
 /// Rebuild and apply the menu in the requested language (called by the frontend
-/// on startup and whenever the in-app language changes).
+/// on startup and whenever the in-app language changes). Carries the current
+/// document state over, so a language switch doesn't silently re-enable items.
 #[tauri::command]
 fn apply_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
-    let menu = build_menu(&app, &lang).map_err(|e| e.to_string())?;
+    let has_doc = has_doc(&app);
+    let menu = build_menu(&app, &lang, has_doc).map_err(|e| e.to_string())?;
     app.set_menu(menu).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn has_doc(app: &tauri::AppHandle) -> bool {
+    app.try_state::<DocOpen>()
+        .is_some_and(|s| s.0.load(Ordering::Relaxed))
+}
+
+/// Grey out (or restore) every `DOC_ITEMS` entry in the live menu. Walking the
+/// existing menu rather than rebuilding keeps the accelerators registered.
+fn set_doc_items_enabled(app: &tauri::AppHandle, enabled: bool) {
+    let Some(menu) = app.menu() else { return };
+    let Ok(submenus) = menu.items() else { return };
+    for kind in submenus {
+        let Some(submenu) = kind.as_submenu() else { continue };
+        let Ok(children) = submenu.items() else { continue };
+        for child in children {
+            if let Some(item) = child.as_menuitem() {
+                if DOC_ITEMS.contains(&item.id().as_ref()) {
+                    let _ = item.set_enabled(enabled);
+                }
+            }
+        }
+    }
+}
+
+/// Called by the frontend whenever the last document closes or the first one
+/// opens, so document actions are only clickable when they'd actually do
+/// something.
+#[tauri::command]
+fn set_document_open(app: tauri::AppHandle, open: bool) {
+    if let Some(state) = app.try_state::<DocOpen>() {
+        state.0.store(open, Ordering::Relaxed);
+    }
+    set_doc_items_enabled(&app, open);
 }
 
 // ── Local History ───────────────────────────────────────────────────────────
@@ -445,6 +512,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(PendingFile::default())
+        .manage(DocOpen::default())
         .invoke_handler(tauri::generate_handler![
             read_file,
             save_file,
@@ -458,6 +526,7 @@ pub fn run() {
             add_recent_file,
             get_pending_file,
             apply_menu,
+            set_document_open,
             snapshot_version,
             list_versions,
             read_version
@@ -473,9 +542,10 @@ pub fn run() {
                 let window = app.get_webview_window("main").unwrap();
                 window.set_title("MRDown").unwrap();
 
-                // Initial menu; the frontend re-applies it in its resolved
-                // language (OS locale or the saved override) right after load.
-                if let Ok(menu) = build_menu(&app.handle(), "ja") {
+                // Initial menu, in the OS language and with no document open.
+                // The frontend re-applies it in its resolved language (which may
+                // be a saved override) right after load.
+                if let Ok(menu) = build_menu(&app.handle(), system_lang(), false) {
                     let _ = app.set_menu(menu);
                 }
 

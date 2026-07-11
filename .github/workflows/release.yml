@@ -102,7 +102,10 @@ jobs:
           echo "$APPLE_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/api_key.p8"
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/api_key.p8" >> "$GITHUB_ENV"
 
-      - name: Build and upload to release
+      # Build only — the upload happens below, after the DMG is stapled. Tauri
+      # notarizes and staples the .app, but it only *signs* the DMG that wraps
+      # it, so a downloaded DMG had no ticket of its own to show Gatekeeper.
+      - name: Build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,8 +116,45 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+      - name: Notarize and staple the DMG
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(src-tauri/target/*/release/bundle/dmg/*.dmg)
+          if [ ${#dmgs[@]} -eq 0 ]; then
+            echo "::error::DMG が見つからない。bundle の出力先が変わった可能性がある。" >&2
+            exit 1
+          fi
+          for dmg in "${dmgs[@]}"; do
+            echo "notarizing $dmg"
+            xcrun notarytool submit "$dmg" \
+              --key "$APPLE_API_KEY_PATH" \
+              --key-id "$APPLE_API_KEY_ID" \
+              --issuer "$APPLE_API_ISSUER" \
+              --wait
+            xcrun stapler staple "$dmg"
+            # 配布物に切符が焼き込まれたことを確認する。オフラインの Mac でも
+            # Gatekeeper が通るのはこれが通っている場合だけ。
+            xcrun stapler validate "$dmg"
+            spctl --assess --type open --context context:primary-signature -v "$dmg"
+          done
+
+      - name: Upload to draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(
+            src-tauri/target/*/release/bundle/dmg/*.dmg
+            src-tauri/target/*/release/bundle/macos/*.app.tar.gz
+          )
+          gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber
 
   publish-release:
     permissions:

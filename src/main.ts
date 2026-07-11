@@ -434,11 +434,23 @@ async function renderSource(source: string, filePath: string) {
 
 // --- Session UI state ---
 
+// The native menu's document actions (Save, Export, Close, …) follow the same
+// rule as the toolbar buttons below: alive only while a document is open. Rust
+// holds the state, so a menu rebuilt for a language switch comes back greyed
+// out too. Deduped because `showDocUI` runs on every document switch.
+let menuDocState: boolean | null = null;
+function setMenuDocState(open: boolean) {
+  if (menuDocState === open) return;
+  menuDocState = open;
+  invoke('set_document_open', { open }).catch(() => {});
+}
+
 function showDocUI() {
   emptyState.style.display = 'none';
   output.style.display = 'block';
   reloadBtn.disabled = false;
   editBtn.disabled = false;
+  setMenuDocState(true);
 }
 
 function showEmpty() {
@@ -450,6 +462,7 @@ function showEmpty() {
   emptyState.style.display = '';
   reloadBtn.disabled = true;
   editBtn.disabled = true;
+  setMenuDocState(false);
   saveBtn.disabled = true;
   deleteBtn.disabled = true;
   historyBtn.disabled = true;

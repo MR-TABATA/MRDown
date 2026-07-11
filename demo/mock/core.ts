@@ -1,4 +1,4 @@
-// Stands in for `@tauri-apps/api/core`: the 15 commands src/main.ts invokes.
+// Stands in for `@tauri-apps/api/core`: the 16 commands src/main.ts invokes.
 
 import { files, versions, recents, type Version } from './vfs';
 
@@ -76,6 +76,12 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
       files.set(args.path, { content: `<binary ${basename(args.path)}>`, mtime: Date.now() });
       return r(undefined);
     }
+
+    // A browser has no native menu, so record what the app asked for instead of
+    // applying it; that's the only way the menu's enabled state is observable here.
+    case 'set_document_open':
+      window.__menuDocOpen = args.open;
+      return r(undefined);
 
     // Nothing to observe in a browser; the demo never exercises these.
     case 'apply_menu':

@@ -167,6 +167,8 @@ declare global {
   interface Window {
     __demo: typeof demo;
     __dropHandler?: (event: { payload: { type: string; paths?: string[] } }) => void;
+    /** Last `set_document_open` the app sent — a browser has no native menu to inspect. */
+    __menuDocOpen?: boolean;
   }
 }
 
