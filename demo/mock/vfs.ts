@@ -10,7 +10,7 @@ export interface Entry {
   mtime: number;
 }
 
-export type VersionKind = 'save' | 'external' | 'draft';
+export type VersionKind = 'save' | 'external' | 'git' | 'draft';
 
 export interface Version {
   id: number;

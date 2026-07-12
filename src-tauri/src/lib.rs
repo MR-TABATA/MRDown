@@ -420,8 +420,16 @@ enum Kind {
     /// You pressed ⌘S.
     Save,
     /// The content appeared on disk without MRDown writing it — an agent, an
-    /// editor, a `git checkout`.
+    /// editor, something. macOS does not record which process wrote a file
+    /// (`stat` has no writer, `lsof` is empty once the writer closed it, and the
+    /// only real answer, Endpoint Security, needs an entitlement no Markdown
+    /// viewer will get), so this stays honestly anonymous.
     External,
+    /// An external change whose content is byte-identical to the file at HEAD.
+    /// That is a fact we can prove rather than a guess about who did it: the file
+    /// was put back to its committed state (`git checkout`, a branch switch, a
+    /// stash pop). Nothing else lands on the committed bytes by accident.
+    Git,
     /// Unsaved edits, rescued before being discarded (you chose to take the
     /// disk's version). These exist nowhere else, so they're never dropped first.
     Draft,
@@ -432,6 +440,7 @@ impl Kind {
         match self {
             Kind::Save => "save",
             Kind::External => "external",
+            Kind::Git => "git",
             Kind::Draft => "draft",
         }
     }
@@ -440,6 +449,7 @@ impl Kind {
         match s {
             "save" => Some(Kind::Save),
             "external" => Some(Kind::External),
+            "git" => Some(Kind::Git),
             "draft" => Some(Kind::Draft),
             _ => None,
         }
@@ -451,8 +461,21 @@ impl Kind {
         match self {
             Kind::Save => 50,
             Kind::External => 30,
+            Kind::Git => 20,
             Kind::Draft => 10,
         }
+    }
+}
+
+/// The one writer we can name. We cannot tell an agent from an editor — the OS
+/// does not keep that — but a file whose new content is byte-for-byte the
+/// committed blob was put back by Git. That is a claim about the content, which
+/// we can prove, rather than a guess about the process, which we cannot.
+fn classify(path: &str, content: &str, kind: Kind) -> Kind {
+    if kind == Kind::External && git_head_content(path.to_string()).as_deref() == Some(content) {
+        Kind::Git
+    } else {
+        kind
     }
 }
 
@@ -524,7 +547,7 @@ fn snapshot_version(
     content: String,
     kind: String,
 ) -> Result<(), String> {
-    let kind = Kind::parse(&kind).unwrap_or(Kind::Save);
+    let kind = classify(&path, &content, Kind::parse(&kind).unwrap_or(Kind::Save));
     let dir = history_dir(&app, &path).ok_or("no data dir")?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
@@ -862,6 +885,36 @@ mod tests {
         assert_eq!(prune_ids(&ids, 5), Vec::<u64>::new());
         assert_eq!(prune_ids(&ids, 10), Vec::<u64>::new());
         assert_eq!(prune_ids(&ids, 3), vec![20, 10]);
+    }
+
+    #[test]
+    fn an_external_change_matching_the_committed_bytes_is_attributed_to_git() {
+        let dir = temp_repo(); // note.md committed as "committed\n"
+        let path = dir.join("note.md").to_str().unwrap().to_string();
+
+        // Put back to exactly what's committed: that had to be Git.
+        assert_eq!(classify(&path, "committed\n", Kind::External), Kind::Git);
+
+        // Anything else stays anonymous — we have no idea who wrote it.
+        assert_eq!(classify(&path, "something else\n", Kind::External), Kind::External);
+
+        // Our own save is never re-attributed, even when it happens to match HEAD.
+        assert_eq!(classify(&path, "committed\n", Kind::Save), Kind::Save);
+        // Nor is a rescued draft, which by definition never touched the disk.
+        assert_eq!(classify(&path, "committed\n", Kind::Draft), Kind::Draft);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_outside_git_is_never_attributed_to_git() {
+        let dir = scratch("nogit");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("loose.md");
+        std::fs::write(&file, "x\n").unwrap();
+        let path = file.to_str().unwrap().to_string();
+        assert_eq!(classify(&path, "x\n", Kind::External), Kind::External);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

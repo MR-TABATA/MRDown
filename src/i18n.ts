@@ -55,6 +55,7 @@ const DICT = {
     backToVersions: '版の比較に戻る',
     kindSave: '保存',
     kindExternal: '外部の書き換え',
+    kindGit: 'コミット済みの版に戻った',
     kindDraft: '退避した下書き',
     // sidebar
     sidebarHeader: '開いている文書',
@@ -170,6 +171,7 @@ const DICT = {
     backToVersions: 'Back to comparing versions',
     kindSave: 'Saved',
     kindExternal: 'Changed elsewhere',
+    kindGit: 'Back to the committed version',
     kindDraft: 'Rescued draft',
     sidebarHeader: 'Open Documents',
     folderOpen: 'Open folder',

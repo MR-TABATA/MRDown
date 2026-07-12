@@ -836,6 +836,7 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 .history-kind { font-size: 10px; color: var(--mrd-faint); }
 .history-kind.external { color: var(--mrd-hit-current); }
 .history-kind.draft { color: var(--mrd-accent); }
+.history-kind.git { color: var(--mrd-muted); }
 #history-list .history-when.is-head { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--mrd-muted); }
 #history-list li.history-empty { display: block; color: var(--mrd-muted); font-size: 12px; line-height: 1.5; padding: 10px; }
 #history-list li.history-empty:hover { background: transparent; }

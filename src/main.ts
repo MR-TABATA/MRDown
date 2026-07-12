@@ -1830,7 +1830,7 @@ settingsOverlay.addEventListener('click', (e) => {
 
 // --- Local History (saved versions, restore) ---
 
-type VersionKind = 'save' | 'external' | 'draft';
+type VersionKind = 'save' | 'external' | 'git' | 'draft';
 
 interface Version {
   id: number; // epoch ms, also the snapshot id
@@ -1842,6 +1842,7 @@ interface Version {
 const KIND_LABEL: Record<VersionKind, Key> = {
   save: 'kindSave',
   external: 'kindExternal',
+  git: 'kindGit',
   draft: 'kindDraft',
 };
 

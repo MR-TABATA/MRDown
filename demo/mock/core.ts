@@ -62,7 +62,11 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
       const latest = list[list.length - 1];
       if (latest?.content === args.content) return r(undefined);
       const id = latest && Date.now() <= latest.id ? latest.id + 1 : Date.now();
-      list.push({ id, bytes: args.content.length, content: args.content, kind: args.kind ?? 'save' });
+      // Mirrors the backend's one attribution: an external change that lands on
+      // exactly the committed bytes was Git putting the file back.
+      const kind =
+        args.kind === 'external' && committed.get(args.path) === args.content ? 'git' : (args.kind ?? 'save');
+      list.push({ id, bytes: args.content.length, content: args.content, kind });
       versions.set(args.path, list);
       return r(undefined);
     }
