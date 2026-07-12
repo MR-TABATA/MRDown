@@ -25,7 +25,12 @@ import {
   inlineSegments,
   foldUnchanged,
   diffStats,
+  threeWay,
+  threeWayStats,
+  foldThreeWay,
+  isGap,
   type DiffRow,
+  type ThreeRow,
   type Seg,
 } from './diff';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
@@ -91,10 +96,15 @@ const historyBtn = document.getElementById('history-btn') as HTMLButtonElement;
 const historyOverlay = document.getElementById('history-overlay') as HTMLElement;
 const historyClose = document.getElementById('history-close')!;
 const historyList = document.getElementById('history-list')!;
+const historySide = document.getElementById('history-side')!;
 const historyDiff = document.getElementById('history-diff')!;
+const historyActions = document.getElementById('history-actions')!;
+const conflictActions = document.getElementById('conflict-actions')!;
 const diffTitle = document.getElementById('diff-title')!;
 const diffStatsEl = document.getElementById('diff-stats')!;
 const historyRestore = document.getElementById('history-restore') as HTMLButtonElement;
+const conflictBar = document.getElementById('conflict-bar')!;
+const historyPanel = document.querySelector<HTMLElement>('.history-panel')!;
 const findBar = document.getElementById('find-bar') as HTMLElement;
 const findInput = document.getElementById('find-input') as HTMLInputElement;
 const findCount = document.getElementById('find-count')!;
@@ -134,6 +144,13 @@ interface Doc {
   savedSource: string;
   workingText: string;
   mtime: number;
+  /**
+   * Something rewrote the file on disk while this buffer had unsaved edits — an
+   * AI agent, most often. Three texts now exist (savedSource, this, workingText)
+   * and the user has to say which wins, so nothing is written or discarded until
+   * they do.
+   */
+  conflict?: { content: string; mtime: number } | null;
 }
 
 let docs: Doc[] = [];
@@ -953,6 +970,13 @@ async function save() {
   if (!active) return;
   // Titled doc with no changes: nothing to do. Untitled always offers a save.
   if (active.path && !isDirty(active)) return;
+  // The file moved under us. Writing now would destroy whatever did it — which
+  // is precisely the bug this exists to prevent — so make the choice explicit.
+  if (active.conflict) {
+    updateConflictBanner();
+    conflictBar.scrollIntoView({ block: 'nearest' });
+    return;
+  }
 
   let path = active.path;
   if (!path) {
@@ -997,6 +1021,66 @@ async function refreshActiveFromDisk(preserveScroll: boolean) {
 // Re-read from disk, but never silently discard unsaved edits.
 async function reload() {
   if (!active || !active.path || isDirty(active)) return;
+  await refreshActiveFromDisk(true);
+}
+
+// --- Conflict: the file changed on disk while we held unsaved edits ----------
+// This is the case MRDown is for. An agent rewrites the .md you are in the
+// middle of editing, and neither version may be thrown away without asking. So:
+// snapshot what's on disk into Local History the moment we see it (an agent's
+// work is never ours to lose), then stop and let the user decide.
+
+async function noteDiskChange(doc: Doc, mtime: number) {
+  const path = doc.path;
+  if (!path || doc.conflict?.mtime === mtime) return; // already known
+
+  const content = await invoke<string>('read_file', { path }).catch(() => null);
+  if (content === null) return;
+
+  // The two converged on the same text (you typed what the agent wrote, or it
+  // rewrote the file with what you already had). Nothing to resolve.
+  if (content === doc.workingText) {
+    doc.savedSource = content;
+    doc.mtime = mtime;
+    doc.conflict = null;
+    if (doc === active) updateConflictBanner();
+    renderSidebar();
+    return;
+  }
+
+  // Preserve the on-disk version before anything can overwrite it. From here on
+  // it is a version in the timeline, recoverable even if the user picks "keep
+  // mine" and never looks at it again.
+  await invoke('snapshot_version', { path, content }).catch(() => {});
+  doc.conflict = { content, mtime };
+  if (doc === active) updateConflictBanner();
+}
+
+function updateConflictBanner() {
+  conflictBar.hidden = !active?.conflict;
+}
+
+/** Keep my buffer and write it over the file. The disk version is already in history. */
+async function resolveKeepMine() {
+  const doc = active;
+  if (!doc?.path || !doc.conflict) return;
+  doc.mtime = doc.conflict.mtime; // acknowledge what we're overwriting
+  doc.conflict = null;
+  updateConflictBanner();
+  await persistTo(doc.path);
+}
+
+/** Take the file as it now stands, dropping my edits — after preserving them. */
+async function resolveTakeTheirs() {
+  const doc = active;
+  if (!doc?.path || !doc.conflict) return;
+  // My unsaved edits were never saved, so they exist nowhere else. Snapshot them
+  // before they go, or "take theirs" would be the very data loss we're fixing.
+  if (isDirty(doc)) {
+    await invoke('snapshot_version', { path: doc.path, content: doc.workingText }).catch(() => {});
+  }
+  doc.conflict = null;
+  updateConflictBanner();
   await refreshActiveFromDisk(true);
 }
 
@@ -1730,6 +1814,8 @@ interface Version {
 }
 
 let historyPanelOpen = false;
+/** `conflict` shows the three-way view instead of the two-version comparison. */
+let historyMode: 'versions' | 'conflict' = 'versions';
 
 // Human-friendly relative time ("3 minutes ago"), localized via the OS locale.
 function relativeTime(ms: number): string {
@@ -1746,18 +1832,23 @@ function relativeTime(ms: number): string {
   return rtf.format(0, 'second'); // "now"
 }
 
-// The working buffer is a version like any other — and the one you most often
-// want on the right ("what has changed since that save?"), so it sits in the
-// same list as the snapshots rather than being a special case in the UI.
+// Everything you might compare is a "version" of the file, and they all go in
+// one list: the snapshots, the working buffer, and — when the file is in a Git
+// repository — its content at HEAD. That's what makes Git diff cheap: it's not
+// another feature, it's another version handed to the same renderer.
 const CURRENT: 'current' = 'current';
-type Pick = number | typeof CURRENT;
+const HEAD: 'head' = 'head';
+type Pick = number | typeof CURRENT | typeof HEAD;
 
 /** The two versions being compared: `base` on the left, `compare` on the right. */
 let basePick: Pick | null = null;
 let comparePick: Pick = CURRENT;
+/** The open document's content at HEAD; null when there's no Git to ask. */
+let headContent: string | null = null;
 
 async function contentOf(pick: Pick): Promise<string | null> {
   if (pick === CURRENT) return active?.workingText ?? null;
+  if (pick === HEAD) return headContent;
   const path = active?.path;
   if (!path) return null;
   return invoke<string>('read_version', { path, id: pick }).catch(() => null);
@@ -1765,6 +1856,7 @@ async function contentOf(pick: Pick): Promise<string | null> {
 
 function labelOf(pick: Pick): string {
   if (pick === CURRENT) return t('historyCurrent');
+  if (pick === HEAD) return t('gitHead');
   // The clock time is what tells two versions apart: relative time alone rounds
   // to the day, so every save from yesterday reads "yesterday" and the list
   // stops being a list of distinct things.
@@ -1774,11 +1866,21 @@ function labelOf(pick: Pick): string {
 
 async function refreshHistory() {
   const path = active?.path;
-  if (!path) return;
-  const versions = await invoke<Version[]>('list_versions', { path }).catch(() => []);
+  // In conflict mode the panel is showing three columns and no version picker;
+  // a save landing in the background must not redraw it as a two-way diff.
+  if (!path || historyMode === 'conflict') return;
+  const [versions, head] = await Promise.all([
+    invoke<Version[]>('list_versions', { path }).catch(() => []),
+    // Null for every ordinary reason — no Git, not a repo, no commits, or the
+    // file is untracked — and none of them is an error worth showing.
+    invoke<string | null>('git_head_content', { path }).catch(() => null),
+  ]);
+  headContent = head;
   historyList.innerHTML = '';
 
-  if (versions.length === 0) {
+  // A file with no snapshots can still have a HEAD to compare against, which is
+  // exactly the case for a document you've opened from a repo but never saved.
+  if (versions.length === 0 && headContent === null) {
     const li = document.createElement('li');
     li.className = 'history-empty';
     li.textContent = t('historyEmpty');
@@ -1791,21 +1893,26 @@ async function refreshHistory() {
     return;
   }
 
-  const picks: Pick[] = [CURRENT, ...versions.map((v) => v.id)];
+  const picks: Pick[] = [
+    CURRENT,
+    ...(headContent === null ? [] : [HEAD]),
+    ...versions.map((v) => v.id),
+  ];
   // Default: the newest snapshot against the working buffer — "what have I
   // changed since I last saved?". But a save *is* a snapshot, so right after one
   // those two are the same text and that default answers with an empty diff. In
   // that case step back one version, and the panel opens on "what did that save
-  // change?" instead — still a question, still an answer.
+  // change?" instead — still a question, still an answer. With no snapshots at
+  // all, HEAD is the only thing to stand on.
   if (basePick === null || !picks.includes(basePick)) {
     const clean = active && !isDirty(active);
-    basePick = (clean && versions[1]?.id) || versions[0].id;
+    basePick = (clean && versions[1]?.id) || versions[0]?.id || HEAD;
   }
   if (!picks.includes(comparePick)) comparePick = CURRENT;
 
   for (const pick of picks) {
     const li = document.createElement('li');
-    if (pick !== CURRENT) li.title = new Date(pick).toLocaleString(getLang());
+    if (typeof pick === 'number') li.title = new Date(pick).toLocaleString(getLang());
 
     const base = document.createElement('input');
     base.type = 'radio';
@@ -1823,6 +1930,7 @@ async function refreshHistory() {
     when.className = 'history-when';
     when.textContent = labelOf(pick);
     if (pick === CURRENT) when.classList.add('is-current');
+    if (pick === HEAD) when.classList.add('is-head');
 
     li.append(when, base, cmp);
     historyList.appendChild(li);
@@ -1927,16 +2035,114 @@ async function renderDiff() {
     }
   }
 
-  // Restore puts the *base* (the left, older side) back into the buffer. The
+  // Restore puts the *base* (the left, older side) back into the buffer — a
+  // snapshot, or HEAD, which reverts the document to what was committed. The
   // working buffer isn't a version to go back to, and restoring what's already
-  // there would be a no-op.
+  // there would be a no-op. Nothing is written until the user saves either way.
   historyRestore.disabled = basePick === CURRENT || oldText === active?.workingText;
 }
 
-function openHistory() {
+// --- Three-way view: last save / on disk / my edits --------------------------
+// A two-column diff can't express a conflict, because there is no single
+// "before" to compare against. Three columns can: base in the middle of the
+// argument, and each side's answer beside it.
+
+function threeCell(text: string | null, changed: boolean, conflict: boolean): HTMLElement {
+  const cell = document.createElement('span');
+  cell.className = 'diff-line';
+  if (text === null) cell.classList.add('void'); // that side has no such line
+  else if (conflict) cell.classList.add('clash');
+  else if (changed) cell.classList.add('touched');
+  cell.textContent = text ?? '';
+  return cell;
+}
+
+function threeRowEl(row: ThreeRow): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'diff-row three';
+  if (row.conflict) el.classList.add('conflict');
+
+  const no = (n: number | null) => {
+    const span = document.createElement('span');
+    span.className = 'diff-no';
+    span.textContent = n === null ? '' : String(n);
+    return span;
+  };
+
+  el.append(
+    no(row.baseNo),
+    threeCell(row.base, false, false),
+    no(row.theirsNo),
+    threeCell(row.theirs, row.theirsChanged, row.conflict),
+    no(row.oursNo),
+    threeCell(row.ours, row.oursChanged, row.conflict),
+  );
+  return el;
+}
+
+function renderThreeWay() {
+  const doc = active;
+  if (!doc?.conflict) return;
+
+  const rows = threeWay(doc.savedSource, doc.conflict.content, doc.workingText);
+  const stats = threeWayStats(rows);
+
+  diffTitle.textContent = doc.name;
+  diffStatsEl.textContent = stats.conflicts
+    ? t('threeConflicts', { n: String(stats.conflicts) })
+    : t('threeNone');
+  diffStatsEl.classList.toggle('has-clash', stats.conflicts > 0);
+
+  historyDiff.innerHTML = '';
+  historyDiff.classList.add('is-three');
+
+  // Name the columns, and keep the names on screen while scrolling: three
+  // columns of near-identical Markdown are unreadable without them.
+  const head = document.createElement('div');
+  head.className = 'three-head';
+  for (const [key, cls] of [
+    ['threeBase', ''],
+    ['threeTheirs', 'three-head-theirs'],
+    ['threeOurs', ''],
+  ] as const) {
+    head.appendChild(document.createElement('span')); // line-number gutter
+    const label = document.createElement('span');
+    if (cls) label.className = cls;
+    label.textContent = t(key);
+    head.appendChild(label);
+  }
+  historyDiff.appendChild(head);
+
+  for (const line of foldThreeWay(rows)) {
+    if (isGap(line)) {
+      const gap = document.createElement('div');
+      gap.className = 'diff-gap';
+      gap.textContent = t('diffGap', { n: String(line.count) });
+      historyDiff.appendChild(gap);
+    } else {
+      historyDiff.appendChild(threeRowEl(line));
+    }
+  }
+
+  historyRestore.disabled = true;
+}
+
+function openHistory(mode: 'versions' | 'conflict' = 'versions') {
   if (!active?.path) return;
   historyPanelOpen = true;
   historyOverlay.hidden = false;
+  historyMode = mode === 'conflict' && active.conflict ? 'conflict' : 'versions';
+  const three = historyMode === 'conflict';
+  historySide.hidden = three;
+  historyDiff.classList.toggle('is-three', three);
+  historyActions.hidden = three;
+  conflictActions.hidden = !three;
+  historyPanel.classList.toggle('wide', three); // three columns need the room
+
+  if (historyMode === 'conflict') {
+    renderThreeWay();
+    return;
+  }
   // A fresh open asks the question you almost always have: what changed since
   // the last save? Stale picks from a previous document don't leak in.
   basePick = null;
@@ -1948,8 +2154,25 @@ function closeHistory() {
   historyOverlay.hidden = true;
 }
 
-historyBtn.addEventListener('click', openHistory);
+// Bare `openHistory` would take the click event as its `mode` argument.
+historyBtn.addEventListener('click', () => openHistory());
 historyClose.addEventListener('click', closeHistory);
+
+// The conflict banner, and the same choices repeated at the foot of the
+// three-way view — the point where the user can actually see what they're
+// choosing between.
+document.getElementById('conflict-view')!.addEventListener('click', () => openHistory('conflict'));
+document.getElementById('conflict-mine')!.addEventListener('click', resolveKeepMine);
+document.getElementById('conflict-theirs')!.addEventListener('click', resolveTakeTheirs);
+document.getElementById('conflict-back')!.addEventListener('click', () => openHistory('versions'));
+document.getElementById('conflict-mine2')!.addEventListener('click', async () => {
+  await resolveKeepMine();
+  closeHistory();
+});
+document.getElementById('conflict-theirs2')!.addEventListener('click', async () => {
+  await resolveTakeTheirs();
+  closeHistory();
+});
 historyOverlay.addEventListener('click', (e) => {
   if (e.target === historyOverlay) closeHistory();
 });
@@ -2425,13 +2648,18 @@ getCurrentWebview().onDragDropEvent((event) => {
   }
 });
 
-// Auto-reload: re-render when the active file changes on disk. Paused while
-// editing or with unsaved changes so it never clobbers the user's work.
+// Watch the active file on disk. With nothing in flight we just re-render the
+// new content. With unsaved edits — or with the editor open — we can't: the file
+// and the buffer have diverged, and picking a winner is the user's call, so it
+// becomes a conflict rather than a silent reload or a silent overwrite.
 setInterval(async () => {
-  if (!active || !active.path || isEditing || isDirty(active)) return;
+  const doc = active;
+  if (!doc?.path) return;
   try {
-    const m = await invoke<number>('file_mtime', { path: active.path });
-    if (m > active.mtime) await refreshActiveFromDisk(true);
+    const m = await invoke<number>('file_mtime', { path: doc.path });
+    if (m <= doc.mtime) return;
+    if (!isEditing && !isDirty(doc)) await refreshActiveFromDisk(true);
+    else await noteDiskChange(doc, m);
   } catch {
     // File may have been moved/removed; leave the last render in place.
   }

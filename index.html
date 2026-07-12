@@ -99,6 +99,15 @@
       <ul id="doc-list"></ul>
     </aside>
     <div class="content-area">
+      <div id="conflict-bar" hidden>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span class="conflict-text" data-i18n="conflictText">ディスク上のファイルが、あなたの編集中に書き換えられました。</span>
+        <button id="conflict-view" class="conflict-btn primary" data-i18n="conflictView">差分を見る</button>
+        <button id="conflict-mine" class="conflict-btn" data-i18n="conflictKeepMine">自分の編集で上書き</button>
+        <button id="conflict-theirs" class="conflict-btn" data-i18n="conflictTakeTheirs">ディスクを読み直す</button>
+      </div>
       <div id="find-bar" hidden>
         <div class="find-row">
           <input id="find-input" type="text" spellcheck="false" data-i18n-placeholder="findPlaceholder" placeholder="検索" />
@@ -206,7 +215,7 @@
         </button>
       </div>
       <div class="history-body">
-        <div class="history-side">
+        <div class="history-side" id="history-side">
           <div class="history-cols">
             <span class="history-col" data-i18n="diffBase">基準</span>
             <span class="history-col" data-i18n="diffCompare">比較</span>
@@ -219,8 +228,14 @@
             <span id="diff-stats" class="diff-stats"></span>
           </div>
           <div id="history-diff" class="diff"></div>
-          <div class="history-actions">
-            <button id="history-restore" disabled data-i18n="historyRestore">この版に戻す</button>
+          <div class="history-actions" id="history-actions">
+            <button id="history-restore" disabled data-i18n="historyRestore">基準の版に戻す</button>
+          </div>
+          <div class="history-actions" id="conflict-actions" hidden>
+            <span class="conflict-safe" data-i18n="conflictSafe">どちらを選んでも、両方の版は履歴に残ります。</span>
+            <button id="conflict-back" data-i18n="backToVersions">版の比較に戻る</button>
+            <button id="conflict-theirs2" data-i18n="conflictTakeTheirs">ディスクを読み直す</button>
+            <button id="conflict-mine2" class="primary" data-i18n="conflictKeepMine">自分の編集で上書き</button>
           </div>
         </div>
       </div>

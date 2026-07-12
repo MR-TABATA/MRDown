@@ -241,6 +241,165 @@ export function inlineSegments(oldLine: string, newLine: string): { left: Seg[];
   return { left, right };
 }
 
+// ── Three-way ────────────────────────────────────────────────────────────────
+// When something rewrites the file on disk while you have unsaved edits — an AI
+// agent, most often, which is the case MRDown exists for — there is no single
+// "before". There are three texts: the version you both started from (the last
+// save), what the file says now (theirs), and what your buffer says (ours). Same
+// shape as a Git merge, and the same question: who touched what, and where do
+// they collide?
+
+export interface ThreeRow {
+  base: string | null;
+  theirs: string | null;
+  ours: string | null;
+  baseNo: number | null;
+  theirsNo: number | null;
+  oursNo: number | null;
+  /** The line differs from base on that side. */
+  theirsChanged: boolean;
+  oursChanged: boolean;
+  /** Both sides changed this line, and not into the same thing. */
+  conflict: boolean;
+}
+
+/** One side projected back onto the base's line numbering. */
+interface Side {
+  /** `map[i]` is what base line `i` became, or null if that side deleted it. */
+  map: (string | null)[];
+  /** `no[i]` is that side's line number for base line `i`. */
+  no: (number | null)[];
+  /** `ins[i]` are the lines that side added *before* base line `i`. */
+  ins: string[][];
+  /** Line numbers for the above. */
+  insNo: number[][];
+}
+
+function project(base: string[], other: string[]): Side {
+  const side: Side = {
+    map: new Array(base.length).fill(null),
+    no: new Array(base.length).fill(null),
+    ins: Array.from({ length: base.length + 1 }, () => [] as string[]),
+    insNo: Array.from({ length: base.length + 1 }, () => [] as number[]),
+  };
+
+  const ops = diff(base, other);
+  let bi = 0;
+  let oi = 0;
+
+  for (let k = 0; k < ops.length; ) {
+    if (ops[k].type === 'eq') {
+      side.map[bi] = other[oi];
+      side.no[bi] = oi + 1;
+      bi++;
+      oi++;
+      k++;
+      continue;
+    }
+
+    // A rewritten line comes out of the line diff as a deletion plus an
+    // insertion. Left as-is, one edited line would occupy two rows — a phantom
+    // "they deleted this" next to a phantom "they added that" — and every count
+    // built on it would be doubled. So pair the run up: the nth deleted base
+    // line became the nth inserted line.
+    const dels: string[] = [];
+    const inss: string[] = [];
+    while (k < ops.length && ops[k].type !== 'eq') {
+      (ops[k].type === 'del' ? dels : inss).push(ops[k].value);
+      k++;
+    }
+
+    const from = oi;
+    const paired = Math.min(dels.length, inss.length);
+    for (let j = 0; j < paired; j++) {
+      side.map[bi + j] = inss[j];
+      side.no[bi + j] = from + j + 1;
+    }
+    // Base lines with no counterpart: this side deleted them (map stays null).
+    // Surplus insertions belong after the region, not inside it.
+    const at = bi + dels.length;
+    for (let j = paired; j < inss.length; j++) {
+      side.ins[at].push(inss[j]);
+      side.insNo[at].push(from + j + 1);
+    }
+
+    bi += dels.length;
+    oi += inss.length;
+  }
+
+  return side;
+}
+
+/**
+ * Line up three texts against their common base. A base line that only one side
+ * touched is that side's change; a line both sides rewrote differently is a
+ * conflict, and that's the only kind of row a human actually has to resolve.
+ */
+export function threeWay(baseText: string, theirsText: string, oursText: string): ThreeRow[] {
+  const base = splitLines(baseText);
+  const theirs = project(base, splitLines(theirsText));
+  const ours = project(base, splitLines(oursText));
+  const rows: ThreeRow[] = [];
+
+  const addInsertions = (at: number) => {
+    const n = Math.max(theirs.ins[at].length, ours.ins[at].length);
+    for (let j = 0; j < n; j++) {
+      const t = theirs.ins[at][j] ?? null;
+      const o = ours.ins[at][j] ?? null;
+      rows.push({
+        base: null,
+        theirs: t,
+        ours: o,
+        baseNo: null,
+        theirsNo: theirs.insNo[at][j] ?? null,
+        oursNo: ours.insNo[at][j] ?? null,
+        theirsChanged: t !== null,
+        oursChanged: o !== null,
+        // Both sides inserted something here, and not the same thing.
+        conflict: t !== null && o !== null && t !== o,
+      });
+    }
+  };
+
+  for (let i = 0; i < base.length; i++) {
+    addInsertions(i);
+    const t = theirs.map[i];
+    const o = ours.map[i];
+    const theirsChanged = t !== base[i];
+    const oursChanged = o !== base[i];
+    rows.push({
+      base: base[i],
+      theirs: t,
+      ours: o,
+      baseNo: i + 1,
+      theirsNo: theirs.no[i],
+      oursNo: ours.no[i],
+      theirsChanged,
+      oursChanged,
+      conflict: theirsChanged && oursChanged && t !== o,
+    });
+  }
+  addInsertions(base.length);
+
+  return rows;
+}
+
+export function threeWayStats(rows: ThreeRow[]): {
+  theirs: number;
+  ours: number;
+  conflicts: number;
+} {
+  let theirs = 0;
+  let ours = 0;
+  let conflicts = 0;
+  for (const row of rows) {
+    if (row.conflict) conflicts++;
+    if (row.theirsChanged) theirs++;
+    if (row.oursChanged) ours++;
+  }
+  return { theirs, ours, conflicts };
+}
+
 // ── Context folding ──────────────────────────────────────────────────────────
 
 /** A run of unchanged lines that was folded away. */
@@ -249,24 +408,30 @@ export interface Gap {
   count: number;
 }
 
+/** `ThreeRow` carries no tag of its own, so the union needs a guard. */
+export function isGap(row: object): row is Gap {
+  return (row as Gap).type === 'gap';
+}
+
 export type DiffLine = DiffRow | Gap;
+export type ThreeLine = ThreeRow | Gap;
 
 /**
- * Keep `context` unchanged lines either side of every change and fold the rest
- * into a gap. Two edits in a two-thousand-line document should not make the
- * reader scroll past two thousand identical lines to find them — and it keeps
- * the DOM proportional to what changed rather than to the file.
+ * Keep `context` rows either side of every changed one and fold the rest into a
+ * gap. Two edits in a two-thousand-line document should not make the reader
+ * scroll past two thousand identical lines to find them — and it keeps the DOM
+ * proportional to what changed rather than to the file.
  */
-export function foldUnchanged(rows: DiffRow[], context = 3): DiffLine[] {
+export function foldRows<T>(rows: T[], changed: (row: T) => boolean, context = 3): (T | Gap)[] {
   const keep = new Array<boolean>(rows.length).fill(false);
   for (let i = 0; i < rows.length; i++) {
-    if (rows[i].type === 'eq') continue;
+    if (!changed(rows[i])) continue;
     for (let j = Math.max(0, i - context); j <= Math.min(rows.length - 1, i + context); j++) {
       keep[j] = true;
     }
   }
 
-  const out: DiffLine[] = [];
+  const out: (T | Gap)[] = [];
   for (let i = 0; i < rows.length; ) {
     if (keep[i]) {
       out.push(rows[i++]);
@@ -283,6 +448,14 @@ export function foldUnchanged(rows: DiffRow[], context = 3): DiffLine[] {
     else out.push(rows[i - 1]);
   }
   return out;
+}
+
+export function foldUnchanged(rows: DiffRow[], context = 3): DiffLine[] {
+  return foldRows(rows, (r) => r.type !== 'eq', context);
+}
+
+export function foldThreeWay(rows: ThreeRow[], context = 3): ThreeLine[] {
+  return foldRows(rows, (r) => r.theirsChanged || r.oursChanged, context);
 }
 
 /** Changed-line counts for the summary line ("+12 −3"). */

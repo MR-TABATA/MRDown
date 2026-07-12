@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { diff, sideBySide, inlineSegments, diffStats, foldUnchanged, type DiffRow, type Gap } from './diff';
+import {
+  diff,
+  sideBySide,
+  inlineSegments,
+  diffStats,
+  foldUnchanged,
+  foldThreeWay,
+  threeWay,
+  threeWayStats,
+  isGap,
+  type DiffRow,
+  type Gap,
+} from './diff';
 
 /** Compact a row list into strings that are readable when a test fails. */
 const shape = (rows: DiffRow[]) =>
@@ -193,6 +205,97 @@ describe('foldUnchanged', () => {
   it('folds nothing when everything changed', () => {
     const folded = foldUnchanged(sideBySide('a\nb', 'x\ny'));
     expect(folded.some((r) => r.type === 'gap')).toBe(false);
+  });
+});
+
+describe('threeWay', () => {
+  // The situation MRDown exists for: you were editing, an agent rewrote the file.
+  const BASE = '# メモ\n\n共通の行\n最後の行';
+
+  it('attributes a change to the side that made it', () => {
+    const theirs = '# メモ\n\nAI が直した行\n最後の行';
+    const ours = '# メモ\n\n共通の行\n最後の行';
+    const rows = threeWay(BASE, theirs, ours);
+    const changed = rows.filter((r) => r.theirsChanged || r.oursChanged);
+    expect(changed).toHaveLength(1);
+    expect(changed[0].theirsChanged).toBe(true);
+    expect(changed[0].oursChanged).toBe(false);
+    expect(changed[0].conflict).toBe(false);
+  });
+
+  it('lets both sides change different lines without conflicting', () => {
+    const theirs = '# メモ\n\nAI が直した行\n最後の行';
+    const ours = '# メモ\n\n共通の行\n私が直した行';
+    const rows = threeWay(BASE, theirs, ours);
+    expect(threeWayStats(rows)).toEqual({ theirs: 1, ours: 1, conflicts: 0 });
+  });
+
+  it('flags the same line rewritten differently as a conflict', () => {
+    const theirs = '# メモ\n\nAI の言い分\n最後の行';
+    const ours = '# メモ\n\n私の言い分\n最後の行';
+    const rows = threeWay(BASE, theirs, ours);
+    const stats = threeWayStats(rows);
+    expect(stats.conflicts).toBe(1);
+    const row = rows.find((r) => r.conflict)!;
+    expect(row.base).toBe('共通の行');
+    expect(row.theirs).toBe('AI の言い分');
+    expect(row.ours).toBe('私の言い分');
+  });
+
+  it('does not call it a conflict when both sides made the same edit', () => {
+    const same = '# メモ\n\n同じ直し\n最後の行';
+    const rows = threeWay(BASE, same, same);
+    expect(threeWayStats(rows).conflicts).toBe(0);
+  });
+
+  it('shows a line one side deleted as null on that side only', () => {
+    const theirs = '# メモ\n\n最後の行'; // AI dropped the shared line
+    const rows = threeWay(BASE, theirs, BASE);
+    const row = rows.find((r) => r.base === '共通の行')!;
+    expect(row.theirs).toBeNull();
+    expect(row.theirsChanged).toBe(true);
+    expect(row.ours).toBe('共通の行');
+    expect(row.oursChanged).toBe(false);
+  });
+
+  it('pairs insertions the two sides made at the same place', () => {
+    const theirs = '# メモ\n\n共通の行\nAI の追記\n最後の行';
+    const ours = '# メモ\n\n共通の行\n私の追記\n最後の行';
+    const rows = threeWay(BASE, theirs, ours);
+    const ins = rows.filter((r) => r.base === null);
+    expect(ins).toHaveLength(1); // one row, not two stacked
+    expect(ins[0].theirs).toBe('AI の追記');
+    expect(ins[0].ours).toBe('私の追記');
+    expect(ins[0].conflict).toBe(true);
+  });
+
+  it('keeps each side numbered in its own coordinates', () => {
+    const theirs = '# メモ\n\n差し込み\n共通の行\n最後の行'; // shifts theirs down by one
+    const rows = threeWay(BASE, theirs, BASE);
+    const last = rows[rows.length - 1];
+    expect(last.base).toBe('最後の行');
+    expect(last.baseNo).toBe(4);
+    expect(last.theirsNo).toBe(5); // one line lower on their side
+    expect(last.oursNo).toBe(4);
+  });
+
+  it('reports nothing changed when all three agree', () => {
+    expect(threeWayStats(threeWay(BASE, BASE, BASE))).toEqual({
+      theirs: 0,
+      ours: 0,
+      conflicts: 0,
+    });
+  });
+});
+
+describe('foldThreeWay', () => {
+  it('folds the untouched middle of a three-way comparison', () => {
+    const base = Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n');
+    const theirs = base.replace('line 20', 'AI');
+    const rows = threeWay(base, theirs, base);
+    const folded = foldThreeWay(rows);
+    expect(folded.filter(isGap)).toHaveLength(2);
+    expect(folded.filter((r) => !isGap(r))).toHaveLength(7); // 3 + change + 3
   });
 });
 

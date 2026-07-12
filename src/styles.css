@@ -771,6 +771,7 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 #settings-close:hover { background: var(--mrd-surface-3); color: var(--mrd-text); }
 
 /* Local History panel (list of saved versions + preview) */
+.history-panel.wide { width: 1300px; }
 .history-panel {
   background: var(--mrd-surface);
   border: 1px solid var(--mrd-border);
@@ -796,6 +797,9 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   flex-direction: column;
   border-right: 1px solid var(--mrd-border);
 }
+/* display:flex above outranks the UA's [hidden] display:none, so the picker
+   would keep its 240px in three-way mode. Same trap as .folder-head. */
+.history-side[hidden] { display: none; }
 .history-cols {
   display: grid;
   grid-template-columns: 1fr 34px 34px;
@@ -826,6 +830,7 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 #history-list li:hover { background: var(--mrd-surface-2); }
 #history-list li input[type='radio'] { justify-self: center; margin: 0; cursor: pointer; }
 #history-list .history-when.is-current { color: var(--mrd-accent); font-weight: 600; }
+#history-list .history-when.is-head { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--mrd-muted); }
 #history-list li.history-empty { display: block; color: var(--mrd-muted); font-size: 12px; line-height: 1.5; padding: 10px; }
 #history-list li.history-empty:hover { background: transparent; }
 
@@ -897,8 +902,62 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   padding: 10px 14px;
   border-top: 1px solid var(--mrd-border);
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
 }
+.history-actions[hidden] { display: none; }
+.conflict-safe { flex: 1; font-size: 11px; color: var(--mrd-faint); }
+#conflict-actions .primary,
+.conflict-btn.primary { background: var(--mrd-accent); color: var(--mrd-accent-text); border-color: var(--mrd-accent); }
+#conflict-actions .primary:hover,
+.conflict-btn.primary:hover { background: var(--mrd-accent-hover); }
+
+/* Three-way: base, what's on disk, what I have. Same grid idea as the two-way
+   diff, one more pair of columns. */
+.diff.is-three .diff-row.three,
+.diff.is-three .three-head {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px 1fr 40px 1fr;
+}
+/* Which column is which. Sticky, because the answer must stay on screen while
+   you scroll through a long conflict. */
+.three-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--mrd-surface-2);
+  border-bottom: 1px solid var(--mrd-border);
+  font-family: ui-sans-serif, -apple-system, sans-serif;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mrd-faint);
+}
+.three-head span { padding: 5px 10px; }
+.three-head .three-head-theirs { color: var(--mrd-muted); }
+.diff-row.three .diff-line.touched { background: var(--mrd-diff-ins); }
+.diff-row.three .diff-line.void { background: var(--mrd-diff-void); }
+/* The only rows a human has to resolve: both sides rewrote the same line. */
+.diff-row.three .diff-line.clash { background: var(--mrd-diff-del); }
+.diff-row.three.conflict .diff-no { color: var(--mrd-hit-current); }
+.diff-stats.has-clash { color: var(--mrd-hit-current); }
+
+/* Conflict banner — the file moved under you. */
+#conflict-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  background: color-mix(in srgb, var(--mrd-hit-current) 16%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--mrd-hit-current) 40%, transparent);
+  color: var(--mrd-text);
+  font-size: 12.5px;
+}
+#conflict-bar[hidden] { display: none; }
+#conflict-bar > svg { flex-shrink: 0; color: var(--mrd-hit-current); }
+#conflict-bar .conflict-text { flex: 1; }
+.conflict-btn { padding: 4px 10px; font-size: 12px; }
 #history-restore:disabled { opacity: 0.4; cursor: default; }
 .settings-section { padding: 12px 16px 18px; }
 .settings-section-title {

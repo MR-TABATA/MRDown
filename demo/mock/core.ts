@@ -1,6 +1,6 @@
-// Stands in for `@tauri-apps/api/core`: the 16 commands src/main.ts invokes.
+// Stands in for `@tauri-apps/api/core`: the 17 commands src/main.ts invokes.
 
-import { files, versions, recents, type Version } from './vfs';
+import { files, versions, committed, recents, type Version } from './vfs';
 
 function basename(p: string) {
   return p.split('/').pop() ?? p;
@@ -71,6 +71,12 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
       if (!v) throw new Error(`No such version: ${args.id}`);
       return r(v.content);
     }
+
+    // Stands in for the file's content at HEAD. `null` is the honest answer for
+    // a fixture that isn't in a repository, and it's the path the UI has to
+    // handle anyway (no Git, untracked, no commits).
+    case 'git_head_content':
+      return r(committed.get(args.path) ?? null);
 
     case 'save_image': {
       files.set(args.path, { content: `<binary ${basename(args.path)}>`, mtime: Date.now() });

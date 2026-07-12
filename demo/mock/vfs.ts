@@ -21,6 +21,8 @@ const NOTES = `${HOME}/notes`;
 
 export const files = new Map<string, Entry>();
 export const versions = new Map<string, Version[]>();
+/** Content at Git HEAD, for the files the fixtures treat as committed. */
+export const committed = new Map<string, string>();
 export let recents: string[] = [];
 
 const README = `${NOTES}/README.md`;
@@ -120,6 +122,7 @@ const NOTICE_STUB = `# サードパーティ・ライセンス / Third-Party Not
 export function seed() {
   files.clear();
   versions.clear();
+  committed.clear();
   recents = [README, DESIGN];
 
   const t0 = Date.UTC(2026, 6, 10, 9, 0, 0);
@@ -136,6 +139,10 @@ export function seed() {
     { id: t0 - 3_600_000, bytes: oldest.length, content: oldest },
     { id: t0 - 600_000, bytes: README_V1.length, content: README_V1 },
   ]);
+
+  // The checklist is committed; the design notes are not, so the UI's "no Git to
+  // compare against" path is exercised by the same fixtures.
+  committed.set(README, oldest);
 }
 
 seed();

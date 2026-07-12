@@ -508,6 +508,48 @@ fn read_version(app: tauri::AppHandle, path: String, id: u64) -> Result<String, 
     std::fs::read_to_string(dir.join(format!("{id}.snap"))).map_err(|e| e.to_string())
 }
 
+// ── Git ─────────────────────────────────────────────────────────────────────
+// HEAD is just one more version of the file, so it feeds the same diff renderer
+// the local history does. We shell out to `git` rather than linking libgit2 or
+// gix: reading one blob doesn't justify the dependency (or its entry in the
+// third-party notices), and every Mac that has Xcode's tools has `git`.
+
+fn git(dir: &std::path::Path, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8(out.stdout).ok()
+}
+
+/// The file's content as of `HEAD`, or `None` when there's nothing to compare
+/// against: no Git, not a repository, no commits yet, or the file is untracked
+/// (a brand new note). Callers treat `None` as "don't offer a Git comparison"
+/// rather than as an error — none of those cases is a fault.
+#[tauri::command]
+fn git_head_content(path: String) -> Option<String> {
+    let file = std::path::Path::new(&path);
+    let dir = file.parent()?;
+
+    let root = git(dir, &["rev-parse", "--show-toplevel"])?;
+    let root = std::path::PathBuf::from(root.trim());
+
+    // `git show` wants a path relative to the repository root, with forward
+    // slashes. Resolve symlinks on both sides first (on macOS /tmp is a symlink
+    // to /private/tmp, and the two spellings would never strip to a relative).
+    let file = file.canonicalize().ok()?;
+    let root = root.canonicalize().ok()?;
+    let rel = file.strip_prefix(&root).ok()?;
+    let rel = rel.to_str()?.replace('\\', "/");
+
+    git(&root, &["show", &format!("HEAD:{rel}")])
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -531,7 +573,8 @@ pub fn run() {
             set_document_open,
             snapshot_version,
             list_versions,
-            read_version
+            read_version,
+            git_head_content
         ])
         .on_menu_event(|app, event| {
             // Forward our custom item ids to the frontend, which maps them to
@@ -581,6 +624,65 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A throwaway repository with one commit, to exercise `git_head_content`
+    /// against the real `git` it shells out to rather than a stand-in.
+    fn temp_repo() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("mrdown-git-{}", now_ms()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        run(&["init"]);
+        run(&["config", "user.email", "t@example.com"]);
+        run(&["config", "user.name", "t"]);
+        std::fs::write(dir.join("note.md"), "committed\n").unwrap();
+        run(&["add", "note.md"]);
+        run(&["commit", "-m", "first"]);
+        dir
+    }
+
+    #[test]
+    fn git_head_content_reads_the_committed_version_not_the_working_tree() {
+        let dir = temp_repo();
+        let file = dir.join("note.md");
+        // Change the file on disk: HEAD must still answer with what was committed.
+        std::fs::write(&file, "edited\n").unwrap();
+
+        let head = git_head_content(file.to_str().unwrap().to_string());
+        assert_eq!(head.as_deref(), Some("committed\n"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn git_head_content_is_none_when_there_is_nothing_to_compare_against() {
+        // An untracked file inside a repository — a brand new note.
+        let dir = temp_repo();
+        let fresh = dir.join("fresh.md");
+        std::fs::write(&fresh, "never committed\n").unwrap();
+        assert_eq!(git_head_content(fresh.to_str().unwrap().to_string()), None);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // A repository with no commits at all: HEAD doesn't resolve.
+        let empty = std::env::temp_dir().join(format!("mrdown-empty-{}", now_ms()));
+        std::fs::create_dir_all(&empty).unwrap();
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&empty)
+            .arg("init")
+            .output()
+            .unwrap();
+        let file = empty.join("note.md");
+        std::fs::write(&file, "unborn\n").unwrap();
+        assert_eq!(git_head_content(file.to_str().unwrap().to_string()), None);
+        let _ = std::fs::remove_dir_all(&empty);
+    }
 
     #[test]
     fn supported_extensions_are_case_insensitive() {
