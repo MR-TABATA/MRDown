@@ -624,11 +624,23 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
+
+    /// Unique per call, not per millisecond: the tests run in parallel and
+    /// `now_ms()` alone hands two of them the same directory to fight over.
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        static N: AtomicUsize = AtomicUsize::new(0);
+        std::env::temp_dir().join(format!(
+            "mrdown-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
 
     /// A throwaway repository with one commit, to exercise `git_head_content`
     /// against the real `git` it shells out to rather than a stand-in.
     fn temp_repo() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("mrdown-git-{}", now_ms()));
+        let dir = scratch("git");
         std::fs::create_dir_all(&dir).unwrap();
         let run = |args: &[&str]| {
             std::process::Command::new("git")
@@ -670,7 +682,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
 
         // A repository with no commits at all: HEAD doesn't resolve.
-        let empty = std::env::temp_dir().join(format!("mrdown-empty-{}", now_ms()));
+        let empty = scratch("empty");
         std::fs::create_dir_all(&empty).unwrap();
         let _ = std::process::Command::new("git")
             .arg("-C")
