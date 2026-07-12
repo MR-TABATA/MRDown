@@ -10,10 +10,13 @@ export interface Entry {
   mtime: number;
 }
 
+export type VersionKind = 'save' | 'external' | 'draft';
+
 export interface Version {
   id: number;
   bytes: number;
   content: string;
+  kind: VersionKind;
 }
 
 const HOME = '/Users/you';
@@ -136,8 +139,8 @@ export function seed() {
       ? '# リリース前チェック\n\nまだ何も決まっていない。\n'
       : '# Release checklist\n\nNothing decided yet.\n';
   versions.set(README, [
-    { id: t0 - 3_600_000, bytes: oldest.length, content: oldest },
-    { id: t0 - 600_000, bytes: README_V1.length, content: README_V1 },
+    { id: t0 - 3_600_000, bytes: oldest.length, content: oldest, kind: 'save' },
+    { id: t0 - 600_000, bytes: README_V1.length, content: README_V1, kind: 'save' },
   ]);
 
   // The checklist is committed; the design notes are not, so the UI's "no Git to

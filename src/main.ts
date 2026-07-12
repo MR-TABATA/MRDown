@@ -940,7 +940,7 @@ async function persistTo(path: string) {
   // Local History: record this saved version (out of band — a history failure
   // must never break a successful save). The backend dedupes and prunes; refresh
   // an open panel only once the snapshot is actually written.
-  invoke('snapshot_version', { path, content: saved })
+  invoke('snapshot_version', { path, content: saved, kind: 'save' })
     .then(() => {
       if (historyPanelOpen && active?.path === path) refreshHistory();
     })
@@ -1001,11 +1001,26 @@ async function saveAs() {
   await persistTo(chosen);
 }
 
+/**
+ * Record an external rewrite as *two* versions: what the file said before, and
+ * what it says now. Recording only the new content would leave an agent's work
+ * as a state rather than as a change — and the "before" may never have been
+ * saved, in which case it exists nowhere else at all. The backend dedupes, so
+ * the common case (the before is already the newest snapshot) writes nothing.
+ */
+async function recordExternal(path: string, before: string, after: string) {
+  await invoke('snapshot_version', { path, content: before, kind: 'external' }).catch(() => {});
+  await invoke('snapshot_version', { path, content: after, kind: 'external' }).catch(() => {});
+}
+
 // Re-read the active document from disk into the editor and preview.
-async function refreshActiveFromDisk(preserveScroll: boolean) {
+async function refreshActiveFromDisk(preserveScroll: boolean, external = false) {
   if (!active || !active.path) return;
   const content = await invoke<string>('read_file', { path: active.path }).catch(() => null);
   if (content == null) return;
+  // Something outside MRDown wrote this. Put both ends of it in the timeline
+  // before the old content is gone from memory.
+  if (external) await recordExternal(active.path, active.savedSource, content);
   const scrollTop = contentArea.scrollTop;
   active.savedSource = content;
   active.workingText = content;
@@ -1051,7 +1066,10 @@ async function noteDiskChange(doc: Doc, mtime: number) {
   // Preserve the on-disk version before anything can overwrite it. From here on
   // it is a version in the timeline, recoverable even if the user picks "keep
   // mine" and never looks at it again.
-  await invoke('snapshot_version', { path, content }).catch(() => {});
+  // Both ends of the change, so the AI's rewrite can be read as a diff and not
+  // just as a new state: the content we held (which may never have been saved,
+  // and so may exist nowhere else) and the content that replaced it.
+  await recordExternal(path, doc.savedSource, content);
   doc.conflict = { content, mtime };
   if (doc === active) updateConflictBanner();
 }
@@ -1077,7 +1095,11 @@ async function resolveTakeTheirs() {
   // My unsaved edits were never saved, so they exist nowhere else. Snapshot them
   // before they go, or "take theirs" would be the very data loss we're fixing.
   if (isDirty(doc)) {
-    await invoke('snapshot_version', { path: doc.path, content: doc.workingText }).catch(() => {});
+    await invoke('snapshot_version', {
+      path: doc.path,
+      content: doc.workingText,
+      kind: 'draft',
+    }).catch(() => {});
   }
   doc.conflict = null;
   updateConflictBanner();
@@ -1808,10 +1830,20 @@ settingsOverlay.addEventListener('click', (e) => {
 
 // --- Local History (saved versions, restore) ---
 
+type VersionKind = 'save' | 'external' | 'draft';
+
 interface Version {
   id: number; // epoch ms, also the snapshot id
   bytes: number;
+  kind: VersionKind;
 }
+
+/** Where each version came from, so the list isn't just a column of clocks. */
+const KIND_LABEL: Record<VersionKind, Key> = {
+  save: 'kindSave',
+  external: 'kindExternal',
+  draft: 'kindDraft',
+};
 
 let historyPanelOpen = false;
 /** `conflict` shows the three-way view instead of the two-version comparison. */
@@ -1928,9 +1960,22 @@ async function refreshHistory() {
 
     const when = document.createElement('span');
     when.className = 'history-when';
-    when.textContent = labelOf(pick);
     if (pick === CURRENT) when.classList.add('is-current');
     if (pick === HEAD) when.classList.add('is-head');
+
+    const time = document.createElement('span');
+    time.textContent = labelOf(pick);
+    when.appendChild(time);
+
+    // A column of clocks can't tell your own save from something an agent wrote
+    // behind your back, which is the one thing you'd want to know here.
+    const version = typeof pick === 'number' ? versions.find((v) => v.id === pick) : undefined;
+    if (version) {
+      const kind = document.createElement('span');
+      kind.className = `history-kind ${version.kind}`;
+      kind.textContent = t(KIND_LABEL[version.kind] ?? 'kindSave');
+      when.appendChild(kind);
+    }
 
     li.append(when, base, cmp);
     historyList.appendChild(li);
@@ -2658,7 +2703,10 @@ setInterval(async () => {
   try {
     const m = await invoke<number>('file_mtime', { path: doc.path });
     if (m <= doc.mtime) return;
-    if (!isEditing && !isDirty(doc)) await refreshActiveFromDisk(true);
+    // Nothing of ours is in flight, so just take the new content — but keep it,
+    // and what it replaced, in the timeline. "What did the AI change?" is only
+    // answerable if the versions it wrote are actually recorded.
+    if (!isEditing && !isDirty(doc)) await refreshActiveFromDisk(true, true);
     else await noteDiskChange(doc, m);
   } catch {
     // File may have been moved/removed; leave the last render in place.

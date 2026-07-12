@@ -391,7 +391,6 @@ fn set_document_open(app: tauri::AppHandle, open: bool) {
 // user's Git repos (the very repos the diff features care about). Users can then
 // list past versions and restore or diff them. No Git required.
 
-const MAX_HISTORY: usize = 50;
 
 /// Stable, dependency-free FNV-1a hash of the absolute path, hex-encoded, used
 /// as a per-file folder name. Deliberately not `DefaultHasher` (whose output is
@@ -412,18 +411,76 @@ fn history_dir(app: &tauri::AppHandle, path: &str) -> Option<std::path::PathBuf>
         .map(|dir| dir.join("history").join(path_key(path)))
 }
 
+/// Where a version came from. Worth keeping: with an agent writing to the same
+/// files, a timeline that can't tell your own save from something that appeared
+/// on disk behind your back isn't much of a record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Kind {
+    /// You pressed ⌘S.
+    Save,
+    /// The content appeared on disk without MRDown writing it — an agent, an
+    /// editor, a `git checkout`.
+    External,
+    /// Unsaved edits, rescued before being discarded (you chose to take the
+    /// disk's version). These exist nowhere else, so they're never dropped first.
+    Draft,
+}
+
+impl Kind {
+    fn tag(self) -> &'static str {
+        match self {
+            Kind::Save => "save",
+            Kind::External => "external",
+            Kind::Draft => "draft",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Kind> {
+        match s {
+            "save" => Some(Kind::Save),
+            "external" => Some(Kind::External),
+            "draft" => Some(Kind::Draft),
+            _ => None,
+        }
+    }
+
+    /// Each kind is capped on its own. Sharing one budget would let an agent
+    /// that rewrites a file in a loop evict every save the user ever made.
+    fn budget(self) -> usize {
+        match self {
+            Kind::Save => 50,
+            Kind::External => 30,
+            Kind::Draft => 10,
+        }
+    }
+}
+
 #[derive(serde::Serialize)]
 struct Version {
     /// Epoch-ms timestamp; doubles as the snapshot's filename stem.
     id: u64,
     bytes: u64,
+    kind: Kind,
 }
 
-/// Parse a snapshot filename like "1719900000000.snap" into its numeric id.
+struct Snap {
+    id: u64,
+    kind: Kind,
+    file: std::path::PathBuf,
+}
+
+/// Parse a snapshot filename ("1719900000000.save.snap") into its id and kind.
 /// Rejects anything else, so junk files are ignored and the id can never carry
 /// path separators.
-fn parse_version_id(name: &str) -> Option<u64> {
-    name.strip_suffix(".snap").and_then(|s| s.parse::<u64>().ok())
+fn parse_version(name: &str) -> Option<(u64, Kind)> {
+    let stem = name.strip_suffix(".snap")?;
+    match stem.split_once('.') {
+        Some((id, kind)) => Some((id.parse().ok()?, Kind::parse(kind)?)),
+        // Written before versions carried a kind: back then every snapshot was a
+        // save, so that's what they are.
+        None => Some((stem.parse().ok()?, Kind::Save)),
+    }
 }
 
 /// Given ids sorted newest-first, return the ones beyond `max` (to delete).
@@ -435,15 +492,19 @@ fn prune_ids(sorted_desc: &[u64], max: usize) -> Vec<u64> {
     }
 }
 
-fn version_ids(dir: &std::path::Path) -> Vec<u64> {
-    let mut ids: Vec<u64> = std::fs::read_dir(dir)
+fn snaps(dir: &std::path::Path) -> Vec<Snap> {
+    let mut all: Vec<Snap> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
-        .filter_map(|e| parse_version_id(e.file_name().to_str()?))
+        .filter_map(|e| {
+            let name = e.file_name().to_str()?.to_string();
+            let (id, kind) = parse_version(&name)?;
+            Some(Snap { id, kind, file: dir.join(name) })
+        })
         .collect();
-    ids.sort_unstable_by(|a, b| b.cmp(a)); // newest first
-    ids
+    all.sort_unstable_by(|a, b| b.id.cmp(&a.id)); // newest first
+    all
 }
 
 fn now_ms() -> u64 {
@@ -453,33 +514,49 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Record a saved version. Skips a snapshot identical to the latest one, keeps
-/// ids monotonic (guards against same-ms saves / clock skew), and prunes to the
-/// newest `MAX_HISTORY`.
+/// Record a version. Skips a snapshot identical to the latest one, keeps ids
+/// monotonic (guards against same-ms writes / clock skew), and prunes within the
+/// version's own kind.
 #[tauri::command]
-fn snapshot_version(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
+fn snapshot_version(
+    app: tauri::AppHandle,
+    path: String,
+    content: String,
+    kind: String,
+) -> Result<(), String> {
+    let kind = Kind::parse(&kind).unwrap_or(Kind::Save);
     let dir = history_dir(&app, &path).ok_or("no data dir")?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
-    let mut ids = version_ids(&dir);
-    if let Some(&latest) = ids.first() {
-        if std::fs::read_to_string(dir.join(format!("{latest}.snap"))).ok() == Some(content.clone())
-        {
-            return Ok(()); // no change since last save — nothing to record
+    let all = snaps(&dir);
+    if let Some(latest) = all.first() {
+        if std::fs::read_to_string(&latest.file).ok().as_deref() == Some(content.as_str()) {
+            return Ok(()); // the file already says this — nothing new to record
         }
     }
 
-    let id = match ids.first() {
-        Some(&latest) if now_ms() <= latest => latest + 1,
+    // Ids double as timestamps *and* as the sort key, so two snapshots taken in
+    // the same millisecond (before + after an external write, say) must not
+    // collide or arrive out of order.
+    let id = match all.first() {
+        Some(latest) if now_ms() <= latest.id => latest.id + 1,
         _ => now_ms(),
     };
-    std::fs::write(dir.join(format!("{id}.snap")), &content).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(format!("{id}.{}.snap", kind.tag())), &content)
+        .map_err(|e| e.to_string())?;
     // The folder name is a hash; keep the human path for display/debugging.
     let _ = std::fs::write(dir.join("path"), &path);
 
+    // Prune within the kind we just added to, and only that one.
+    let mut ids: Vec<u64> = all
+        .iter()
+        .filter(|s| s.kind == kind)
+        .map(|s| s.id)
+        .collect();
     ids.insert(0, id);
-    for old in prune_ids(&ids, MAX_HISTORY) {
-        let _ = std::fs::remove_file(dir.join(format!("{old}.snap")));
+    let doomed = prune_ids(&ids, kind.budget());
+    for snap in all.iter().filter(|s| doomed.contains(&s.id)) {
+        let _ = std::fs::remove_file(&snap.file);
     }
     Ok(())
 }
@@ -490,22 +567,24 @@ fn list_versions(app: tauri::AppHandle, path: String) -> Vec<Version> {
     let Some(dir) = history_dir(&app, &path) else {
         return Vec::new();
     };
-    version_ids(&dir)
+    snaps(&dir)
         .into_iter()
-        .map(|id| {
-            let bytes = std::fs::metadata(dir.join(format!("{id}.snap")))
-                .map(|m| m.len())
-                .unwrap_or(0);
-            Version { id, bytes }
+        .map(|s| {
+            let bytes = std::fs::metadata(&s.file).map(|m| m.len()).unwrap_or(0);
+            Version { id: s.id, bytes, kind: s.kind }
         })
         .collect()
 }
 
-/// Content of one past version. `id` is a `u64`, so it cannot escape the dir.
+/// Content of one past version, found by id whatever kind it turned out to be.
 #[tauri::command]
 fn read_version(app: tauri::AppHandle, path: String, id: u64) -> Result<String, String> {
     let dir = history_dir(&app, &path).ok_or("no data dir")?;
-    std::fs::read_to_string(dir.join(format!("{id}.snap"))).map_err(|e| e.to_string())
+    let snap = snaps(&dir)
+        .into_iter()
+        .find(|s| s.id == id)
+        .ok_or("no such version")?;
+    std::fs::read_to_string(&snap.file).map_err(|e| e.to_string())
 }
 
 // ── Git ─────────────────────────────────────────────────────────────────────
@@ -763,13 +842,17 @@ mod tests {
     }
 
     #[test]
-    fn parse_version_id_accepts_only_snap_numbers() {
-        assert_eq!(parse_version_id("1719900000000.snap"), Some(1719900000000));
-        assert_eq!(parse_version_id("0.snap"), Some(0));
-        assert_eq!(parse_version_id("path"), None); // the stored path file
-        assert_eq!(parse_version_id("abc.snap"), None);
-        assert_eq!(parse_version_id("123"), None);
-        assert_eq!(parse_version_id("../evil.snap"), None); // no traversal
+    fn parse_version_accepts_only_snap_numbers() {
+        assert_eq!(parse_version("1719900000000.save.snap"), Some((1719900000000, Kind::Save)));
+        assert_eq!(parse_version("42.external.snap"), Some((42, Kind::External)));
+        assert_eq!(parse_version("7.draft.snap"), Some((7, Kind::Draft)));
+        // Written before versions carried a kind: those were all saves.
+        assert_eq!(parse_version("1719900000000.snap"), Some((1719900000000, Kind::Save)));
+        assert_eq!(parse_version("path"), None); // the stored path file
+        assert_eq!(parse_version("abc.snap"), None);
+        assert_eq!(parse_version("123"), None);
+        assert_eq!(parse_version("9.bogus.snap"), None);
+        assert_eq!(parse_version("../evil.snap"), None); // no traversal
     }
 
     #[test]
@@ -779,5 +862,21 @@ mod tests {
         assert_eq!(prune_ids(&ids, 5), Vec::<u64>::new());
         assert_eq!(prune_ids(&ids, 10), Vec::<u64>::new());
         assert_eq!(prune_ids(&ids, 3), vec![20, 10]);
+    }
+
+    #[test]
+    fn each_kind_is_capped_on_its_own_budget() {
+        // The point of separate budgets: an agent rewriting a file in a loop
+        // must not evict the user's own saves.
+        assert!(Kind::External.budget() < Kind::Save.budget());
+
+        let external: Vec<u64> = (0..Kind::External.budget() as u64 + 5).rev().collect();
+        let doomed = prune_ids(&external, Kind::External.budget());
+        assert_eq!(doomed.len(), 5); // only externals are considered here
+
+        // A save budget's worth of saves survives however many externals exist,
+        // because pruning never looks outside the kind being written.
+        let saves: Vec<u64> = (0..Kind::Save.budget() as u64).rev().collect();
+        assert!(prune_ids(&saves, Kind::Save.budget()).is_empty());
     }
 }

@@ -829,7 +829,13 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 }
 #history-list li:hover { background: var(--mrd-surface-2); }
 #history-list li input[type='radio'] { justify-self: center; margin: 0; cursor: pointer; }
+#history-list .history-when { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 #history-list .history-when.is-current { color: var(--mrd-accent); font-weight: 600; }
+/* Where the version came from. The external ones are the point of the whole
+   feature, so they're the ones that carry a colour. */
+.history-kind { font-size: 10px; color: var(--mrd-faint); }
+.history-kind.external { color: var(--mrd-hit-current); }
+.history-kind.draft { color: var(--mrd-accent); }
 #history-list .history-when.is-head { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--mrd-muted); }
 #history-list li.history-empty { display: block; color: var(--mrd-muted); font-size: 12px; line-height: 1.5; padding: 10px; }
 #history-list li.history-empty:hover { background: transparent; }

@@ -57,14 +57,21 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
 
     case 'snapshot_version': {
       const list = versions.get(args.path) ?? [];
-      list.push({ id: Date.now(), bytes: args.content.length, content: args.content });
+      // The real command dedupes against the newest snapshot and keeps ids
+      // monotonic, so two snapshots in one millisecond stay ordered.
+      const latest = list[list.length - 1];
+      if (latest?.content === args.content) return r(undefined);
+      const id = latest && Date.now() <= latest.id ? latest.id + 1 : Date.now();
+      list.push({ id, bytes: args.content.length, content: args.content, kind: args.kind ?? 'save' });
       versions.set(args.path, list);
       return r(undefined);
     }
     case 'list_versions': {
       const list = versions.get(args.path) ?? [];
       // The real command hands back newest-first metadata only.
-      return r([...list].reverse().map(({ id, bytes }): Omit<Version, 'content'> => ({ id, bytes })));
+      return r(
+        [...list].reverse().map(({ id, bytes, kind }): Omit<Version, 'content'> => ({ id, bytes, kind })),
+      );
     }
     case 'read_version': {
       const v = (versions.get(args.path) ?? []).find((x) => x.id === args.id);
