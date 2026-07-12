@@ -40,20 +40,44 @@ giant-file / log / remote parts of that backlog stay over there (there is no
 Build order matters: **Local History is the foundation**, and it hands the diff
 renderer to the other two nearly for free.
 
-1. [ ] **Local History** ★ — on save, keep a quiet local timeline of versions;
+> Pillars 1 and 2 are **built and in `main`, but not in any release yet** — the
+> newest release is v1.1.0, which has none of this.
+
+1. [x] **Local History** ★ — on save, keep a quiet local timeline of versions;
    pick any two versions → diff → one-click restore. **No Git required**, so it
    helps *every* user, not just those inside a repo. This is the retention
    feature (the "safety net" that worked well in cli2ui), and building it gives
    us the two-version diff renderer the next pillar reuses.
-2. [ ] **Git diff** — `HEAD` vs working tree of the open `.md`, add/remove
-   highlight in the preview, toggle diff-mode ⇄ normal preview. Once Local
-   History exists this is almost free: feed the same diff renderer a different
-   pair of versions. (Bonus: extend the existing auto-reload-on-disk-change to
-   flash the changed lines — cheapest first taste.)
+2. [x] **Git diff** — the file at `HEAD` vs the working tree. As predicted, this
+   cost almost nothing once the renderer existed: `HEAD` is simply one more
+   version in the same list, handed to the same diff.
 3. [ ] **AI explains the diff (BYOK)** — with the user's own API key, narrate
    *what changed and why* in a revision. Plain AI summary is crowded; "AI that
    explains what your AI just changed" is MRDown-specific and finishes the
-   story. Zero cost to us (BYOK). Heaviest to wire, so it goes last.
+   story. Zero cost to us (BYOK). Heaviest to wire, so it goes last. **Pro.**
+
+Two things the build turned up that weren't planned, and that the axis doesn't
+work without:
+
+4. [x] **Never lose a version to an agent.** A file rewritten on disk while the
+   buffer held unsaved edits used to be reloaded silently or overwritten
+   silently, and the other version was gone for good — the exact failure the
+   whole axis exists to prevent. The disk's version is now snapshotted the moment
+   it's seen, unsaved edits are snapshotted before they're discarded, and a save
+   into a changed file asks first.
+5. [x] **A three-way view** (last save / on disk / my edits). Two columns cannot
+   express a conflict: there is no single "before" to compare against. Only lines
+   both sides rewrote differently are marked as conflicts — those are the only
+   ones a human has to resolve.
+
+Versions also record **where they came from** (saved / changed elsewhere / back
+to the committed version / rescued draft), each kind capped on its own budget so
+an agent writing in a loop can't evict the user's own saves. Which *application*
+wrote a file is not knowable: macOS doesn't record it (`stat` has no writer,
+`lsof` is empty once the writer closed the file, and Endpoint Security needs an
+entitlement no Markdown viewer will get). Git is the one exception — content that
+matches the committed blob byte-for-byte was Git putting the file back — and it's
+labelled as a statement about the content, not a guess about the process.
 
 ## Planned — editor depth
 

@@ -39,7 +39,6 @@ const DICT = {
     historyCurrent: '現在の本文',
     diffNoChanges: 'この2つの版に違いはありません。',
     diffGap: '{n} 行省略',
-    diffSamePick: '同じ版どうしは比較できません。',
     gitHead: 'HEAD（Git）',
     // conflict (the file changed on disk while editing)
     conflictText: 'ディスク上のファイルが、あなたの編集中に書き換えられました。',
@@ -156,7 +155,6 @@ const DICT = {
     historyCurrent: 'Current text',
     diffNoChanges: 'These two versions are identical.',
     diffGap: '{n} unchanged lines',
-    diffSamePick: "A version can't be compared with itself.",
     gitHead: 'HEAD (Git)',
     conflictText: 'This file was rewritten on disk while you were editing it.',
     conflictView: 'Show the differences',
