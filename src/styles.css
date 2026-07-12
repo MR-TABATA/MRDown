@@ -43,6 +43,14 @@
   --mrd-hit:              color-mix(in srgb, #ffcc00 38%, transparent);
   --mrd-hit-current:      #f2a900;
   --mrd-hit-current-text: #1a1a1a;
+
+  /* Diff tints. Translucent, because the reading background is the user's to
+     choose (light or dark) and a solid green would fight it. */
+  --mrd-diff-ins:        color-mix(in srgb, #2ea043 18%, transparent);
+  --mrd-diff-del:        color-mix(in srgb, #f85149 16%, transparent);
+  --mrd-diff-ins-strong: color-mix(in srgb, #2ea043 40%, transparent);
+  --mrd-diff-del-strong: color-mix(in srgb, #f85149 38%, transparent);
+  --mrd-diff-void:       color-mix(in srgb, var(--mrd-text) 4%, transparent);
 }
 
 body {
@@ -767,9 +775,10 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   background: var(--mrd-surface);
   border: 1px solid var(--mrd-border);
   border-radius: 10px;
-  width: 720px;
-  max-width: 92vw;
-  height: 70vh;
+  /* Two columns of source have to fit side by side and still be readable. */
+  width: 1060px;
+  max-width: 94vw;
+  height: 78vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
@@ -777,38 +786,113 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 #history-close { background: transparent; border-color: transparent; color: var(--mrd-muted); padding: 4px 6px; }
 #history-close:hover { background: var(--mrd-surface-3); color: var(--mrd-text); }
 .history-body { display: flex; flex: 1; min-height: 0; }
-#history-list {
-  width: 200px;
+
+/* Version picker. Each row carries the two ends of the comparison, so the two
+   radio columns line up under their headers. */
+.history-side {
+  width: 240px;
   flex-shrink: 0;
-  margin: 0;
-  padding: 6px;
-  list-style: none;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid var(--mrd-border);
 }
+.history-cols {
+  display: grid;
+  grid-template-columns: 1fr 34px 34px;
+  padding: 6px 12px 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mrd-faint);
+}
+.history-cols .history-col { text-align: center; }
+.history-cols .history-col:first-child { text-align: left; }
+#history-list {
+  flex: 1;
+  margin: 0;
+  padding: 0 6px 6px;
+  list-style: none;
+  overflow-y: auto;
+}
 #history-list li {
-  padding: 7px 10px;
+  display: grid;
+  grid-template-columns: 1fr 34px 34px;
+  align-items: center;
+  padding: 7px 6px;
   border-radius: 6px;
-  cursor: pointer;
   color: var(--mrd-text);
   font-size: 13px;
 }
-#history-list li:hover { background: var(--mrd-surface); }
-#history-list li.selected { background: var(--mrd-accent-soft); color: var(--mrd-text); }
-#history-list li.history-empty { color: var(--mrd-muted); cursor: default; font-size: 12px; line-height: 1.5; }
+#history-list li:hover { background: var(--mrd-surface-2); }
+#history-list li input[type='radio'] { justify-self: center; margin: 0; cursor: pointer; }
+#history-list .history-when.is-current { color: var(--mrd-accent); font-weight: 600; }
+#history-list li.history-empty { display: block; color: var(--mrd-muted); font-size: 12px; line-height: 1.5; padding: 10px; }
 #history-list li.history-empty:hover { background: transparent; }
+
 .history-detail { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#history-preview {
+.diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--mrd-border);
+  font-size: 12px;
+  color: var(--mrd-muted);
+}
+.diff-stats { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--mrd-faint); }
+
+/* The diff itself: line number + line, twice. A grid keeps the two sides in
+   lockstep, so a row's halves always sit on the same baseline however it wraps. */
+.diff {
   flex: 1;
-  margin: 0;
-  padding: 12px 14px;
   overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
+  line-height: 1.6;
+}
+.diff-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px 1fr;
+}
+.diff-no {
+  padding: 0 8px;
+  text-align: right;
+  color: var(--mrd-faint);
+  user-select: none;
+  border-right: 1px solid var(--mrd-border);
+}
+.diff-line {
+  padding: 0 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
   color: var(--mrd-text);
 }
+/* Removed on the left, added on the right; a rewritten line is both at once.
+   The tints are translucent so they read on any background the user has chosen. */
+.diff-row.del .diff-left,
+.diff-row.mod .diff-left { background: var(--mrd-diff-del); }
+.diff-row.ins .diff-right,
+.diff-row.mod .diff-right { background: var(--mrd-diff-ins); }
+/* The half of an add/remove row that has no counterpart: struck out, not blank,
+   so the eye can see that nothing stood there. */
+.diff-row.del .diff-right,
+.diff-row.ins .diff-left { background: var(--mrd-diff-void); }
+/* The words that actually differ, inside a rewritten line. */
+.diff-row.mod .diff-left .diff-seg { background: var(--mrd-diff-del-strong); }
+.diff-row.mod .diff-right .diff-seg { background: var(--mrd-diff-ins-strong); }
+.diff-gap {
+  padding: 3px 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--mrd-faint);
+  background: var(--mrd-surface-2);
+  border-top: 1px solid var(--mrd-border);
+  border-bottom: 1px solid var(--mrd-border);
+  user-select: none;
+}
+.diff-empty { padding: 24px 14px; text-align: center; color: var(--mrd-muted); font-size: 13px; }
+
 .history-actions {
   padding: 10px 14px;
   border-top: 1px solid var(--mrd-border);

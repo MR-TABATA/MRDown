@@ -206,9 +206,19 @@
         </button>
       </div>
       <div class="history-body">
-        <ul id="history-list"></ul>
+        <div class="history-side">
+          <div class="history-cols">
+            <span class="history-col" data-i18n="diffBase">基準</span>
+            <span class="history-col" data-i18n="diffCompare">比較</span>
+          </div>
+          <ul id="history-list"></ul>
+        </div>
         <div class="history-detail">
-          <pre id="history-preview"></pre>
+          <div class="diff-head">
+            <span id="diff-title" class="diff-title"></span>
+            <span id="diff-stats" class="diff-stats"></span>
+          </div>
+          <div id="history-diff" class="diff"></div>
           <div class="history-actions">
             <button id="history-restore" disabled data-i18n="historyRestore">この版に戻す</button>
           </div>

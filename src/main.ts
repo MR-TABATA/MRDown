@@ -20,6 +20,14 @@ import {
   toggleTaskListItem,
 } from './markdown';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts } from './find';
+import {
+  sideBySide,
+  inlineSegments,
+  foldUnchanged,
+  diffStats,
+  type DiffRow,
+  type Seg,
+} from './diff';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
 import {
   toggleWrap,
@@ -83,7 +91,9 @@ const historyBtn = document.getElementById('history-btn') as HTMLButtonElement;
 const historyOverlay = document.getElementById('history-overlay') as HTMLElement;
 const historyClose = document.getElementById('history-close')!;
 const historyList = document.getElementById('history-list')!;
-const historyPreview = document.getElementById('history-preview')!;
+const historyDiff = document.getElementById('history-diff')!;
+const diffTitle = document.getElementById('diff-title')!;
+const diffStatsEl = document.getElementById('diff-stats')!;
 const historyRestore = document.getElementById('history-restore') as HTMLButtonElement;
 const findBar = document.getElementById('find-bar') as HTMLElement;
 const findInput = document.getElementById('find-input') as HTMLInputElement;
@@ -1720,7 +1730,6 @@ interface Version {
 }
 
 let historyPanelOpen = false;
-let selectedVersion: number | null = null;
 
 // Human-friendly relative time ("3 minutes ago"), localized via the OS locale.
 function relativeTime(ms: number): string {
@@ -1737,60 +1746,195 @@ function relativeTime(ms: number): string {
   return rtf.format(0, 'second'); // "now"
 }
 
+// The working buffer is a version like any other — and the one you most often
+// want on the right ("what has changed since that save?"), so it sits in the
+// same list as the snapshots rather than being a special case in the UI.
+const CURRENT: 'current' = 'current';
+type Pick = number | typeof CURRENT;
+
+/** The two versions being compared: `base` on the left, `compare` on the right. */
+let basePick: Pick | null = null;
+let comparePick: Pick = CURRENT;
+
+async function contentOf(pick: Pick): Promise<string | null> {
+  if (pick === CURRENT) return active?.workingText ?? null;
+  const path = active?.path;
+  if (!path) return null;
+  return invoke<string>('read_version', { path, id: pick }).catch(() => null);
+}
+
+function labelOf(pick: Pick): string {
+  if (pick === CURRENT) return t('historyCurrent');
+  // The clock time is what tells two versions apart: relative time alone rounds
+  // to the day, so every save from yesterday reads "yesterday" and the list
+  // stops being a list of distinct things.
+  const clock = new Date(pick).toLocaleTimeString(getLang(), { hour: '2-digit', minute: '2-digit' });
+  return `${relativeTime(pick)} ${clock}`;
+}
+
 async function refreshHistory() {
   const path = active?.path;
   if (!path) return;
   const versions = await invoke<Version[]>('list_versions', { path }).catch(() => []);
   historyList.innerHTML = '';
+
   if (versions.length === 0) {
     const li = document.createElement('li');
     li.className = 'history-empty';
     li.textContent = t('historyEmpty');
     historyList.appendChild(li);
-    historyPreview.textContent = '';
+    historyDiff.innerHTML = '';
+    diffTitle.textContent = '';
+    diffStatsEl.textContent = '';
     historyRestore.disabled = true;
-    selectedVersion = null;
+    basePick = null;
     return;
   }
-  // Keep a valid selection across refreshes; default to the newest.
-  if (!versions.some((v) => v.id === selectedVersion)) selectedVersion = versions[0].id;
-  for (const v of versions) {
+
+  const picks: Pick[] = [CURRENT, ...versions.map((v) => v.id)];
+  // Default (and the fallback whenever a pick goes stale): the newest snapshot
+  // against the working buffer — "what have I changed since I last saved?".
+  if (basePick === null || !picks.includes(basePick)) basePick = versions[0].id;
+  if (!picks.includes(comparePick)) comparePick = CURRENT;
+
+  for (const pick of picks) {
     const li = document.createElement('li');
-    li.dataset.id = String(v.id);
-    li.classList.toggle('selected', v.id === selectedVersion);
-    li.title = new Date(v.id).toLocaleString(getLang());
+    if (pick !== CURRENT) li.title = new Date(pick).toLocaleString(getLang());
+
+    const base = document.createElement('input');
+    base.type = 'radio';
+    base.name = 'diff-base';
+    base.checked = pick === basePick;
+    base.addEventListener('change', () => setPick('base', pick));
+
+    const cmp = document.createElement('input');
+    cmp.type = 'radio';
+    cmp.name = 'diff-compare';
+    cmp.checked = pick === comparePick;
+    cmp.addEventListener('change', () => setPick('compare', pick));
+
     const when = document.createElement('span');
     when.className = 'history-when';
-    when.textContent = relativeTime(v.id);
-    li.append(when);
-    li.addEventListener('click', () => selectVersion(v.id));
+    when.textContent = labelOf(pick);
+    if (pick === CURRENT) when.classList.add('is-current');
+
+    li.append(when, base, cmp);
     historyList.appendChild(li);
   }
-  await selectVersion(selectedVersion!);
+
+  await renderDiff();
 }
 
-async function selectVersion(id: number) {
-  const path = active?.path;
-  if (!path) return;
-  selectedVersion = id;
-  historyList.querySelectorAll('li').forEach((li) => {
-    li.classList.toggle('selected', (li as HTMLElement).dataset.id === String(id));
-  });
-  const content = await invoke<string>('read_version', { path, id }).catch(() => null);
-  if (content === null) {
-    historyPreview.textContent = t('historyReadFailed');
+/**
+ * Move one end of the comparison. Picking the version that already holds the
+ * other end would ask for a diff of something against itself, so that end steps
+ * aside instead of the click being silently ignored.
+ */
+function setPick(end: 'base' | 'compare', pick: Pick) {
+  if (end === 'base') {
+    if (comparePick === pick) comparePick = basePick ?? CURRENT;
+    basePick = pick;
+  } else {
+    if (basePick === pick) basePick = comparePick;
+    comparePick = pick;
+  }
+  refreshHistory();
+}
+
+function segmentsTo(el: HTMLElement, segs: Seg[]) {
+  for (const seg of segs) {
+    if (!seg.changed) {
+      el.append(seg.text);
+      continue;
+    }
+    const mark = document.createElement('span');
+    mark.className = 'diff-seg';
+    mark.textContent = seg.text;
+    el.appendChild(mark);
+  }
+}
+
+function diffRowEl(row: DiffRow): HTMLElement {
+  const el = document.createElement('div');
+  el.className = `diff-row ${row.type}`;
+
+  const leftNo = document.createElement('span');
+  leftNo.className = 'diff-no';
+  leftNo.textContent = row.leftNo === null ? '' : String(row.leftNo);
+  const left = document.createElement('span');
+  left.className = 'diff-line diff-left';
+
+  const rightNo = document.createElement('span');
+  rightNo.className = 'diff-no';
+  rightNo.textContent = row.rightNo === null ? '' : String(row.rightNo);
+  const right = document.createElement('span');
+  right.className = 'diff-line diff-right';
+
+  if (row.type === 'mod') {
+    // Only the words that actually differ get marked, so a one-word edit in a
+    // long paragraph doesn't light up the whole line.
+    const segs = inlineSegments(row.left ?? '', row.right ?? '');
+    segmentsTo(left, segs.left);
+    segmentsTo(right, segs.right);
+  } else {
+    left.textContent = row.left ?? '';
+    right.textContent = row.right ?? '';
+  }
+
+  el.append(leftNo, left, rightNo, right);
+  return el;
+}
+
+async function renderDiff() {
+  if (basePick === null) return;
+  const [oldText, newText] = await Promise.all([contentOf(basePick), contentOf(comparePick)]);
+
+  diffTitle.textContent = `${labelOf(basePick)} → ${labelOf(comparePick)}`;
+  historyDiff.innerHTML = '';
+
+  if (oldText === null || newText === null) {
+    diffStatsEl.textContent = '';
+    historyDiff.textContent = t('historyReadFailed');
     historyRestore.disabled = true;
     return;
   }
-  historyPreview.textContent = content;
-  // Restoring to the exact current buffer would be a no-op.
-  historyRestore.disabled = content === active?.workingText;
+
+  const rows = sideBySide(oldText, newText);
+  const { added, removed } = diffStats(rows);
+  diffStatsEl.textContent = added || removed ? `+${added} −${removed}` : '';
+
+  if (!added && !removed) {
+    const empty = document.createElement('div');
+    empty.className = 'diff-empty';
+    empty.textContent = t('diffNoChanges');
+    historyDiff.appendChild(empty);
+  } else {
+    for (const line of foldUnchanged(rows)) {
+      if (line.type === 'gap') {
+        const gap = document.createElement('div');
+        gap.className = 'diff-gap';
+        gap.textContent = t('diffGap', { n: String(line.count) });
+        historyDiff.appendChild(gap);
+      } else {
+        historyDiff.appendChild(diffRowEl(line));
+      }
+    }
+  }
+
+  // Restore puts the *base* (the left, older side) back into the buffer. The
+  // working buffer isn't a version to go back to, and restoring what's already
+  // there would be a no-op.
+  historyRestore.disabled = basePick === CURRENT || oldText === active?.workingText;
 }
 
 function openHistory() {
   if (!active?.path) return;
   historyPanelOpen = true;
   historyOverlay.hidden = false;
+  // A fresh open asks the question you almost always have: what changed since
+  // the last save? Stale picks from a previous document don't leak in.
+  basePick = null;
+  comparePick = CURRENT;
   refreshHistory();
 }
 function closeHistory() {
@@ -1804,11 +1948,8 @@ historyOverlay.addEventListener('click', (e) => {
   if (e.target === historyOverlay) closeHistory();
 });
 historyRestore.addEventListener('click', async () => {
-  const path = active?.path;
-  if (!path || selectedVersion === null) return;
-  const content = await invoke<string>('read_version', { path, id: selectedVersion }).catch(
-    () => null,
-  );
+  if (basePick === null || basePick === CURRENT) return;
+  const content = await contentOf(basePick);
   if (content === null || !active) return;
   // Non-destructive: load the old version into the working buffer and mark it
   // dirty. Nothing is written until the user saves, so a restore is undoable by
