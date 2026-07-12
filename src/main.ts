@@ -1792,9 +1792,15 @@ async function refreshHistory() {
   }
 
   const picks: Pick[] = [CURRENT, ...versions.map((v) => v.id)];
-  // Default (and the fallback whenever a pick goes stale): the newest snapshot
-  // against the working buffer — "what have I changed since I last saved?".
-  if (basePick === null || !picks.includes(basePick)) basePick = versions[0].id;
+  // Default: the newest snapshot against the working buffer — "what have I
+  // changed since I last saved?". But a save *is* a snapshot, so right after one
+  // those two are the same text and that default answers with an empty diff. In
+  // that case step back one version, and the panel opens on "what did that save
+  // change?" instead — still a question, still an answer.
+  if (basePick === null || !picks.includes(basePick)) {
+    const clean = active && !isDirty(active);
+    basePick = (clean && versions[1]?.id) || versions[0].id;
+  }
   if (!picks.includes(comparePick)) comparePick = CURRENT;
 
   for (const pick of picks) {
