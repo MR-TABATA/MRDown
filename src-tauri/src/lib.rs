@@ -287,6 +287,8 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
         &[
             &MenuItem::with_id(app, "new", pick("新規", "New"), true, Some("CmdOrCtrl+N"))?,
             &MenuItem::with_id(app, "open", pick("開く…", "Open…"), true, Some("CmdOrCtrl+O"))?,
+            // Not in DOC_ITEMS: comparing two files on disk needs no open document.
+            &MenuItem::with_id(app, "compare", pick("2つのファイルを比較…", "Compare Two Files…"), true, Some("CmdOrCtrl+Shift+D"))?,
             &sep()?,
             &MenuItem::with_id(app, "save", pick("保存", "Save"), has_doc, Some("CmdOrCtrl+S"))?,
             &MenuItem::with_id(app, "save_as", pick("別名で保存…", "Save As…"), has_doc, Some("CmdOrCtrl+Shift+S"))?,

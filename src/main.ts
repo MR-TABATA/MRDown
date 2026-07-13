@@ -103,6 +103,7 @@ const conflictActions = document.getElementById('conflict-actions')!;
 const diffTitle = document.getElementById('diff-title')!;
 const diffStatsEl = document.getElementById('diff-stats')!;
 const historyRestore = document.getElementById('history-restore') as HTMLButtonElement;
+const historyTitle = document.getElementById('history-title')!;
 const conflictBar = document.getElementById('conflict-bar')!;
 const historyPanel = document.querySelector<HTMLElement>('.history-panel')!;
 const findBar = document.getElementById('find-bar') as HTMLElement;
@@ -1847,8 +1848,13 @@ const KIND_LABEL: Record<VersionKind, Key> = {
 };
 
 let historyPanelOpen = false;
-/** `conflict` shows the three-way view instead of the two-version comparison. */
-let historyMode: 'versions' | 'conflict' = 'versions';
+/**
+ * What the diff panel is showing.
+ *   versions — two versions of the open document (the default)
+ *   conflict — the three-way view, when the file changed under an unsaved edit
+ *   files    — two files picked from disk, unrelated to whatever is open
+ */
+let historyMode: 'versions' | 'conflict' | 'files' = 'versions';
 
 // Human-friendly relative time ("3 minutes ago"), localized via the OS locale.
 function relativeTime(ms: number): string {
@@ -1899,9 +1905,10 @@ function labelOf(pick: Pick): string {
 
 async function refreshHistory() {
   const path = active?.path;
-  // In conflict mode the panel is showing three columns and no version picker;
-  // a save landing in the background must not redraw it as a two-way diff.
-  if (!path || historyMode === 'conflict') return;
+  // The panel may be showing three columns (a conflict) or two unrelated files.
+  // A save landing in the background must not redraw either of those as this
+  // document's version timeline.
+  if (!path || historyMode !== 'versions') return;
   const [versions, head] = await Promise.all([
     invoke<Version[]>('list_versions', { path }).catch(() => []),
     // Null for every ordinary reason — no Git, not a repo, no commits, or the
@@ -2045,20 +2052,14 @@ function diffRowEl(row: DiffRow): HTMLElement {
   return el;
 }
 
-async function renderDiff() {
-  if (basePick === null) return;
-  const [oldText, newText] = await Promise.all([contentOf(basePick), contentOf(comparePick)]);
-
-  diffTitle.textContent = `${labelOf(basePick)} → ${labelOf(comparePick)}`;
+/**
+ * Draw one two-way diff into the panel. Two versions of a document and two
+ * unrelated files ask the same question — the only difference is where the two
+ * texts came from — so they get the same renderer rather than a second one that
+ * drifts away from it.
+ */
+function renderTwoWay(oldText: string, newText: string) {
   historyDiff.innerHTML = '';
-
-  if (oldText === null || newText === null) {
-    diffStatsEl.textContent = '';
-    historyDiff.textContent = t('historyReadFailed');
-    historyRestore.disabled = true;
-    return;
-  }
-
   const rows = sideBySide(oldText, newText);
   const { added, removed } = diffStats(rows);
   diffStatsEl.textContent = added || removed ? `+${added} −${removed}` : '';
@@ -2068,18 +2069,35 @@ async function renderDiff() {
     empty.className = 'diff-empty';
     empty.textContent = t('diffNoChanges');
     historyDiff.appendChild(empty);
-  } else {
-    for (const line of foldUnchanged(rows)) {
-      if (line.type === 'gap') {
-        const gap = document.createElement('div');
-        gap.className = 'diff-gap';
-        gap.textContent = t('diffGap', { n: String(line.count) });
-        historyDiff.appendChild(gap);
-      } else {
-        historyDiff.appendChild(diffRowEl(line));
-      }
+    return;
+  }
+  for (const line of foldUnchanged(rows)) {
+    if (line.type === 'gap') {
+      const gap = document.createElement('div');
+      gap.className = 'diff-gap';
+      gap.textContent = t('diffGap', { n: String(line.count) });
+      historyDiff.appendChild(gap);
+    } else {
+      historyDiff.appendChild(diffRowEl(line));
     }
   }
+}
+
+async function renderDiff() {
+  if (basePick === null) return;
+  const [oldText, newText] = await Promise.all([contentOf(basePick), contentOf(comparePick)]);
+
+  diffTitle.textContent = `${labelOf(basePick)} → ${labelOf(comparePick)}`;
+
+  if (oldText === null || newText === null) {
+    historyDiff.innerHTML = '';
+    diffStatsEl.textContent = '';
+    historyDiff.textContent = t('historyReadFailed');
+    historyRestore.disabled = true;
+    return;
+  }
+
+  renderTwoWay(oldText, newText);
 
   // Restore puts the *base* (the left, older side) back into the buffer — a
   // snapshot, or HEAD, which reverts the document to what was committed. The
@@ -2173,11 +2191,67 @@ function renderThreeWay() {
   historyRestore.disabled = true;
 }
 
+// --- Comparing two files ----------------------------------------------------
+// The same question the version timeline asks — "what's different?" — but about
+// two files instead of two versions of one. It needs no open document, so it is
+// reachable with nothing on screen at all.
+
+async function openCompare() {
+  const picked = await open({
+    multiple: true,
+    filters: [{ name: 'Markdown', extensions: SUPPORTED }],
+  });
+  const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
+  if (paths.length === 0) return; // cancelled
+  if (paths.length !== 2) {
+    // The dialog will happily return one file or five. Say what's needed rather
+    // than guessing at which two were meant.
+    await confirmDialog(t('comparePickTwo'), { title: t('compareTitle'), kind: 'warning' });
+    return;
+  }
+  const [a, b] = paths;
+  if (a === b) {
+    await confirmDialog(t('compareSameFile'), { title: t('compareTitle'), kind: 'warning' });
+    return;
+  }
+
+  const [textA, textB] = await Promise.all([
+    invoke<string>('read_file', { path: a }).catch(() => null),
+    invoke<string>('read_file', { path: b }).catch(() => null),
+  ]);
+  if (textA === null || textB === null) {
+    await confirmDialog(t('historyReadFailed'), { title: t('compareTitle'), kind: 'warning' });
+    return;
+  }
+
+  historyPanelOpen = true;
+  historyOverlay.hidden = false;
+  historyMode = 'files';
+  // No versions to pick between, nothing to restore, and no conflict to resolve —
+  // the panel is only the diff.
+  historySide.hidden = true;
+  historyActions.hidden = true;
+  conflictActions.hidden = true;
+  historyDiff.classList.remove('is-three');
+  historyPanel.classList.remove('wide');
+
+  // The panel is not showing history, so it must not claim to. `applyI18n` puts
+  // the heading back from [data-i18n] whenever the language changes, so this is
+  // set on open rather than once.
+  historyTitle.textContent = t('compareTitle');
+  diffTitle.textContent = `${basename(a)} → ${basename(b)}`;
+  diffTitle.title = `${a}\n${b}`; // the names may well be identical; the paths aren't
+  diffStatsEl.classList.remove('has-clash');
+  renderTwoWay(textA, textB);
+}
+
 function openHistory(mode: 'versions' | 'conflict' = 'versions') {
   if (!active?.path) return;
   historyPanelOpen = true;
   historyOverlay.hidden = false;
   historyMode = mode === 'conflict' && active.conflict ? 'conflict' : 'versions';
+  historyTitle.textContent = t('historyTitle');
+  diffTitle.title = ''; // a previous file comparison's paths must not linger
   const three = historyMode === 'conflict';
   historySide.hidden = three;
   historyDiff.classList.toggle('is-three', three);
@@ -2834,6 +2908,7 @@ listen<string>('menu', (e) => {
     case 'reload': reload(); break;
     case 'delete': deleteActive(); break;
     case 'close': if (active) closeDoc(active); break;
+    case 'compare': openCompare(); break;
     case 'sidebar': sidebarBtn.click(); break;
     case 'outline': toggleOutline(); break;
     case 'edit': if (active) setEditing(!isEditing); break;

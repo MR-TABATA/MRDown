@@ -40,6 +40,10 @@ const DICT = {
     diffNoChanges: 'この2つの版に違いはありません。',
     diffGap: '{n} 行省略',
     gitHead: 'HEAD（Git）',
+    // compare two files
+    compareTitle: '2つのファイルを比較',
+    comparePickTwo: 'ファイルをちょうど2つ選んでください。',
+    compareSameFile: '同じファイルを2つ選んでいます。',
     // conflict (the file changed on disk while editing)
     conflictText: 'ディスク上のファイルが、あなたの編集中に書き換えられました。',
     conflictView: '差分を見る',
@@ -156,6 +160,9 @@ const DICT = {
     diffNoChanges: 'These two versions are identical.',
     diffGap: '{n} unchanged lines',
     gitHead: 'HEAD (Git)',
+    compareTitle: 'Compare two files',
+    comparePickTwo: 'Pick exactly two files.',
+    compareSameFile: "That's the same file twice.",
     conflictText: 'This file was rewritten on disk while you were editing it.',
     conflictView: 'Show the differences',
     conflictKeepMine: 'Overwrite with my edits',

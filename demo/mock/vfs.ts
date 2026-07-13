@@ -181,6 +181,8 @@ declare global {
     __menuDocOpen?: boolean;
     /** Fire a Tauri event the app listens for, e.g. `__emit('menu', 'outline')`. */
     __emit?: (event: string, payload: unknown) => void;
+    /** What the next file dialog should return — a browser has none. */
+    __pick?: string[];
   }
 }
 
