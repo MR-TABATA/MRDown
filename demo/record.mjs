@@ -91,51 +91,62 @@ async function clickOn(locator) {
   await pause(200);
 }
 
-// --- the beats, in the order the landing page argues them -------------------
+// --- the beats: the one thing this app does that the others don't -----------
+//
+// The old cut showed opening a file, ticking a task, following a link. Every
+// Markdown app does those. It never once showed the reason this one exists.
+//
+// This one tells a single story: you are editing, an agent rewrites the file
+// underneath you, and neither of you loses anything.
 
 // 1. The start screen you come back to.
-await pause(1200);
+await pause(1000);
 
 // 2. A document arrives by drag & drop.
 await page.evaluate(() => window.__dropHandler({ payload: { type: 'enter', paths: [] } }));
-await pause(450);
+await pause(400);
 await page.evaluate(() => window.__dropHandler({ payload: { type: 'drop', paths: [window.__demo.README] } }));
 await page.waitForSelector('#output h1');
-await pause(1500);
+await pause(1300);
 
-// 3. Something else rewrites the file. The real 1.5s mtime poll picks it up.
-await page.evaluate(() => window.__demo.rewriteReadme());
-await page.waitForFunction(
-  () =>
-    [...document.querySelectorAll('#output h2')].some((h) =>
-      h.textContent.includes(window.__demo.needles.appended)
-    ),
-  null,
-  { timeout: 6000 }
-);
-await pause(1700);
+// 3. You tick a blocker. The Markdown source is rewritten underneath — and the
+//    document is now unsaved.
+await clickOn(page.locator('#output li > input[type=checkbox]').nth(2));
+await page.waitForFunction(() => document.querySelector('#doc-list li.dirty') !== null);
+await pause(1200);
 
-// 4. Tick a task; the Markdown source is rewritten underneath.
-await clickOn(page.locator('#output li > input[type=checkbox]').nth(1));
+// 4. An agent rewrites the file on disk. It ticks a different blocker, and it
+//    rewrites the very line you just ticked.
+await page.evaluate(() => window.__demo.agentRewrite());
+
+// 5. Nothing is silently overwritten, and nothing is silently reloaded. The
+//    real 1.5s mtime poll finds it and stops.
+await page.waitForSelector('#conflict-bar:not([hidden])', { timeout: 8000 });
+await pause(1800);
+
+// 6. See what the two of you did.
+await clickOn(page.locator('#conflict-view'));
+await page.waitForSelector('.diff-row.three');
+await pause(700);
+
+// 7. Three columns: the last save, what's on disk, your edits. Only the line you
+//    both rewrote differently is marked as a conflict.
+await page.waitForSelector('.diff-row.three.conflict');
+await pause(3200);
+
+// 8. Keep yours. The agent's version is not thrown away.
+await clickOn(page.locator('#conflict-mine2'));
+await pause(1200);
+
+// 9. It's in the history, as what it was: a rewrite from outside.
+await clickOn(page.locator('#history-btn'));
+await page.waitForSelector('#history-list .history-kind.external');
 await pause(1400);
 
-// 5. Follow a link to another local document — it opens in the app.
-await clickOn(page.locator('#output a[href="./design.md"]'));
-await page.waitForFunction(() => document.title === 'design.md');
-await pause(1500);
-
-// 6. Back to the checklist, then roll it back to an earlier save.
-await clickOn(page.locator('#sidebar li').first());
-await pause(900);
-await clickOn(page.locator('#history-btn'));
-await pause(800);
-await clickOn(page.locator('#history-list li').last());
-await pause(1100);
-await clickOn(page.locator('#history-restore'));
-await page.waitForFunction(() =>
-  document.getElementById('output').textContent.includes(window.__demo.needles.oldest)
-);
-await pause(1800);
+// 10. Read it back — the change the agent made, still there.
+await clickOn(page.locator('#history-list li').filter({ has: page.locator('.history-kind.external') }).first().locator('input[name=diff-base]'));
+await page.waitForSelector('#history-diff .diff-row');
+await pause(2600);
 
 await browser.close(); // flushes the video
 

@@ -12,7 +12,10 @@ cd "$(dirname "$0")/.."
 
 OUT=demo/out
 MEDIA=docs/media
-POSTER_AT=6 # a frame where the document is rendered and the cursor is at rest
+# The three-way conflict — the one thing no other Markdown app can show you. The
+# poster is also the og:image, so this is the frame that represents the app when
+# someone shares the link. It must not be a screenshot of a text editor.
+POSTER_AT=13
 
 mkdir -p "$MEDIA"
 

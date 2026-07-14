@@ -2187,9 +2187,12 @@ function renderThreeWay() {
   const stats = threeWayStats(rows);
 
   diffTitle.textContent = doc.name;
-  diffStatsEl.textContent = stats.conflicts
-    ? t('threeConflicts', { n: String(stats.conflicts) })
-    : t('threeNone');
+  // "1 conflicting lines" is the kind of thing that ends up on a screenshot.
+  diffStatsEl.textContent = !stats.conflicts
+    ? t('threeNone')
+    : stats.conflicts === 1
+      ? t('threeConflictOne')
+      : t('threeConflicts', { n: String(stats.conflicts) });
   diffStatsEl.classList.toggle('has-clash', stats.conflicts > 0);
 
   historyDiff.innerHTML = '';
@@ -2285,7 +2288,9 @@ function openHistory(mode: 'versions' | 'conflict' = 'versions') {
   historyPanelOpen = true;
   historyOverlay.hidden = false;
   historyMode = mode === 'conflict' && active.conflict ? 'conflict' : 'versions';
-  historyTitle.textContent = t('historyTitle');
+  // The three-way view is not a history — it is a standoff between three texts.
+  // Labelling it "History" reads as a lie to anyone seeing it for the first time.
+  historyTitle.textContent = t(historyMode === 'conflict' ? 'conflictHeading' : 'historyTitle');
   diffTitle.title = ''; // a previous file comparison's paths must not linger
   const three = historyMode === 'conflict';
   historySide.hidden = three;

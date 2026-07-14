@@ -106,15 +106,69 @@ and the freedom for a fork to ship the platform you dropped.
 What you protect isn't the core's secrecy. It's where the Pro features live.
 `;
 
+// What an agent leaves behind. It ticks a different blocker *and* rewrites the
+// same line the user is about to touch — so the recording shows both a change
+// that merges cleanly and one that genuinely collides.
+const AGENT_JA = `# リリース前チェック
+
+タグを打つ前に、真であってほしいことを並べる。
+
+## ブロッカー
+
+- [x] 第三者ライセンス表記を同梱する
+- [ ] Developer ID で notarize する
+- [ ] DMG を staple する
+
+## 検証
+
+\`\`\`bash
+npm run notice
+npm test
+\`\`\`
+
+判断の背景は [設計メモ](./design.md) に書いてある。
+`;
+const AGENT_EN = `# Release checklist
+
+What has to be true before we tag.
+
+## Blockers
+
+- [x] Bundle the third-party notices
+- [ ] Notarize with a Developer ID
+- [ ] Staple the DMG
+
+## Verify
+
+\`\`\`bash
+npm run notice
+npm test
+\`\`\`
+
+The reasoning lives in the [design notes](./design.md).
+`;
+
 const README_V1 = LANG === 'ja' ? README_V1_JA : README_V1_EN;
 const README_V2 = README_V1 + (LANG === 'ja' ? APPENDED_JA : APPENDED_EN);
+const README_AGENT = LANG === 'ja' ? AGENT_JA : AGENT_EN;
 const DESIGN_DOC = LANG === 'ja' ? DESIGN_JA : DESIGN_EN;
 
 /** Strings the recording script waits on, so it never hardcodes a language. */
 export const needles =
   LANG === 'ja'
-    ? { appended: '決めたこと', oldest: 'まだ何も決まっていない' }
-    : { appended: 'Decisions', oldest: 'Nothing decided yet' };
+    ? {
+        appended: '決めたこと',
+        oldest: 'まだ何も決まっていない',
+        /** The line the user ticks — and the agent rewrites out from under them. */
+        contested: 'Windows',
+        agentLine: 'DMG',
+      }
+    : {
+        appended: 'Decisions',
+        oldest: 'Nothing decided yet',
+        contested: 'Windows',
+        agentLine: 'DMG',
+      };
 
 const NOTICE_STUB = `# サードパーティ・ライセンス / Third-Party Notices
 
@@ -168,6 +222,15 @@ export const demo = {
   /** The rewrite the demo performs, kept next to the fixtures it belongs to. */
   rewriteReadme() {
     demo.rewrite(README, README_V2);
+  },
+
+  /**
+   * An agent rewrites the checklist while the user is editing it. It ticks a
+   * blocker they didn't touch (which merges) and rewrites the very line they
+   * just ticked (which collides) — the two cases the three-way view exists for.
+   */
+  agentRewrite() {
+    demo.rewrite(README, README_AGENT);
   },
 
   seed,
