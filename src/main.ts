@@ -146,6 +146,15 @@ interface Doc {
   workingText: string;
   mtime: number;
   /**
+   * Where you were reading. Switching to another document and back should put you
+   * back where you left off, not at the top — a long document you were halfway
+   * through is otherwise lost every time you glance at something else.
+   *
+   * Preview and the split editor scroll different elements, so each keeps its own
+   * position; coming back in the mode you left in lands where you left.
+   */
+  scroll?: { preview: number; edit: number };
+  /**
    * Something rewrote the file on disk while this buffer had unsaved edits — an
    * AI agent, most often. Three texts now exist (savedSource, this, workingText)
    * and the user has to say which wins, so nothing is written or discarded until
@@ -583,12 +592,17 @@ function updateStatus() {
 }
 
 function setEditing(on: boolean) {
+  // Switching mode makes the content area stop (or start) being the scrolling
+  // element, and the browser drops its scrollTop to 0 when it does. Capture the
+  // place we were reading in the mode we're leaving, before that happens.
+  if (active) rememberScroll(active);
   isEditing = on;
   contentArea.classList.toggle('editing', on);
   editLabel.textContent = on ? t('preview') : t('edit');
   // The outline is remembered per mode (hidden while editing unless you asked
   // for it there), so the mode flip has to re-read it.
   applyOutlineHidden();
+  if (active) restoreScroll(active);
   if (on) editor.focus();
   // The outline's scroll-spy watches a different scroll container per mode.
   bindOutlineSpy();
@@ -812,11 +826,28 @@ function scheduleSessionSave() {
 // Last-chance flush so the final keystrokes before a close survive the debounce.
 window.addEventListener('beforeunload', saveSession);
 
+// Preview scrolls the content area; the split editor scrolls #output. Each mode
+// therefore keeps its own position, and coming back in the mode you left in
+// lands where you left.
+function rememberScroll(doc: Doc) {
+  const s = (doc.scroll ??= { preview: 0, edit: 0 });
+  if (isEditing) s.edit = output.scrollTop;
+  else s.preview = contentArea.scrollTop;
+}
+
+function restoreScroll(doc: Doc) {
+  const s = doc.scroll ?? { preview: 0, edit: 0 };
+  contentArea.scrollTop = s.preview;
+  output.scrollTop = s.edit;
+}
+
 async function setActive(doc: Doc) {
   if (active === doc) {
     if (isEditing) editor.focus();
     return;
   }
+  // Leaving: keep the place we were reading before the pane is rebuilt.
+  if (active) rememberScroll(active);
   active = doc;
   lastActiveDirty = isDirty(doc);
   editor.value = doc.workingText;
@@ -826,7 +857,7 @@ async function setActive(doc: Doc) {
   renderSidebar();
   renderTree();
   saveSession();
-  contentArea.scrollTop = 0;
+  restoreScroll(doc);
   if (isEditing) editor.focus();
 }
 
@@ -847,6 +878,9 @@ async function openFile(path: string, opts: { recent?: boolean } = {}) {
   }
   const mtime = await invoke<number>('file_mtime', { path }).catch(() => 0);
   const doc: Doc = { path, name: basename(path), savedSource: content, workingText: content, mtime };
+  // A newly opened document starts at the top, but the one we're leaving keeps
+  // its place — it's still open, and you'll be back.
+  if (active) rememberScroll(active);
   docs.push(doc);
   active = doc;
   lastActiveDirty = false;
@@ -912,6 +946,7 @@ function newDoc() {
   untitledCount++;
   const name = untitledCount === 1 ? 'untitled' : `untitled ${untitledCount}`;
   const doc: Doc = { path: null, name, savedSource: '', workingText: '', mtime: 0 };
+  if (active) rememberScroll(active);
   docs.push(doc);
   active = doc;
   lastActiveDirty = false;
