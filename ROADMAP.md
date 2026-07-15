@@ -8,7 +8,8 @@ your data local.**
 
 - **CRUD**: open & render (R), edit with split live preview (U), new document (C),
   move-to-trash delete (D)
-- Multi-document sidebar with session restore; recent files
+- Multi-document sidebar with session restore; recent files; per-document
+  reading position (reopen a file and land where you left off, not at the top)
 - Drag & drop, "Open With", auto-reload on external change
 - Formatting toolbar (14 Markdown actions) + Settings panel (`⌘,`) to customize it
 - Mermaid diagrams; local image resolution; sanitized HTML + strict CSP
@@ -41,8 +42,8 @@ Build order matters: **Local History is the foundation**, and it hands the diff
 renderer to the other two nearly for free.
 
 > Pillars 1 and 2 — together with the two unplanned essentials (4 and 5) below —
-> **shipped in v1.2.0** (the current release). Only pillar 3 (AI explains the
-> diff) is still to come.
+> **shipped in v1.2.0**; v1.3.0 adds compare-any-two-files (6). Only pillar 3
+> (AI explains the diff) is still to come.
 
 1. [x] **Local History** ★ — on save, keep a quiet local timeline of versions;
    pick any two versions → diff → one-click restore. **No Git required**, so it
@@ -79,6 +80,11 @@ wrote a file is not knowable: macOS doesn't record it (`stat` has no writer,
 entitlement no Markdown viewer will get). Git is the one exception — content that
 matches the committed blob byte-for-byte was Git putting the file back — and it's
 labelled as a statement about the content, not a guess about the process.
+
+6. [x] **Compare any two files** (`⌘⇧D`) — shipped v1.3.0. Not a pillar of its
+   own: the two-version diff renderer already existed, so pointing it at two
+   arbitrary files on disk (nothing open required) cost almost nothing.
+   File ▸ "Compare Two Files…".
 
 ## Planned — editor depth
 
