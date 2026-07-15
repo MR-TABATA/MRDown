@@ -34,3 +34,6 @@ demo/out/
 # machine only and would leave a fresh clone one `git add -A` away from
 # committing it.
 /notes/
+
+# Claude Code local settings & memory — machine-local, not for the repo.
+/.claude/
