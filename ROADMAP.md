@@ -40,8 +40,9 @@ giant-file / log / remote parts of that backlog stay over there (there is no
 Build order matters: **Local History is the foundation**, and it hands the diff
 renderer to the other two nearly for free.
 
-> Pillars 1 and 2 are **built and in `main`, but not in any release yet** — the
-> newest release is v1.1.0, which has none of this.
+> Pillars 1 and 2 — together with the two unplanned essentials (4 and 5) below —
+> **shipped in v1.2.0** (the current release). Only pillar 3 (AI explains the
+> diff) is still to come.
 
 1. [x] **Local History** ★ — on save, keep a quiet local timeline of versions;
    pick any two versions → diff → one-click restore. **No Git required**, so it
