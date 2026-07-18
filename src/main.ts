@@ -86,6 +86,7 @@ const textOption = document.getElementById('text-option')!;
 const fontOption = document.getElementById('font-option')!;
 const fontsizeOption = document.getElementById('fontsize-option')!;
 const outlinePosOption = document.getElementById('outline-pos-option')!;
+const previewThemeOption = document.getElementById('preview-theme-option')!;
 const output = document.getElementById('output')!;
 const docStatsEl = document.getElementById('doc-stats')!;
 const emptyState = document.getElementById('empty-state')!;
@@ -550,6 +551,7 @@ function showDocUI() {
 }
 
 function showEmpty() {
+  setReading(false); // no document to read
   setEditing(false);
   clearOutline();
   output.style.display = 'none';
@@ -598,7 +600,22 @@ function updateStatus() {
   filepath.append(active.path ? tildify(active.path, home) : active.name);
 }
 
+// Reading mode: hide every piece of chrome (toolbar, sidebar, outline) and
+// centre the preview, for distraction-free reading of a generated .md. It only
+// makes sense on the preview, so entering it leaves the editor.
+let reading = false;
+function setReading(on: boolean) {
+  reading = on && !!active;
+  if (reading && isEditing) setEditing(false);
+  document.body.classList.toggle('reading', reading);
+}
+function toggleReading() {
+  setReading(!reading);
+}
+
 function setEditing(on: boolean) {
+  // Reading mode is a preview-only view; going back to edit leaves it.
+  if (on && reading) setReading(false);
   // Switching mode makes the content area stop (or start) being the scrolling
   // element, and the browser drops its scrollTop to 0 when it does. Capture the
   // place we were reading in the mode we're leaving, before that happens.
@@ -1602,6 +1619,29 @@ function buildOutlinePosOption() {
   }
 }
 
+function buildPreviewThemeOption() {
+  const current = currentPreviewTheme();
+  previewThemeOption.innerHTML = '';
+  for (const value of PREVIEW_THEMES) {
+    const label = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'preview-theme';
+    radio.checked = value === current;
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      // '' is the default, stored by clearing the key so it never sticks around.
+      if (value) localStorage.setItem(PREVIEW_THEME_KEY, value);
+      else localStorage.removeItem(PREVIEW_THEME_KEY);
+      applyPreviewTheme(value);
+    });
+    const name = document.createElement('span');
+    name.textContent = t(PREVIEW_THEME_LABEL[value]);
+    label.append(radio, name);
+    previewThemeOption.appendChild(label);
+  }
+}
+
 // Language picker: System (follow the OS) / 日本語 / English.
 function buildLangOptions() {
   const choices: Array<{ value: Lang | 'system'; label: string }> = [
@@ -1640,6 +1680,17 @@ const BG_KEY = 'mrdown.bg';
 const TEXT_KEY = 'mrdown.text';
 const FONT_KEY = 'mrdown.contentFont';
 const FONTSIZE_KEY = 'mrdown.contentSize';
+const PREVIEW_THEME_KEY = 'mrdown.previewTheme';
+
+// A reading theme for the preview only — the CSS retints #output to look like
+// GitHub's rendered Markdown. '' (the default) leaves the app's own dark look.
+type PreviewTheme = '' | 'github-light' | 'github-dark';
+const PREVIEW_THEMES: PreviewTheme[] = ['', 'github-light', 'github-dark'];
+const PREVIEW_THEME_LABEL: Record<PreviewTheme, Key> = {
+  '': 'themeDefault',
+  'github-light': 'themeGithubLight',
+  'github-dark': 'themeGithubDark',
+};
 
 // Preset swatches. Accent mirrors the macOS accent choices; background/text are
 // a few coherent pairings, but any two can be combined (or a custom colour set).
@@ -1681,6 +1732,15 @@ function applyContentSize(px: string | null) {
   applyVar('--mrd-content-size', Number.isFinite(n) && n > 0 ? `${n}px` : null);
 }
 
+function currentPreviewTheme(): PreviewTheme {
+  const stored = localStorage.getItem(PREVIEW_THEME_KEY);
+  return (PREVIEW_THEMES as string[]).includes(stored ?? '') ? (stored as PreviewTheme) : '';
+}
+function applyPreviewTheme(theme: PreviewTheme) {
+  if (theme) output.setAttribute('data-preview-theme', theme);
+  else output.removeAttribute('data-preview-theme');
+}
+
 // Read the persisted appearance overrides and push them onto <html>. Called once
 // at startup so a customised look is in place before the first document renders.
 function applyStoredAppearance() {
@@ -1689,6 +1749,7 @@ function applyStoredAppearance() {
   applyVar('--mrd-text', localStorage.getItem(TEXT_KEY));
   applyContentFont(localStorage.getItem(FONT_KEY));
   applyContentSize(localStorage.getItem(FONTSIZE_KEY));
+  applyPreviewTheme(currentPreviewTheme());
 }
 
 // Build one colour row: a "reset to default" chip, an optional System chip, the
@@ -1838,6 +1899,7 @@ function applyI18n() {
   buildToolbarOptions();
   buildLangOptions();
   buildAppearanceOptions();
+  buildPreviewThemeOption();
   buildOutlinePosOption();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
@@ -1849,6 +1911,7 @@ function openSettings() {
   buildLangOptions();
   buildWidthOption();
   buildAppearanceOptions();
+  buildPreviewThemeOption();
   buildOutlinePosOption();
   settingsOverlay.hidden = false;
 }
@@ -2941,6 +3004,10 @@ document.addEventListener('keydown', (e) => {
     closeFind();
     return;
   }
+  if (e.key === 'Escape' && reading) {
+    setReading(false);
+    return;
+  }
   const mod = e.metaKey || e.ctrlKey;
   if (!mod) return;
   if (e.key === 'f' && active) {
@@ -3169,6 +3236,7 @@ listen<string>('menu', (e) => {
     case 'sidebar': sidebarBtn.click(); break;
     case 'outline': toggleOutline(); break;
     case 'edit': if (active) setEditing(!isEditing); break;
+    case 'reading': if (active) toggleReading(); break;
     case 'settings': openSettings(); break;
   }
 });

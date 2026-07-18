@@ -607,15 +607,33 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   background: var(--mrd-bg);
   font-family: var(--mrd-content-font);
   font-size: var(--mrd-content-size);
+  /* Content colours, named so a preview theme can retint the reading surface
+     without touching the app chrome. Defaults are the VSCode-dark look the app
+     has always shipped; the GitHub themes below override the whole set. */
+  --md-link: #58a6ff;
+  --md-code-text: #ce9178;
+  --md-border: var(--mrd-border);
+  --md-quote: var(--mrd-muted);
+  --hl-comment: #6a9955;
+  --hl-keyword: #569cd6;
+  --hl-string: #ce9178;
+  --hl-number: #b5cea8;
+  --hl-title: #dcdcaa;
+  --hl-type: #4ec9b0;
+  --hl-attr: #9cdcfe;
+  --hl-meta: #c586c0;
+  --hl-symbol: #d7ba7d;
+  --hl-addition: #b5cea8;
+  --hl-deletion: #f48771;
 }
 #output h1, #output h2, #output h3, #output h4 { color: var(--mrd-text); margin: 1.5em 0 0.5em; }
-#output h1 { font-size: 2em; border-bottom: 1px solid var(--mrd-border); padding-bottom: 0.3em; }
-#output h2 { font-size: 1.5em; border-bottom: 1px solid var(--mrd-border); padding-bottom: 0.3em; }
+#output h1 { font-size: 2em; border-bottom: 1px solid var(--md-border); padding-bottom: 0.3em; }
+#output h2 { font-size: 1.5em; border-bottom: 1px solid var(--md-border); padding-bottom: 0.3em; }
 #output h3 { font-size: 1.25em; }
 #output p { margin: 0.8em 0; }
-#output a { color: #58a6ff; }
+#output a { color: var(--md-link); }
 #output code {
-  background: var(--mrd-surface-2); color: #ce9178;
+  background: var(--mrd-surface-2); color: var(--md-code-text);
   padding: 2px 6px; border-radius: 4px;
   font-family: 'SF Mono', Menlo, monospace; font-size: 0.9em;
 }
@@ -648,22 +666,23 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 #output pre .code-copy:hover { color: var(--mrd-text); }
 #output pre .code-copy.done { opacity: 1; color: var(--mrd-accent); border-color: var(--mrd-accent); }
 #output pre code { background: none; padding: 0; color: var(--mrd-text); }
-/* highlight.js tokens — tuned to the surrounding VSCode-dark palette */
-#output .hljs-comment, #output .hljs-quote { color: #6a9955; font-style: italic; }
-#output .hljs-keyword, #output .hljs-built_in, #output .hljs-literal { color: #569cd6; }
-#output .hljs-string, #output .hljs-regexp { color: #ce9178; }
-#output .hljs-number { color: #b5cea8; }
-#output .hljs-title, #output .hljs-title.function_, #output .hljs-section { color: #dcdcaa; }
-#output .hljs-title.class_, #output .hljs-type, #output .hljs-class .hljs-title { color: #4ec9b0; }
-#output .hljs-attr, #output .hljs-attribute, #output .hljs-variable, #output .hljs-property { color: #9cdcfe; }
-#output .hljs-tag, #output .hljs-name, #output .hljs-selector-tag { color: #569cd6; }
-#output .hljs-meta { color: #c586c0; }
-#output .hljs-symbol, #output .hljs-bullet, #output .hljs-link { color: #d7ba7d; }
-#output .hljs-deletion { color: #f48771; }
-#output .hljs-addition { color: #b5cea8; }
+/* highlight.js tokens — driven by the --hl-* vars so a preview theme retints
+   them; the defaults are the surrounding VSCode-dark palette. */
+#output .hljs-comment, #output .hljs-quote { color: var(--hl-comment); font-style: italic; }
+#output .hljs-keyword, #output .hljs-built_in, #output .hljs-literal { color: var(--hl-keyword); }
+#output .hljs-string, #output .hljs-regexp { color: var(--hl-string); }
+#output .hljs-number { color: var(--hl-number); }
+#output .hljs-title, #output .hljs-title.function_, #output .hljs-section { color: var(--hl-title); }
+#output .hljs-title.class_, #output .hljs-type, #output .hljs-class .hljs-title { color: var(--hl-type); }
+#output .hljs-attr, #output .hljs-attribute, #output .hljs-variable, #output .hljs-property { color: var(--hl-attr); }
+#output .hljs-tag, #output .hljs-name, #output .hljs-selector-tag { color: var(--hl-keyword); }
+#output .hljs-meta { color: var(--hl-meta); }
+#output .hljs-symbol, #output .hljs-bullet, #output .hljs-link { color: var(--hl-symbol); }
+#output .hljs-deletion { color: var(--hl-deletion); }
+#output .hljs-addition { color: var(--hl-addition); }
 #output .hljs-emphasis { font-style: italic; }
 #output .hljs-strong { font-weight: 600; }
-#output blockquote { border-left: 3px solid var(--mrd-border); margin: 1em 0; padding: 4px 16px; color: var(--mrd-muted); }
+#output blockquote { border-left: 3px solid var(--md-border); margin: 1em 0; padding: 4px 16px; color: var(--md-quote); }
 #output ul, #output ol { padding-left: 1.5em; margin: 0.6em 0; }
 #output li { margin: 0.2em 0; }
 /* Nested lists shouldn't add the full block margin — keep the rhythm even */
@@ -718,6 +737,54 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 #output details.frontmatter > summary::before { content: '▸  '; }
 #output details.frontmatter[open] > summary::before { content: '▾  '; }
 #output details.frontmatter table { margin: 0; width: 100%; }
+
+/* Preview themes: retint the reading surface to look like GitHub's rendered
+   Markdown, for reading AI-generated .md the way you'd read it on GitHub. Each
+   overrides the app's colour tokens *scoped to #output only*, so the app chrome
+   keeps whatever appearance the user set. `data-preview-theme` is stamped on
+   #output from the setting; absent means the default VSCode-dark look above. */
+#output[data-preview-theme='github-light'] {
+  --mrd-bg: #ffffff;
+  --mrd-text: #1f2328;
+  --mrd-muted: #59636e;
+  --mrd-border: #d1d9e0;
+  --mrd-surface: #f6f8fa;
+  --mrd-surface-2: #f6f8fa;
+  --md-link: #0969da;
+  --md-code-text: #1f2328;
+  --hl-comment: #6e7781;
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-title: #8250df;
+  --hl-type: #953800;
+  --hl-attr: #0550ae;
+  --hl-meta: #116329;
+  --hl-symbol: #0550ae;
+  --hl-addition: #116329;
+  --hl-deletion: #82071e;
+}
+#output[data-preview-theme='github-dark'] {
+  --mrd-bg: #0d1117;
+  --mrd-text: #e6edf3;
+  --mrd-muted: #9198a1;
+  --mrd-border: #3d444d;
+  --mrd-surface: #161b22;
+  --mrd-surface-2: #151b23;
+  --md-link: #4493f8;
+  --md-code-text: #e6edf3;
+  --hl-comment: #8b949e;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  --hl-type: #ffa657;
+  --hl-attr: #79c0ff;
+  --hl-meta: #79c0ff;
+  --hl-symbol: #79c0ff;
+  --hl-addition: #3fb950;
+  --hl-deletion: #ffa198;
+}
 #output details.frontmatter th, #output details.frontmatter td {
   border: none; border-top: 1px solid var(--mrd-border); padding: 6px 12px; font-size: 0.9em;
   vertical-align: top;
@@ -1158,6 +1225,23 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
    File ▸ Export as PDF… opens the platform print dialog, which renders this
    document. Strip the app chrome down to the rendered article and force a light
    page: a dark PDF is unusable on paper, and the ink cost is real. */
+/* Reading mode — distraction-free: every piece of chrome is gone and the
+   preview is centred at a comfortable measure. Toggled from the View menu
+   (⌘⇧M) or dismissed with Esc; only ever active on the preview. */
+body.reading .toolbar,
+body.reading #sidebar,
+body.reading #outline,
+body.reading #find-bar,
+body.reading #format-bar,
+body.reading #divider,
+body.reading .editor-pane { display: none !important; }
+body.reading .content-area { padding: 0; }
+body.reading #output {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+}
+
 @media print {
   :root {
     --mrd-bg: #ffffff;
