@@ -96,6 +96,7 @@ const historyBtn = document.getElementById('history-btn') as HTMLButtonElement;
 const historyOverlay = document.getElementById('history-overlay') as HTMLElement;
 const historyClose = document.getElementById('history-close')!;
 const historyList = document.getElementById('history-list')!;
+const refPicker = document.getElementById('ref-picker') as HTMLSelectElement;
 const historySide = document.getElementById('history-side')!;
 const historyDiff = document.getElementById('history-diff')!;
 const historyActions = document.getElementById('history-actions')!;
@@ -1912,25 +1913,56 @@ function relativeTime(ms: number): string {
 // another feature, it's another version handed to the same renderer.
 const CURRENT: 'current' = 'current';
 const HEAD: 'head' = 'head';
-type Pick = number | typeof CURRENT | typeof HEAD;
+/**
+ * A Git ref pulled in for comparison — a branch or commit — carried as a branded
+ * string (`ref:<rev>`) rather than an object so that `===` and `includes` still
+ * work everywhere the pick is a version id or one of the sentinels above.
+ */
+type RefPick = `ref:${string}`;
+type Pick = number | typeof CURRENT | typeof HEAD | RefPick;
+
+/** A branch or commit this file can be diffed against, from `git_refs`. */
+interface GitRef {
+  id: string;
+  kind: 'branch' | 'commit';
+  label: string;
+  subject: string | null;
+}
+
+const isRefPick = (pick: Pick): pick is RefPick =>
+  typeof pick === 'string' && pick.startsWith('ref:');
+const refPickOf = (rev: string): RefPick => `ref:${rev}`;
+const revOf = (pick: RefPick): string => pick.slice('ref:'.length);
 
 /** The two versions being compared: `base` on the left, `compare` on the right. */
 let basePick: Pick | null = null;
 let comparePick: Pick = CURRENT;
 /** The open document's content at HEAD; null when there's no Git to ask. */
 let headContent: string | null = null;
+/** Every ref this file could be compared against, and the ones pulled into the list. */
+let gitRefs: GitRef[] = [];
+let addedRefs: RefPick[] = [];
 
 async function contentOf(pick: Pick): Promise<string | null> {
   if (pick === CURRENT) return active?.workingText ?? null;
   if (pick === HEAD) return headContent;
   const path = active?.path;
   if (!path) return null;
+  if (isRefPick(pick)) {
+    return invoke<string>('git_ref_content', { path, rev: revOf(pick) }).catch(() => null);
+  }
   return invoke<string>('read_version', { path, id: pick }).catch(() => null);
 }
 
 function labelOf(pick: Pick): string {
   if (pick === CURRENT) return t('historyCurrent');
   if (pick === HEAD) return t('gitHead');
+  if (isRefPick(pick)) {
+    const rev = revOf(pick);
+    const ref = gitRefs.find((r) => r.id === rev);
+    if (!ref) return rev.slice(0, 7); // ref vanished (branch deleted) — show the sha
+    return ref.kind === 'commit' && ref.subject ? `${ref.label} ${ref.subject}` : ref.label;
+  }
   // The clock time is what tells two versions apart: relative time alone rounds
   // to the day, so every save from yesterday reads "yesterday" and the list
   // stops being a list of distinct things.
@@ -1944,13 +1976,18 @@ async function refreshHistory() {
   // A save landing in the background must not redraw either of those as this
   // document's version timeline.
   if (!path || historyMode !== 'versions') return;
-  const [versions, head] = await Promise.all([
+  const [versions, head, refs] = await Promise.all([
     invoke<Version[]>('list_versions', { path }).catch(() => []),
     // Null for every ordinary reason — no Git, not a repo, no commits, or the
     // file is untracked — and none of them is an error worth showing.
     invoke<string | null>('git_head_content', { path }).catch(() => null),
+    invoke<GitRef[]>('git_refs', { path }).catch(() => []),
   ]);
   headContent = head;
+  gitRefs = refs;
+  // A branch can be deleted between opening the panel and refreshing it; drop any
+  // pick whose ref no longer exists rather than leaving a dead row in the list.
+  addedRefs = addedRefs.filter((p) => gitRefs.some((r) => r.id === revOf(p)));
   historyList.innerHTML = '';
 
   // A file with no snapshots can still have a HEAD to compare against, which is
@@ -1971,6 +2008,7 @@ async function refreshHistory() {
   const picks: Pick[] = [
     CURRENT,
     ...(headContent === null ? [] : [HEAD]),
+    ...addedRefs,
     ...versions.map((v) => v.id),
   ];
   // Default: the newest snapshot against the working buffer — "what have I
@@ -2005,6 +2043,7 @@ async function refreshHistory() {
     when.className = 'history-when';
     if (pick === CURRENT) when.classList.add('is-current');
     if (pick === HEAD) when.classList.add('is-head');
+    if (isRefPick(pick)) when.classList.add('is-ref');
 
     const time = document.createElement('span');
     time.textContent = labelOf(pick);
@@ -2019,13 +2058,83 @@ async function refreshHistory() {
       kind.textContent = t(KIND_LABEL[version.kind] ?? 'kindSave');
       when.appendChild(kind);
     }
+    // A pulled-in Git ref wears its kind too, and can be removed again.
+    if (isRefPick(pick)) {
+      const ref = gitRefs.find((r) => r.id === revOf(pick));
+      if (ref) {
+        const kind = document.createElement('span');
+        kind.className = `history-kind git ${ref.kind}`;
+        kind.textContent = t(ref.kind === 'branch' ? 'refBranchGroup' : 'refCommitGroup');
+        when.appendChild(kind);
+      }
+      const remove = document.createElement('button');
+      remove.className = 'ref-remove';
+      remove.textContent = '×';
+      remove.title = t('close');
+      remove.addEventListener('click', () => removeRef(pick));
+      when.appendChild(remove);
+    }
 
     li.append(when, base, cmp);
     historyList.appendChild(li);
   }
 
+  populateRefPicker();
   await renderDiff();
 }
+
+/**
+ * Fill the "add a Git version" dropdown with every branch and commit not already
+ * in the list. It hides itself when there's nothing to add — no Git, or every ref
+ * already pulled in — so it never sits there empty.
+ */
+function populateRefPicker() {
+  const available = gitRefs.filter((r) => !addedRefs.includes(refPickOf(r.id)));
+  refPicker.hidden = available.length === 0;
+  if (refPicker.hidden) return;
+
+  refPicker.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = t('refPicker');
+  refPicker.appendChild(placeholder);
+
+  const group = (labelKey: Key, kind: GitRef['kind']) => {
+    const items = available.filter((r) => r.kind === kind);
+    if (items.length === 0) return;
+    const og = document.createElement('optgroup');
+    og.label = t(labelKey);
+    for (const r of items) {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = r.subject ? `${r.label} — ${r.subject}` : r.label;
+      og.appendChild(opt);
+    }
+    refPicker.appendChild(og);
+  };
+  group('refBranchGroup', 'branch');
+  group('refCommitGroup', 'commit');
+  refPicker.value = '';
+}
+
+/** Pull a ref into the list as the base of the comparison, and diff it. */
+function addRef(rev: string) {
+  const pick = refPickOf(rev);
+  if (!addedRefs.includes(pick)) addedRefs.push(pick);
+  setPick('base', pick);
+}
+
+/** Drop a pulled-in ref. If it was an end of the comparison, fall back to CURRENT. */
+function removeRef(pick: RefPick) {
+  addedRefs = addedRefs.filter((p) => p !== pick);
+  if (basePick === pick) basePick = null; // refreshHistory recomputes a default
+  if (comparePick === pick) comparePick = CURRENT;
+  refreshHistory();
+}
+
+refPicker.addEventListener('change', () => {
+  if (refPicker.value) addRef(refPicker.value);
+});
 
 /**
  * Move one end of the comparison. Picking the version that already holds the
@@ -2304,9 +2413,11 @@ function openHistory(mode: 'versions' | 'conflict' = 'versions') {
     return;
   }
   // A fresh open asks the question you almost always have: what changed since
-  // the last save? Stale picks from a previous document don't leak in.
+  // the last save? Stale picks from a previous document don't leak in — nor do
+  // Git refs pulled in for whatever was open before.
   basePick = null;
   comparePick = CURRENT;
+  addedRefs = [];
   refreshHistory();
 }
 function closeHistory() {

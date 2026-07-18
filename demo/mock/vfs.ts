@@ -22,10 +22,21 @@ export interface Version {
 const HOME = '/Users/you';
 const NOTES = `${HOME}/notes`;
 
+export interface GitRef {
+  id: string;
+  kind: 'branch' | 'commit';
+  label: string;
+  subject: string | null;
+}
+
 export const files = new Map<string, Entry>();
 export const versions = new Map<string, Version[]>();
 /** Content at Git HEAD, for the files the fixtures treat as committed. */
 export const committed = new Map<string, string>();
+/** Branches and commits a file can be diffed against (`git_refs`). */
+export const refs = new Map<string, GitRef[]>();
+/** A file's content at a given ref, keyed `path\0rev` (`git_ref_content`). */
+export const refContent = new Map<string, string>();
 export let recents: string[] = [];
 
 const README = `${NOTES}/README.md`;
@@ -180,6 +191,8 @@ export function seed() {
   files.clear();
   versions.clear();
   committed.clear();
+  refs.clear();
+  refContent.clear();
   recents = [README, DESIGN];
 
   const t0 = Date.UTC(2026, 6, 10, 9, 0, 0);
@@ -200,6 +213,20 @@ export function seed() {
   // The checklist is committed; the design notes are not, so the UI's "no Git to
   // compare against" path is exercised by the same fixtures.
   committed.set(README, oldest);
+
+  // A branch an agent pushed, plus the two commits behind the file — the targets
+  // the "add a Git version" picker offers, and the review case it's built for.
+  const branch = 'agent/release-polish';
+  const c1 = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
+  const c0 = 'f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1';
+  refs.set(README, [
+    { id: branch, kind: 'branch', label: branch, subject: null },
+    { id: c1, kind: 'commit', label: c1.slice(0, 7), subject: LANG === 'ja' ? '本文を追記' : 'flesh out the checklist' },
+    { id: c0, kind: 'commit', label: c0.slice(0, 7), subject: LANG === 'ja' ? '最初のコミット' : 'first commit' },
+  ]);
+  refContent.set(`${README}\0${branch}`, README_AGENT);
+  refContent.set(`${README}\0${c1}`, README_V1);
+  refContent.set(`${README}\0${c0}`, oldest);
 }
 
 seed();

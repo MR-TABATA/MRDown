@@ -631,27 +631,112 @@ fn git(dir: &std::path::Path, args: &[&str]) -> Option<String> {
     String::from_utf8(out.stdout).ok()
 }
 
-/// The file's content as of `HEAD`, or `None` when there's nothing to compare
-/// against: no Git, not a repository, no commits yet, or the file is untracked
-/// (a brand new note). Callers treat `None` as "don't offer a Git comparison"
-/// rather than as an error — none of those cases is a fault.
-#[tauri::command]
-fn git_head_content(path: String) -> Option<String> {
-    let file = std::path::Path::new(&path);
+/// The repository root and the file's path relative to it (forward slashes, the
+/// spelling `git show` and `git log` want). `None` when the file isn't inside a
+/// Git repository at all — not an error, just nothing to compare against.
+fn repo_rel(path: &str) -> Option<(std::path::PathBuf, String)> {
+    let file = std::path::Path::new(path);
     let dir = file.parent()?;
 
     let root = git(dir, &["rev-parse", "--show-toplevel"])?;
     let root = std::path::PathBuf::from(root.trim());
 
-    // `git show` wants a path relative to the repository root, with forward
-    // slashes. Resolve symlinks on both sides first (on macOS /tmp is a symlink
-    // to /private/tmp, and the two spellings would never strip to a relative).
+    // Resolve symlinks on both sides first (on macOS /tmp is a symlink to
+    // /private/tmp, and the two spellings would never strip to a relative).
     let file = file.canonicalize().ok()?;
     let root = root.canonicalize().ok()?;
     let rel = file.strip_prefix(&root).ok()?;
     let rel = rel.to_str()?.replace('\\', "/");
+    Some((root, rel))
+}
 
+/// The file's content at an arbitrary revision (a branch name, tag, or commit
+/// sha). `None` when there's no Git to ask; `Some("")` when the revision is real
+/// but the file didn't exist there yet (so a diff reads it as wholly added,
+/// rather than as a read failure). Callers treat `None` as "no comparison to
+/// offer", never as a fault.
+#[tauri::command]
+fn git_ref_content(path: String, rev: String) -> Option<String> {
+    let (root, rel) = repo_rel(&path)?;
+    if let Some(content) = git(&root, &["show", &format!("{rev}:{rel}")]) {
+        return Some(content);
+    }
+    // The blob didn't resolve. Distinguish "the file isn't in that revision"
+    // (a valid answer — empty side) from "that revision doesn't exist" (None).
+    match git(&root, &["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")]) {
+        Some(_) => Some(String::new()),
+        None => None,
+    }
+}
+
+/// The file's content as of `HEAD`, or `None` when there's nothing to compare
+/// against: no Git, not a repository, no commits yet, or the file is untracked
+/// (a brand new note). Kept as its own command because the version panel asks it
+/// on every refresh just to learn whether Git is available at all.
+#[tauri::command]
+fn git_head_content(path: String) -> Option<String> {
+    let (root, rel) = repo_rel(&path)?;
     git(&root, &["show", &format!("HEAD:{rel}")])
+}
+
+/// One comparison target the version panel can offer: a local branch, or a
+/// commit that touched this file. `id` is what `git_ref_content` resolves;
+/// `label` is what the user sees.
+#[derive(serde::Serialize)]
+struct GitRef {
+    /// A branch name or a full commit sha — passed straight back as `rev`.
+    id: String,
+    /// "branch" or "commit", so the UI can tell them apart.
+    kind: String,
+    /// Branch name, or a short sha for a commit.
+    label: String,
+    /// A commit's subject line; absent for branches.
+    subject: Option<String>,
+}
+
+/// Everything worth diffing this file against, beyond the versions already in
+/// the local timeline: the repository's local branches, and the commits that
+/// last touched this file. Empty when the file isn't in a Git repository — the
+/// picker simply doesn't appear. Tags and unrelated commits are left out on
+/// purpose: the list has to stay short enough to scan.
+#[tauri::command]
+fn git_refs(path: String) -> Vec<GitRef> {
+    let Some((root, rel)) = repo_rel(&path) else {
+        return Vec::new();
+    };
+    let mut refs = Vec::new();
+
+    // Local branches, alphabetical. This is the review case MRDown exists for:
+    // diff a branch an agent pushed against the working tree before merging.
+    if let Some(out) = git(&root, &["for-each-ref", "--format=%(refname:short)", "refs/heads"]) {
+        for name in out.lines().filter(|l| !l.is_empty()) {
+            refs.push(GitRef {
+                id: name.to_string(),
+                kind: "branch".into(),
+                label: name.to_string(),
+                subject: None,
+            });
+        }
+    }
+
+    // Recent commits that touched this file. NUL between sha and subject so a
+    // subject can hold anything (a tab, say) without breaking the split.
+    if let Some(out) = git(
+        &root,
+        &["log", "-n", "20", "--format=%H%x00%s", "--", &rel],
+    ) {
+        for line in out.lines().filter(|l| !l.is_empty()) {
+            let (sha, subject) = line.split_once('\0').unwrap_or((line, ""));
+            refs.push(GitRef {
+                id: sha.to_string(),
+                kind: "commit".into(),
+                label: sha.chars().take(7).collect(),
+                subject: Some(subject.to_string()),
+            });
+        }
+    }
+
+    refs
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -678,7 +763,9 @@ pub fn run() {
             snapshot_version,
             list_versions,
             read_version,
-            git_head_content
+            git_head_content,
+            git_ref_content,
+            git_refs
         ])
         .on_menu_event(|app, event| {
             // Forward our custom item ids to the frontend, which maps them to
@@ -798,6 +885,103 @@ mod tests {
         std::fs::write(&file, "unborn\n").unwrap();
         assert_eq!(git_head_content(file.to_str().unwrap().to_string()), None);
         let _ = std::fs::remove_dir_all(&empty);
+    }
+
+    /// Run a git command in `dir`, for tests that need to shape history.
+    fn git_in(dir: &std::path::Path, args: &[&str]) {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .unwrap();
+    }
+
+    #[test]
+    fn git_ref_content_reads_a_branch_and_a_commit() {
+        let dir = temp_repo();
+        let file = dir.join("note.md");
+        let path = file.to_str().unwrap().to_string();
+
+        // A second commit on a feature branch changes the file.
+        git_in(&dir, &["checkout", "-b", "feature"]);
+        std::fs::write(&file, "on the branch\n").unwrap();
+        git_in(&dir, &["commit", "-am", "second"]);
+        // And the working tree is different again.
+        std::fs::write(&file, "in the working tree\n").unwrap();
+
+        // The branch tip sees the branch's version.
+        assert_eq!(
+            git_ref_content(path.clone(), "feature".into()).as_deref(),
+            Some("on the branch\n")
+        );
+        // `main`/`master` (whatever init named it) still sees the first commit.
+        let first_sha = git(&dir, &["rev-list", "--max-parents=0", "HEAD"]).unwrap();
+        assert_eq!(
+            git_ref_content(path.clone(), first_sha.trim().into()).as_deref(),
+            Some("committed\n")
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn git_ref_content_is_empty_when_the_file_is_absent_from_a_real_revision() {
+        let dir = temp_repo();
+        // A commit that predates the file: it exists, but note.md doesn't.
+        git_in(&dir, &["checkout", "-b", "before"]);
+        git_in(&dir, &["rm", "note.md"]);
+        git_in(&dir, &["commit", "-m", "remove"]);
+        let sha = git(&dir, &["rev-parse", "HEAD"]).unwrap();
+        git_in(&dir, &["checkout", "-"]);
+
+        let file = dir.join("note.md");
+        // Real revision, file not in it → empty (wholly added), not a failure.
+        assert_eq!(
+            git_ref_content(file.to_str().unwrap().to_string(), sha.trim().into()),
+            Some(String::new())
+        );
+        // A revision that doesn't exist at all → None.
+        assert_eq!(
+            git_ref_content(file.to_str().unwrap().to_string(), "no-such-ref".into()),
+            None
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn git_refs_lists_branches_and_commits_that_touched_the_file() {
+        let dir = temp_repo();
+        let file = dir.join("note.md");
+        git_in(&dir, &["checkout", "-b", "feature"]);
+        std::fs::write(&file, "changed\n").unwrap();
+        git_in(&dir, &["commit", "-am", "tweak the note"]);
+
+        let refs = git_refs(file.to_str().unwrap().to_string());
+
+        let branches: Vec<&str> =
+            refs.iter().filter(|r| r.kind == "branch").map(|r| r.label.as_str()).collect();
+        assert!(branches.contains(&"feature"));
+
+        let commits: Vec<&GitRef> = refs.iter().filter(|r| r.kind == "commit").collect();
+        // Both commits touched note.md, and subjects come through.
+        assert!(commits.iter().any(|c| c.subject.as_deref() == Some("tweak the note")));
+        assert!(commits.iter().any(|c| c.subject.as_deref() == Some("first")));
+        // Labels are short shas of the full id.
+        assert!(commits.iter().all(|c| c.label.len() == 7 && c.id.starts_with(&c.label)));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn git_refs_is_empty_outside_a_repository() {
+        let dir = scratch("norepo");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("note.md");
+        std::fs::write(&file, "loose\n").unwrap();
+        assert!(git_refs(file.to_str().unwrap().to_string()).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

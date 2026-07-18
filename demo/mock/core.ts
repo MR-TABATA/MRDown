@@ -1,6 +1,6 @@
-// Stands in for `@tauri-apps/api/core`: the 17 commands src/main.ts invokes.
+// Stands in for `@tauri-apps/api/core`: the 19 commands src/main.ts invokes.
 
-import { files, versions, committed, recents, type Version } from './vfs';
+import { files, versions, committed, refs, refContent, recents, type Version } from './vfs';
 
 function basename(p: string) {
   return p.split('/').pop() ?? p;
@@ -88,6 +88,13 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
     // handle anyway (no Git, untracked, no commits).
     case 'git_head_content':
       return r(committed.get(args.path) ?? null);
+
+    // The branches and commits the version panel can pull in, and the file's
+    // content at one of them. `[]`/`null` for a fixture outside any repository.
+    case 'git_refs':
+      return r(refs.get(args.path) ?? []);
+    case 'git_ref_content':
+      return r(refContent.get(`${args.path}\0${args.rev}`) ?? null);
 
     case 'save_image': {
       files.set(args.path, { content: `<binary ${basename(args.path)}>`, mtime: Date.now() });

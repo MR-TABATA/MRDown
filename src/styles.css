@@ -837,7 +837,38 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 .history-kind.external { color: var(--mrd-hit-current); }
 .history-kind.draft { color: var(--mrd-accent); }
 .history-kind.git { color: var(--mrd-muted); }
+/* A branch pulled in for review is the point of this feature — give it the
+   accent, the way an external save gets one. Commits stay quiet. */
+.history-kind.git.branch { color: var(--mrd-accent); }
 #history-list .history-when.is-head { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--mrd-muted); }
+/* The remove (×) sits in the top-right of the label column; the radios live in
+   their own grid columns to its right, so it can't collide with them. */
+#history-list .history-when.is-ref { position: relative; padding-right: 16px; }
+.ref-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--mrd-faint);
+  cursor: pointer;
+}
+.ref-remove:hover { color: var(--mrd-text); }
+/* "Add a Git version" — hidden when there's nothing left to add. */
+.ref-picker {
+  margin: 2px 6px 6px;
+  padding: 5px 6px;
+  font-size: 12px;
+  border: 1px solid var(--mrd-border);
+  border-radius: 6px;
+  background: var(--mrd-surface);
+  color: var(--mrd-text);
+  cursor: pointer;
+}
+.ref-picker[hidden] { display: none; }
 #history-list li.history-empty { display: block; color: var(--mrd-muted); font-size: 12px; line-height: 1.5; padding: 10px; }
 #history-list li.history-empty:hover { background: transparent; }
 
