@@ -42,8 +42,9 @@ Build order matters: **Local History is the foundation**, and it hands the diff
 renderer to the other two nearly for free.
 
 > Pillars 1 and 2 — together with the two unplanned essentials (4 and 5) below —
-> **shipped in v1.2.0**; v1.3.0 adds compare-any-two-files (6). Only pillar 3
-> (AI explains the diff) is still to come.
+> **shipped in v1.2.0**; v1.3.0 adds compare-any-two-files (6); v1.4.0 adds
+> compare-against-any-Git-ref (7). Only pillar 3 (AI explains the diff) is still
+> to come.
 
 1. [x] **Local History** ★ — on save, keep a quiet local timeline of versions;
    pick any two versions → diff → one-click restore. **No Git required**, so it
@@ -52,7 +53,8 @@ renderer to the other two nearly for free.
    us the two-version diff renderer the next pillar reuses.
 2. [x] **Git diff** — the file at `HEAD` vs the working tree. As predicted, this
    cost almost nothing once the renderer existed: `HEAD` is simply one more
-   version in the same list, handed to the same diff.
+   version in the same list, handed to the same diff. **v1.4.0 generalises it**
+   to any ref (see 7).
 3. [ ] **AI explains the diff (BYOK)** — with the user's own API key, narrate
    *what changed and why* in a revision. Plain AI summary is crowded; "AI that
    explains what your AI just changed" is MRDown-specific and finishes the
@@ -85,6 +87,12 @@ labelled as a statement about the content, not a guess about the process.
    own: the two-version diff renderer already existed, so pointing it at two
    arbitrary files on disk (nothing open required) cost almost nothing.
    File ▸ "Compare Two Files…".
+7. [x] **Compare against any Git ref** — shipped v1.4.0. The version panel could
+   already diff `HEAD`; a picker now pulls any **local branch or commit** into the
+   same list, so you can review a branch an agent pushed *before* merging it.
+   Still **free-core** (local Git, no auth) — the remote GitHub/PR review stays
+   Pro. Only files tracked at `HEAD` offer the picker for now (a file that exists
+   only on another branch is a later extension).
 
 ## Planned — editor depth
 
