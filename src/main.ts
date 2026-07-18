@@ -19,7 +19,7 @@ import {
   docStats,
   toggleTaskListItem,
 } from './markdown';
-import { buildMatcher, findMatches, sliceMatches, type FindOpts } from './find';
+import { buildMatcher, findMatches, sliceMatches, type FindOpts, type Match } from './find';
 import {
   sideBySide,
   inlineSegments,
@@ -126,6 +126,10 @@ const replaceAllBtn = document.getElementById('replace-all')!;
 const optCaseBtn = document.getElementById('opt-case')!;
 const optWordBtn = document.getElementById('opt-word')!;
 const optRegexBtn = document.getElementById('opt-regex')!;
+const docSearchOverlay = document.getElementById('docsearch-overlay') as HTMLElement;
+const docSearchInput = document.getElementById('docsearch-input') as HTMLInputElement;
+const docSearchSummary = document.getElementById('docsearch-summary')!;
+const docSearchResults = document.getElementById('docsearch-results')!;
 const appWindow = getCurrentWindow();
 
 // Home directory, used to abbreviate paths to ~ (resolved once on startup).
@@ -2989,6 +2993,207 @@ optCaseBtn.addEventListener('click', () => toggleOpt('caseSensitive'));
 optWordBtn.addEventListener('click', () => toggleOpt('wholeWord'));
 optRegexBtn.addEventListener('click', () => toggleOpt('regex'));
 
+// --- Search across open documents (⌘⇧F) -------------------------------------
+// ⌘F searches the document you're reading; this asks every open one at once —
+// "which of these mention X, and where?" — and jumps you to the hit. Open tabs
+// only: they're all in memory, so it's instant. Grepping a whole folder of
+// unopened files is a separate, heavier job (and a paid one).
+const DOCSEARCH_HITS_PER_DOC = 50;
+
+/** One match: where to jump (source offsets), the line number, and a snippet of
+ *  its line with the matched span marked. */
+interface LineHit {
+  /** Selection to jump to: the first matched word on the line. */
+  start: number;
+  end: number;
+  lineNo: number;
+  /** The line, cut into alternating plain / highlighted pieces. */
+  segments: { text: string; mark: boolean }[];
+}
+
+/**
+ * Turn one line and every query-word match on it into a result row: the line
+ * number, the line marked up (all words, not just one), and where to jump. A
+ * long line is windowed around its matches. `matches` must be for this line and
+ * sorted by position.
+ */
+function toLineHit(text: string, lineStart: number, matches: Match[]): LineHit {
+  let lineEnd = text.indexOf('\n', lineStart);
+  if (lineEnd === -1) lineEnd = text.length;
+  const lineNo = text.slice(0, lineStart).split('\n').length;
+  const line = text.slice(lineStart, lineEnd);
+
+  // Local, clamped mark ranges, with any overlaps merged.
+  const ranges: [number, number][] = [];
+  for (const m of matches) {
+    const s = Math.max(0, m.start - lineStart);
+    const e = Math.min(line.length, m.end - lineStart);
+    if (e <= s) continue;
+    const last = ranges[ranges.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else ranges.push([s, e]);
+  }
+
+  // Window a long line around its matches, keeping the marks in view.
+  const MAX = 200;
+  let from = 0;
+  let to = line.length;
+  let prefix = '';
+  let suffix = '';
+  if (line.length > MAX && ranges.length) {
+    const ctx = 48;
+    from = Math.max(0, ranges[0][0] - ctx);
+    to = Math.min(line.length, ranges[ranges.length - 1][1] + ctx);
+    if (to - from > MAX) to = from + MAX;
+    prefix = from > 0 ? '…' : '';
+    suffix = to < line.length ? '…' : '';
+  }
+
+  const segments: { text: string; mark: boolean }[] = [];
+  if (prefix) segments.push({ text: prefix, mark: false });
+  let cur = from;
+  for (const [s, e] of ranges) {
+    const ms = Math.max(s, from);
+    const me = Math.min(e, to);
+    if (me <= ms) continue; // range fell outside the window
+    if (ms > cur) segments.push({ text: line.slice(cur, ms), mark: false });
+    segments.push({ text: line.slice(ms, me), mark: true });
+    cur = me;
+  }
+  if (cur < to) segments.push({ text: line.slice(cur, to), mark: false });
+  if (suffix) segments.push({ text: suffix, mark: false });
+
+  const first = ranges[0] ?? [0, 0];
+  return { start: lineStart + first[0], end: lineStart + first[1], lineNo, segments };
+}
+
+function runDocSearch() {
+  docSearchResults.innerHTML = '';
+  if (docs.length === 0) {
+    docSearchSummary.textContent = t('docsearchNoDocs');
+    return;
+  }
+  // Space-separated words are ANDed: a document qualifies only if it contains
+  // every word (any order, anywhere), and every word's occurrences are shown.
+  // Plain, case-insensitive — regex/whole-word live on the in-document find bar.
+  const opts: FindOpts = { regex: false, caseSensitive: false, wholeWord: false };
+  const matchers = docSearchInput.value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => buildMatcher(word, opts));
+  if (matchers.length === 0 || matchers.some((m) => !m)) {
+    docSearchSummary.textContent = '';
+    return;
+  }
+
+  let totalHits = 0;
+  let docsWithHits = 0;
+  for (const doc of docs) {
+    const text = doc.workingText;
+    // Quick reject: a word missing from the whole document can't share a line
+    // with the others, so there's nothing to show.
+    if (!matchers.every((m) => findMatches(text, m, 1).length > 0)) continue;
+
+    // Group every word's matches by the line they sit on, tracking which words
+    // landed on each line.
+    const byLine = new Map<number, { matches: Match[]; words: Set<number> }>();
+    matchers.forEach((matcher, w) => {
+      for (const m of findMatches(text, matcher)) {
+        const lineStart = text.lastIndexOf('\n', m.start - 1) + 1;
+        let g = byLine.get(lineStart);
+        if (!g) {
+          g = { matches: [], words: new Set() };
+          byLine.set(lineStart, g);
+        }
+        g.matches.push(m);
+        g.words.add(w);
+      }
+    });
+
+    // Keep only lines where *every* word appears — "show me where they occur
+    // together" — so a result line always lights up all of them, never one.
+    const lines = [...byLine.entries()]
+      .filter(([, g]) => g.words.size === matchers.length)
+      .sort((a, b) => a[0] - b[0])
+      .slice(0, DOCSEARCH_HITS_PER_DOC);
+    if (lines.length === 0) continue;
+
+    docsWithHits++;
+    totalHits += lines.length;
+
+    const group = document.createElement('div');
+    group.className = 'docsearch-group';
+    const head = document.createElement('div');
+    head.className = 'docsearch-doc';
+    head.textContent = doc.name;
+    const count = document.createElement('span');
+    count.className = 'docsearch-doc-count';
+    count.textContent = String(lines.length);
+    head.appendChild(count);
+    group.appendChild(head);
+
+    for (const [lineStart, g] of lines) {
+      g.matches.sort((a, b) => a.start - b.start || a.end - b.end);
+      const hit = toLineHit(text, lineStart, g.matches);
+      const row = document.createElement('button');
+      row.className = 'docsearch-hit';
+      const no = document.createElement('span');
+      no.className = 'docsearch-lineno';
+      no.textContent = String(hit.lineNo);
+      const snippet = document.createElement('span');
+      snippet.className = 'docsearch-snippet';
+      for (const seg of hit.segments) {
+        if (seg.mark) {
+          const mark = document.createElement('mark');
+          mark.textContent = seg.text;
+          snippet.appendChild(mark);
+        } else {
+          snippet.append(seg.text);
+        }
+      }
+      row.append(no, snippet);
+      row.addEventListener('click', () => navigateToHit(doc, hit.start, hit.end));
+      group.appendChild(row);
+    }
+    docSearchResults.appendChild(group);
+  }
+
+  docSearchSummary.textContent = totalHits
+    ? t('docsearchSummary', { docs: String(docsWithHits), n: String(totalHits) })
+    : t('docsearchNone');
+}
+
+/** Open the document and land on the exact match that was clicked. Precision is
+ *  the whole point of clicking a specific result, and only the source has stable
+ *  offsets (the preview drops link URLs and other source-only text), so this
+ *  drops into the editor and selects the span. ⌘E returns to the reading view. */
+async function navigateToHit(doc: Doc, start: number, end: number) {
+  closeDocSearch();
+  await setActive(doc);
+  if (!isEditing) setEditing(true);
+  editor.focus();
+  editor.setSelectionRange(start, end);
+  scrollEditorTo(start);
+}
+
+function openDocSearch() {
+  if (docs.length === 0) return;
+  docSearchOverlay.hidden = false;
+  // Carry over whatever's in the in-document find box, so ⌘F → ⌘⇧F widens the
+  // same query to every tab.
+  docSearchInput.value = findInput.value;
+  docSearchInput.focus();
+  docSearchInput.select();
+  runDocSearch();
+}
+function closeDocSearch() {
+  docSearchOverlay.hidden = true;
+}
+
+docSearchInput.addEventListener('input', runDocSearch);
+document.getElementById('docsearch-close')!.addEventListener('click', closeDocSearch);
+
 applyI18n();
 applyPreviewWidth(storedWidth());
 applyStoredAppearance();
@@ -3026,8 +3231,19 @@ document.addEventListener('keydown', (e) => {
     setReading(false);
     return;
   }
+  if (e.key === 'Escape' && !docSearchOverlay.hidden) {
+    closeDocSearch();
+    return;
+  }
   const mod = e.metaKey || e.ctrlKey;
   if (!mod) return;
+  // ⌘⇧F searches every open document; ⌘F searches the one you're reading. Shift
+  // makes the key 'F', so the plain-'f' branch below never swallows it.
+  if (e.shiftKey && e.key.toLowerCase() === 'f' && docs.length) {
+    e.preventDefault();
+    openDocSearch();
+    return;
+  }
   if (e.key === 'f' && active) {
     e.preventDefault();
     openFind();

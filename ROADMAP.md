@@ -25,8 +25,11 @@ turn MRDown from a single-file viewer into something you actually navigate.
       (biggest jump in substance)
 - [x] **Outline / table-of-contents panel** — jump by heading, with a scroll-spy
       that highlights the heading you're reading
-- [x] **Find (`⌘F`) and Replace** — in-document; searching across open docs is
-      still planned
+- [x] **Find (`⌘F`) and Replace** — in-document
+- [x] **Search across open documents (`⌘⇧F`)** — one query over every open tab,
+      results grouped by document with line + snippet, click to jump to the hit.
+      Open tabs only (in memory); project-wide vault-grep of unopened files is a
+      separate, heavier — and paid — job.
 
 ## Planned — flagship axis: the time machine ("what changed?")
 

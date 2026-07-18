@@ -253,6 +253,22 @@
     </div>
   </div>
 
+  <div id="docsearch-overlay" class="overlay" hidden>
+    <div class="docsearch-panel" role="dialog" aria-labelledby="docsearch-title">
+      <div class="settings-head">
+        <h2 id="docsearch-title" data-i18n="docsearchTitle">開いている文書を横断検索</h2>
+        <button id="docsearch-close" data-i18n-title="close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="docsearch-body">
+        <input id="docsearch-input" type="text" spellcheck="false" data-i18n-placeholder="docsearchPlaceholder" />
+        <div id="docsearch-summary" class="docsearch-summary"></div>
+        <div id="docsearch-results" class="docsearch-results"></div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
