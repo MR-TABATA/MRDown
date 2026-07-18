@@ -67,6 +67,14 @@ nav {
 .hero h1 .accent { color: var(--accent); }
 .hero .lead { font-size: 19px; color: var(--text-dim); max-width: 620px; margin: 0 auto 36px; }
 
+/* Origin: the honest "how it started → what it became" note under the hero. */
+.origin { padding: 44px 0 8px; }
+.origin .wrap { max-width: 720px; }
+.origin .identity { font-size: 22px; line-height: 1.5; color: #fff; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 16px; }
+.origin .story { font-size: 16px; line-height: 1.85; color: var(--text-dim); }
+.origin .story strong { color: var(--text); font-weight: 600; }
+.origin .story code { color: var(--code); font-size: 0.92em; }
+
 .btn-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
 .btn {
   display: inline-flex; align-items: center; gap: 8px;

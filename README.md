@@ -2,7 +2,11 @@
 
 **English** | [日本語](README.ja.md)
 
-A minimal, fast Markdown viewer & editor built with Tauri + TypeScript.
+**A Markdown viewer at heart — it edits, saves, and creates too, and the diff is the showpiece.**
+
+It began with the `.md` files Claude Code generates. Opening a heavy editor and right-clicking to preview was a chore — so I asked Claude Code for help and had a **viewer-only 0.1 in two hours**. These days it's not only Claude Code: I read the `.md` I write in VSCode here too — **I write in an editor, and I read in MRDown**. From there, one "it'd be nice if it also…" after another, it grew — until it did something no other Markdown app does: **read the diff of what your AI just rewrote**.
+
+Built with Tauri + TypeScript. macOS native.
 
 ## Features
 
