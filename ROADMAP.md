@@ -103,7 +103,11 @@ labelled as a statement about the content, not a guess about the process.
 - [x] Auto-close pairs (`` ` ``, `[`, `(`; wrap the selection, type-over the close)
 - [x] Paste a URL onto a selection → link; paste an image → save + insert
 - [x] Word / character count, reading time
-- [ ] Focus / Zen mode; font size & line-width settings; word-wrap toggle
+- [x] Reading mode (⌘⇧M — chrome hidden, preview centred); font size & width
+      settings. Shipped v1.5.0. (Word-wrap toggle still open.)
+- [x] **GitHub-style preview themes** (Default / GitHub Light / GitHub Dark) —
+      shipped v1.5.0. Retints the preview to read like GitHub's rendered Markdown,
+      scoped to the preview so the app chrome keeps the user's own appearance.
 
 ## Planned — text transforms (act on the selection)
 
