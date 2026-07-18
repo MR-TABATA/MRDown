@@ -92,8 +92,9 @@ labelled as a statement about the content, not a guess about the process.
    already diff `HEAD`; a picker now pulls any **local branch or commit** into the
    same list, so you can review a branch an agent pushed *before* merging it.
    Still **free-core** (local Git, no auth) — the remote GitHub/PR review stays
-   Pro. Only files tracked at `HEAD` offer the picker for now (a file that exists
-   only on another branch is a later extension).
+   Pro. v1.5.1 extends it to files that aren't in `HEAD` but are alive in history
+   (deleted, or living on another branch) — as long as the file has any history
+   to stand on.
 
 ## Planned — editor depth
 
