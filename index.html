@@ -226,7 +226,15 @@
         <div class="history-detail">
           <div class="diff-head">
             <span id="diff-title" class="diff-title"></span>
-            <span id="diff-stats" class="diff-stats"></span>
+            <div class="diff-tools" id="diff-tools">
+              <input id="diff-filter" class="diff-filter" type="search" data-i18n-placeholder="diffFilterPlaceholder" />
+              <span id="diff-stats" class="diff-stats"></span>
+              <span class="diff-nav" id="diff-nav" hidden>
+                <button id="diff-prev" data-i18n-title="diffPrevChange">‹</button>
+                <span id="diff-nav-count" class="diff-nav-count"></span>
+                <button id="diff-next" data-i18n-title="diffNextChange">›</button>
+              </span>
+            </div>
           </div>
           <div id="history-diff" class="diff"></div>
           <div class="history-actions" id="history-actions">

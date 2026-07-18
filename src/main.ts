@@ -23,7 +23,7 @@ import { buildMatcher, findMatches, sliceMatches, type FindOpts } from './find';
 import {
   sideBySide,
   inlineSegments,
-  foldUnchanged,
+  foldRows,
   diffStats,
   threeWay,
   threeWayStats,
@@ -103,6 +103,12 @@ const historyActions = document.getElementById('history-actions')!;
 const conflictActions = document.getElementById('conflict-actions')!;
 const diffTitle = document.getElementById('diff-title')!;
 const diffStatsEl = document.getElementById('diff-stats')!;
+const diffTools = document.getElementById('diff-tools')!;
+const diffFilterInput = document.getElementById('diff-filter') as HTMLInputElement;
+const diffNav = document.getElementById('diff-nav')!;
+const diffNavCount = document.getElementById('diff-nav-count')!;
+const diffPrevBtn = document.getElementById('diff-prev') as HTMLButtonElement;
+const diffNextBtn = document.getElementById('diff-next') as HTMLButtonElement;
 const historyRestore = document.getElementById('history-restore') as HTMLButtonElement;
 const historyTitle = document.getElementById('history-title')!;
 const conflictBar = document.getElementById('conflict-bar')!;
@@ -2196,6 +2202,36 @@ function diffRowEl(row: DiffRow): HTMLElement {
   return el;
 }
 
+// --- In-diff filter and change navigation ------------------------------------
+// A wholesale rewrite — the review case the Git-ref picker exists for — can stay
+// long even after folding. The filter narrows the diff to the changed lines that
+// mention a term; the ‹ › navigator steps between the changed hunks that remain.
+
+let diffFilter = '';
+/** The two texts of the current two-way diff, kept so the filter can re-render
+ *  without re-reading them (a version, a commit, HEAD — none free to re-fetch). */
+let lastTwoWay: { oldText: string; newText: string } | null = null;
+/** The first row of each on-screen changed hunk, for the navigator. */
+let diffHunks: HTMLElement[] = [];
+let diffHunkIdx = -1;
+
+const rowMatchesFilter = (row: DiffRow, q: string): boolean =>
+  `${row.left ?? ''}\n${row.right ?? ''}`.toLowerCase().includes(q);
+
+function appendDiffEmpty(msg: string) {
+  const empty = document.createElement('div');
+  empty.className = 'diff-empty';
+  empty.textContent = msg;
+  historyDiff.appendChild(empty);
+}
+
+/** Clear the filter and its box — for a fresh comparison that shouldn't inherit
+ *  a term typed against whatever was open before. */
+function resetDiffFilter() {
+  diffFilter = '';
+  diffFilterInput.value = '';
+}
+
 /**
  * Draw one two-way diff into the panel. Two versions of a document and two
  * unrelated files ask the same question — the only difference is where the two
@@ -2203,20 +2239,32 @@ function diffRowEl(row: DiffRow): HTMLElement {
  * drifts away from it.
  */
 function renderTwoWay(oldText: string, newText: string) {
+  lastTwoWay = { oldText, newText };
+  diffTools.hidden = false;
   historyDiff.innerHTML = '';
   const rows = sideBySide(oldText, newText);
   const { added, removed } = diffStats(rows);
+  // The count is always the whole diff's; the filter changes what's shown, not
+  // what changed.
   diffStatsEl.textContent = added || removed ? `+${added} −${removed}` : '';
 
   if (!added && !removed) {
-    const empty = document.createElement('div');
-    empty.className = 'diff-empty';
-    empty.textContent = t('diffNoChanges');
-    historyDiff.appendChild(empty);
+    appendDiffEmpty(t('diffNoChanges'));
+    indexDiffHunks();
     return;
   }
-  for (const line of foldUnchanged(rows)) {
-    if (line.type === 'gap') {
+
+  const q = diffFilter.trim().toLowerCase();
+  // With a filter, the fold is driven by a narrower predicate: keep only the
+  // changed rows that mention the term (and, as ever, their context).
+  const changed = (r: DiffRow) => r.type !== 'eq' && (q === '' || rowMatchesFilter(r, q));
+  if (q !== '' && !rows.some(changed)) {
+    appendDiffEmpty(t('diffFilterNone'));
+    indexDiffHunks();
+    return;
+  }
+  for (const line of foldRows(rows, changed)) {
+    if (isGap(line)) {
       const gap = document.createElement('div');
       gap.className = 'diff-gap';
       gap.textContent = t('diffGap', { n: String(line.count) });
@@ -2225,6 +2273,43 @@ function renderTwoWay(oldText: string, newText: string) {
       historyDiff.appendChild(diffRowEl(line));
     }
   }
+  indexDiffHunks();
+}
+
+/** Find the first row of each run of changed rows, and refresh the navigator. */
+function indexDiffHunks() {
+  diffHunks = [];
+  let inHunk = false;
+  for (const el of Array.from(historyDiff.children) as HTMLElement[]) {
+    const isChange =
+      el.classList.contains('diff-row') &&
+      (el.classList.contains('del') || el.classList.contains('ins') || el.classList.contains('mod'));
+    if (isChange && !inHunk) diffHunks.push(el);
+    inHunk = isChange;
+  }
+  diffHunkIdx = -1;
+  updateDiffNav();
+}
+
+function updateDiffNav() {
+  const n = diffHunks.length;
+  diffNav.hidden = n === 0;
+  diffNavCount.textContent = n === 0 ? '' : `${diffHunkIdx < 0 ? '–' : diffHunkIdx + 1}/${n}`;
+  diffPrevBtn.disabled = n === 0;
+  diffNextBtn.disabled = n === 0;
+}
+
+/** Step to the next (or previous) changed hunk, wrapping, and centre it. From
+ *  the initial "nowhere", forward lands on the first hunk and back on the last. */
+function gotoHunk(delta: number) {
+  const n = diffHunks.length;
+  if (n === 0) return;
+  if (diffHunkIdx >= 0) diffHunks[diffHunkIdx].classList.remove('is-cursor');
+  diffHunkIdx = diffHunkIdx < 0 ? (delta > 0 ? 0 : n - 1) : (diffHunkIdx + delta + n) % n;
+  const el = diffHunks[diffHunkIdx];
+  el.classList.add('is-cursor');
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  updateDiffNav();
 }
 
 async function renderDiff() {
@@ -2291,6 +2376,9 @@ function threeRowEl(row: ThreeRow): HTMLElement {
 function renderThreeWay() {
   const doc = active;
   if (!doc?.conflict) return;
+
+  // Filter and change-nav are two-way tools; a conflict is resolved, not browsed.
+  diffTools.hidden = true;
 
   const rows = threeWay(doc.savedSource, doc.conflict.content, doc.workingText);
   const stats = threeWayStats(rows);
@@ -2389,6 +2477,7 @@ async function openCompare() {
   diffTitle.textContent = `${basename(a)} → ${basename(b)}`;
   diffTitle.title = `${a}\n${b}`; // the names may well be identical; the paths aren't
   diffStatsEl.classList.remove('has-clash');
+  resetDiffFilter();
   renderTwoWay(textA, textB);
 }
 
@@ -2414,10 +2503,11 @@ function openHistory(mode: 'versions' | 'conflict' = 'versions') {
   }
   // A fresh open asks the question you almost always have: what changed since
   // the last save? Stale picks from a previous document don't leak in — nor do
-  // Git refs pulled in for whatever was open before.
+  // Git refs pulled in for whatever was open before, nor a leftover filter term.
   basePick = null;
   comparePick = CURRENT;
   addedRefs = [];
+  resetDiffFilter();
   refreshHistory();
 }
 function closeHistory() {
@@ -2428,6 +2518,22 @@ function closeHistory() {
 // Bare `openHistory` would take the click event as its `mode` argument.
 historyBtn.addEventListener('click', () => openHistory());
 historyClose.addEventListener('click', closeHistory);
+
+// In-diff filter: re-render the current two-way diff through the narrower fold.
+diffFilterInput.addEventListener('input', () => {
+  diffFilter = diffFilterInput.value;
+  if (lastTwoWay) renderTwoWay(lastTwoWay.oldText, lastTwoWay.newText);
+});
+diffPrevBtn.addEventListener('click', () => gotoHunk(-1));
+diffNextBtn.addEventListener('click', () => gotoHunk(1));
+// ⌥↓ / ⌥↑ step between changed hunks while the two-way diff is on screen. Guarded
+// so typing in the filter box (or any other field) never triggers a jump.
+document.addEventListener('keydown', (e) => {
+  if (!historyPanelOpen || historyOverlay.hidden || historyMode === 'conflict') return;
+  if (!e.altKey || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+  e.preventDefault();
+  gotoHunk(e.key === 'ArrowDown' ? 1 : -1);
+});
 
 // The conflict banner, and the same choices repeated at the foot of the
 // three-way view — the point where the user can actually see what they're

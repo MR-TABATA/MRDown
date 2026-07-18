@@ -884,6 +884,40 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   color: var(--mrd-muted);
 }
 .diff-stats { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--mrd-faint); }
+.diff-tools { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.diff-tools[hidden] { display: none; }
+.diff-filter {
+  width: 160px;
+  padding: 3px 8px;
+  font-size: 12px;
+  border: 1px solid var(--mrd-border);
+  border-radius: 6px;
+  background: var(--mrd-surface);
+  color: var(--mrd-text);
+}
+.diff-filter:focus { outline: none; border-color: var(--mrd-accent); }
+.diff-nav { display: inline-flex; align-items: center; gap: 2px; }
+.diff-nav[hidden] { display: none; }
+.diff-nav button {
+  border: none;
+  background: none;
+  padding: 0 4px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--mrd-muted);
+  cursor: pointer;
+}
+.diff-nav button:hover:not(:disabled) { color: var(--mrd-text); }
+.diff-nav button:disabled { opacity: 0.4; cursor: default; }
+.diff-nav-count {
+  min-width: 34px;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--mrd-faint);
+}
+/* The hunk the navigator last landed on — a marker in the left gutter, so it
+   reads without recolouring the diff tints. */
+.diff-row.is-cursor { box-shadow: inset 3px 0 0 var(--mrd-accent); }
 
 /* The diff itself: line number + line, twice. A grid keeps the two sides in
    lockstep, so a row's halves always sit on the same baseline however it wraps. */
