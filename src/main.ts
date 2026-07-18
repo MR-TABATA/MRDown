@@ -2059,9 +2059,10 @@ async function refreshHistory() {
   addedRefs = addedRefs.filter((p) => gitRefs.some((r) => r.id === revOf(p)));
   historyList.innerHTML = '';
 
-  // A file with no snapshots can still have a HEAD to compare against, which is
-  // exactly the case for a document you've opened from a repo but never saved.
-  if (versions.length === 0 && headContent === null) {
+  // A file with no snapshots can still have a HEAD — or, for one absent from HEAD
+  // but alive in history, a branch or commit — to compare against. Only when
+  // there is truly nothing on any of those fronts is there no comparison to make.
+  if (versions.length === 0 && headContent === null && gitRefs.length === 0) {
     const li = document.createElement('li');
     li.className = 'history-empty';
     li.textContent = t('historyEmpty');
@@ -2069,6 +2070,8 @@ async function refreshHistory() {
     historyDiff.innerHTML = '';
     diffTitle.textContent = '';
     diffStatsEl.textContent = '';
+    diffTools.hidden = true;
+    refPicker.hidden = true; // nothing in Git to add, and no stale list to keep
     historyRestore.disabled = true;
     basePick = null;
     return;
@@ -2084,11 +2087,15 @@ async function refreshHistory() {
   // changed since I last saved?". But a save *is* a snapshot, so right after one
   // those two are the same text and that default answers with an empty diff. In
   // that case step back one version, and the panel opens on "what did that save
-  // change?" instead — still a question, still an answer. With no snapshots at
-  // all, HEAD is the only thing to stand on.
+  // change?" instead — still a question, still an answer. With no snapshots,
+  // HEAD is the thing to stand on; with no HEAD either (a file absent from it),
+  // a pulled-in ref is — and failing that, nothing until the user picks one.
   if (basePick === null || !picks.includes(basePick)) {
     const clean = active && !isDirty(active);
-    basePick = (clean && versions[1]?.id) || versions[0]?.id || HEAD;
+    basePick =
+      (clean && versions[1]?.id) ||
+      versions[0]?.id ||
+      (headContent !== null ? HEAD : (addedRefs[0] ?? null));
   }
   if (!picks.includes(comparePick)) comparePick = CURRENT;
 
@@ -2149,6 +2156,17 @@ async function refreshHistory() {
   }
 
   populateRefPicker();
+  if (basePick === null) {
+    // Only the working buffer and some Git refs to pull in — nothing on the left
+    // yet. Prompt for a pick rather than diffing a thing against nothing.
+    historyDiff.innerHTML = '';
+    diffTitle.textContent = '';
+    diffStatsEl.textContent = '';
+    diffTools.hidden = true;
+    historyRestore.disabled = true;
+    appendDiffEmpty(t('diffAddRefHint'));
+    return;
+  }
   await renderDiff();
 }
 

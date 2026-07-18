@@ -698,16 +698,31 @@ struct GitRef {
 
 /// Everything worth diffing this file against, beyond the versions already in
 /// the local timeline: the repository's local branches, and the commits that
-/// last touched this file. Empty when the file isn't in a Git repository — the
-/// picker simply doesn't appear. Tags and unrelated commits are left out on
-/// purpose: the list has to stay short enough to scan.
+/// last touched this file. Empty when the file isn't in a Git repository, or
+/// isn't in its history at all (a brand-new, never-committed note) — nothing to
+/// compare against, so the picker simply doesn't appear. But a file that *is* in
+/// history yet absent from the current `HEAD` (deleted, or living on another
+/// branch) still gets its refs: that's exactly the pre-merge review case. Tags
+/// and unrelated commits are left out on purpose — the list stays scannable.
 #[tauri::command]
 fn git_refs(path: String) -> Vec<GitRef> {
     let Some((root, rel)) = repo_rel(&path) else {
         return Vec::new();
     };
-    let mut refs = Vec::new();
 
+    // Recent commits that touched this file — resolved first because they're the
+    // test of whether the file is in this repo's history at all. `git log <path>`
+    // walks history, so it finds them even when the file isn't in `HEAD`. NUL
+    // between sha and subject so a subject can hold anything (a tab, say).
+    let log = git(&root, &["log", "-n", "20", "--format=%H%x00%s", "--", &rel]).unwrap_or_default();
+    let commits: Vec<&str> = log.lines().filter(|l| !l.is_empty()).collect();
+    // No history means every diff against a ref would be "the whole file is new",
+    // which is noise, not a comparison. Offer nothing rather than every branch.
+    if commits.is_empty() {
+        return Vec::new();
+    }
+
+    let mut refs = Vec::new();
     // Local branches, alphabetical. This is the review case MRDown exists for:
     // diff a branch an agent pushed against the working tree before merging.
     if let Some(out) = git(&root, &["for-each-ref", "--format=%(refname:short)", "refs/heads"]) {
@@ -720,22 +735,14 @@ fn git_refs(path: String) -> Vec<GitRef> {
             });
         }
     }
-
-    // Recent commits that touched this file. NUL between sha and subject so a
-    // subject can hold anything (a tab, say) without breaking the split.
-    if let Some(out) = git(
-        &root,
-        &["log", "-n", "20", "--format=%H%x00%s", "--", &rel],
-    ) {
-        for line in out.lines().filter(|l| !l.is_empty()) {
-            let (sha, subject) = line.split_once('\0').unwrap_or((line, ""));
-            refs.push(GitRef {
-                id: sha.to_string(),
-                kind: "commit".into(),
-                label: sha.chars().take(7).collect(),
-                subject: Some(subject.to_string()),
-            });
-        }
+    for line in commits {
+        let (sha, subject) = line.split_once('\0').unwrap_or((line, ""));
+        refs.push(GitRef {
+            id: sha.to_string(),
+            kind: "commit".into(),
+            label: sha.chars().take(7).collect(),
+            subject: Some(subject.to_string()),
+        });
     }
 
     refs
@@ -983,6 +990,35 @@ mod tests {
         let file = dir.join("note.md");
         std::fs::write(&file, "loose\n").unwrap();
         assert!(git_refs(file.to_str().unwrap().to_string()).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn git_refs_is_empty_for_a_never_committed_file_in_a_repo() {
+        // A brand-new note inside a repo: no history, so no meaningful comparison.
+        let dir = temp_repo();
+        let fresh = dir.join("fresh.md");
+        std::fs::write(&fresh, "never committed\n").unwrap();
+        assert!(git_refs(fresh.to_str().unwrap().to_string()).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn git_refs_offers_refs_even_when_the_file_is_absent_from_head() {
+        // The pre-merge review case: the file has history but isn't in HEAD.
+        let dir = temp_repo();
+        let file = dir.join("note.md");
+        git_in(&dir, &["rm", "note.md"]);
+        git_in(&dir, &["commit", "-m", "remove the note"]);
+        // Bring it back on disk (as one would to read it) but not into HEAD.
+        std::fs::write(&file, "restored on disk\n").unwrap();
+
+        // git_head_content has nothing to give — the file isn't in HEAD…
+        assert_eq!(git_head_content(file.to_str().unwrap().to_string()), None);
+        // …but its history is real, so refs are still offered (the first commit).
+        let refs = git_refs(file.to_str().unwrap().to_string());
+        assert!(refs.iter().any(|r| r.kind == "commit" && r.subject.as_deref() == Some("first")));
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 

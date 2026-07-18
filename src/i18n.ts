@@ -45,6 +45,7 @@ const DICT = {
     refCommitGroup: 'このファイルを変更したコミット',
     diffFilterPlaceholder: '差分内を絞り込み',
     diffFilterNone: '一致する変更はありません。',
+    diffAddRefHint: '比較する Git の版（ブランチ／コミット）を下から追加してください。',
     diffPrevChange: '前の変更 (⌥↑)',
     diffNextChange: '次の変更 (⌥↓)',
     // compare two files
@@ -178,6 +179,7 @@ const DICT = {
     refCommitGroup: 'Commits that changed this file',
     diffFilterPlaceholder: 'Filter the diff',
     diffFilterNone: 'No changes match.',
+    diffAddRefHint: 'Add a Git version (branch or commit) below to compare against.',
     diffPrevChange: 'Previous change (⌥↑)',
     diffNextChange: 'Next change (⌥↓)',
     compareTitle: 'Compare two files',

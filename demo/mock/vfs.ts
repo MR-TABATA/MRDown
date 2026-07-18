@@ -246,6 +246,14 @@ export const demo = {
     files.set(path, { content, mtime: (e?.mtime ?? 0) + 60_000 });
   },
 
+  /** Test hook: present a file as absent from HEAD (no committed content) yet
+   *  alive in history (refs to compare against) — the pre-merge review case. */
+  historyOnly(path: string, list: GitRef[], contents: Array<[string, string]>) {
+    committed.delete(path);
+    refs.set(path, list);
+    for (const [rev, c] of contents) refContent.set(`${path}\0${rev}`, c);
+  },
+
   /** The rewrite the demo performs, kept next to the fixtures it belongs to. */
   rewriteReadme() {
     demo.rewrite(README, README_V2);
