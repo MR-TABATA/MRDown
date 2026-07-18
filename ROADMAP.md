@@ -43,8 +43,9 @@ renderer to the other two nearly for free.
 
 > Pillars 1 and 2 — together with the two unplanned essentials (4 and 5) below —
 > **shipped in v1.2.0**; v1.3.0 adds compare-any-two-files (6); v1.4.0 adds
-> compare-against-any-Git-ref (7). Only pillar 3 (AI explains the diff) is still
-> to come.
+> compare-against-any-Git-ref (7); v1.4.1 rounds the diff out with an in-diff
+> filter and change-to-change navigation. Only pillar 3 (AI explains the diff)
+> is still to come.
 
 1. [x] **Local History** ★ — on save, keep a quiet local timeline of versions;
    pick any two versions → diff → one-click restore. **No Git required**, so it
