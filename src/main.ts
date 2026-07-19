@@ -568,6 +568,7 @@ function showEmpty() {
   saveBtn.disabled = true;
   deleteBtn.disabled = true;
   historyBtn.disabled = true;
+  conflictBar.hidden = true; // no document, so no conflict to warn about
   findBar.hidden = true;
   filepath.textContent = '';
   appWindow.setTitle('MRDown').catch(() => {});
@@ -881,6 +882,9 @@ async function setActive(doc: Doc) {
   editor.value = doc.workingText;
   await renderSource(doc.workingText, doc.path ?? '');
   showDocUI();
+  // The conflict banner belongs to a specific document; re-sync it to this one so
+  // a warning raised on another file doesn't linger over an unchanged one.
+  updateConflictBanner();
   updateStatus();
   renderSidebar();
   renderTree();
