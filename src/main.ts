@@ -880,6 +880,10 @@ async function setActive(doc: Doc) {
   active = doc;
   lastActiveDirty = isDirty(doc);
   editor.value = doc.workingText;
+  // Assigning `.value` drops the caret at the end; left there, the first switch
+  // into edit mode would `focus()` and scroll the textarea to the bottom. Put it
+  // back at the top so editing starts where reading did.
+  editor.setSelectionRange(0, 0);
   await renderSource(doc.workingText, doc.path ?? '');
   showDocUI();
   // The conflict banner belongs to a specific document; re-sync it to this one so
@@ -1093,6 +1097,7 @@ async function refreshActiveFromDisk(preserveScroll: boolean, external = false) 
   active.savedSource = content;
   active.workingText = content;
   editor.value = content;
+  editor.setSelectionRange(0, 0); // keep the caret off the end (see setActive)
   active.mtime = await invoke<number>('file_mtime', { path: active.path }).catch(() => 0);
   lastActiveDirty = false;
   await renderSource(content, active.path);
