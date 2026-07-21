@@ -124,6 +124,42 @@ button:disabled { opacity: 0.3; cursor: default; }
 }
 #doc-stats:empty { display: none; }
 
+/* Search: one toolbar button that drops a menu of "in this doc" / "across docs". */
+.search-wrap { position: relative; flex-shrink: 0; display: flex; }
+.popup-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 210px;
+  padding: 4px;
+  background: var(--mrd-surface-2);
+  border: 1px solid var(--mrd-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+.popup-menu[hidden] { display: none; }
+.popup-item {
+  width: 100%;
+  justify-content: space-between;
+  gap: 16px;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--mrd-text);
+  font-size: 13px;
+  text-align: left;
+}
+.popup-item:hover:not(:disabled) { background: var(--mrd-surface-3); }
+.popup-item kbd {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--mrd-faint);
+  white-space: nowrap;
+}
+
 .body-row {
   flex: 1;
   display: flex;
@@ -144,11 +180,11 @@ body.sidebar-hidden #sidebar { display: none; }
 /* Not scoped to #sidebar: the outline wears this too, and it can live outside
    the sidebar (see #outline below). */
 .sidebar-title {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--mrd-faint);
-  padding: 4px 14px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--mrd-text);
+  padding: 6px 14px 8px;
 }
 #doc-list { list-style: none; }
 #doc-list li {
@@ -825,13 +861,16 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 }
 .overlay[hidden] { display: none; }
 .settings-panel {
+  display: flex;
+  flex-direction: column;
   background: var(--mrd-surface);
   border: 1px solid var(--mrd-border);
   border-radius: 10px;
-  width: 420px;
-  max-width: 90vw;
-  max-height: 80vh;
-  overflow-y: auto;
+  width: 600px;
+  max-width: 92vw;
+  height: 460px;
+  max-height: 82vh;
+  overflow: hidden;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
 }
 .settings-head {
@@ -840,10 +879,37 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   justify-content: space-between;
   padding: 13px 16px;
   border-bottom: 1px solid var(--mrd-border);
-  position: sticky;
-  top: 0;
   background: var(--mrd-surface);
+  flex-shrink: 0;
 }
+/* Two columns: a category rail on the left, the selected pane on the right. */
+.settings-body { display: flex; flex: 1; min-height: 0; }
+.settings-nav {
+  flex-shrink: 0;
+  width: 150px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--mrd-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-nav-item {
+  width: 100%;
+  justify-content: flex-start;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--mrd-muted);
+  font-size: 13px;
+  text-align: left;
+}
+.settings-nav-item:hover:not(.active) { background: var(--mrd-surface-2); color: var(--mrd-text); }
+.settings-nav-item.active { background: var(--mrd-surface-3); color: var(--mrd-text); font-weight: 600; }
+.settings-content { flex: 1; min-width: 0; overflow-y: auto; }
+.settings-pane { display: none; padding: 14px 18px 20px; }
+.settings-pane.active { display: block; }
 .settings-head h2 { font-size: 15px; color: var(--mrd-text); font-weight: 600; }
 #settings-close { background: transparent; border-color: transparent; color: var(--mrd-muted); padding: 4px 6px; }
 #settings-close:hover { background: var(--mrd-surface-3); color: var(--mrd-text); }
@@ -1211,6 +1277,9 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 }
 .link-btn:hover { text-decoration: underline; }
 #toolbar-options label,
+#outline-pos-option label,
+#preview-theme-option label,
+#font-option label,
 #lang-options label {
   display: flex;
   align-items: center;
@@ -1222,8 +1291,14 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   font-size: 13px;
 }
 #toolbar-options label:hover,
+#outline-pos-option label:hover,
+#preview-theme-option label:hover,
+#font-option label:hover,
 #lang-options label:hover { background: var(--mrd-surface-2); }
 #toolbar-options input,
+#outline-pos-option input,
+#preview-theme-option input,
+#font-option input,
 #lang-options input { accent-color: var(--mrd-accent); width: 15px; height: 15px; flex-shrink: 0; }
 .opt-icon { display: inline-flex; width: 18px; color: var(--mrd-muted); }
 .opt-icon svg { width: 16px; height: 16px; }

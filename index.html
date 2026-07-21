@@ -75,6 +75,24 @@
     </button>
     <span id="filepath"></span>
     <span id="doc-stats"></span>
+    <div class="search-wrap">
+      <button id="search-btn" data-i18n-title="btnSearch" aria-haspopup="menu" aria-expanded="false" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"/>
+          <line x1="21" y1="21" x2="16.5" y2="16.5"/>
+        </svg>
+      </button>
+      <div id="search-menu" class="popup-menu" role="menu" hidden>
+        <button id="search-in-doc" class="popup-item" role="menuitem">
+          <span data-i18n="searchInDoc">文書内を検索</span>
+          <kbd>⌘F</kbd>
+        </button>
+        <button id="search-cross" class="popup-item" role="menuitem">
+          <span data-i18n="searchCross">開いている文書を横断検索</span>
+          <kbd>⌘⇧F</kbd>
+        </button>
+      </div>
+    </div>
     <button id="settings-btn" data-i18n-title="btnSettings">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/>
@@ -172,38 +190,49 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
         </button>
       </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="langSection">言語</div>
-        <div id="lang-options"></div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="appearanceSection">外観</div>
-        <div class="opt-group-title" data-i18n="previewThemeLabel">プレビューテーマ</div>
-        <div id="preview-theme-option"></div>
-        <div class="opt-group-title" data-i18n="accentLabel">アクセントカラー</div>
-        <div id="accent-option" class="color-option"></div>
-        <div class="opt-group-title" data-i18n="bgLabel">背景色</div>
-        <div id="bg-option" class="color-option"></div>
-        <div class="opt-group-title" data-i18n="textLabel">文字色</div>
-        <div id="text-option" class="color-option"></div>
-        <div class="opt-group-title" data-i18n="fontLabel">本文フォント</div>
-        <div id="font-option"></div>
-        <div class="opt-group-title" data-i18n="fontSizeLabel">本文サイズ</div>
-        <div id="fontsize-option"></div>
-        <div class="opt-group-title" data-i18n="outlinePosLabel">アウトラインの位置</div>
-        <div id="outline-pos-option"></div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="widthSection">プレビューの幅</div>
-        <div id="width-option"></div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="toolbarSection">ツールバーに表示するボタン</div>
-        <div id="toolbar-options"></div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="licensesSection">ライセンス</div>
-        <button id="licenses-btn" type="button" class="link-btn" data-i18n="licensesOpen">サードパーティ・ライセンス</button>
+      <div class="settings-body">
+        <nav class="settings-nav" role="tablist" aria-label="設定">
+          <button class="settings-nav-item active" data-tab="appearance" role="tab" data-i18n="navAppearance">外観</button>
+          <button class="settings-nav-item" data-tab="width" role="tab" data-i18n="navWidth">プレビュー幅</button>
+          <button class="settings-nav-item" data-tab="toolbar" role="tab" data-i18n="navToolbar">ツールバー</button>
+          <button class="settings-nav-item" data-tab="lang" role="tab" data-i18n="navLang">言語</button>
+          <button class="settings-nav-item" data-tab="licenses" role="tab" data-i18n="navLicenses">ライセンス</button>
+        </nav>
+        <div class="settings-content">
+          <section class="settings-pane active" data-pane="appearance" role="tabpanel">
+            <div class="settings-section-title" data-i18n="appearanceSection">外観</div>
+            <div class="opt-group-title" data-i18n="previewThemeLabel">プレビューテーマ</div>
+            <div id="preview-theme-option"></div>
+            <div class="opt-group-title" data-i18n="accentLabel">アクセントカラー</div>
+            <div id="accent-option" class="color-option"></div>
+            <div class="opt-group-title" data-i18n="bgLabel">背景色</div>
+            <div id="bg-option" class="color-option"></div>
+            <div class="opt-group-title" data-i18n="textLabel">文字色</div>
+            <div id="text-option" class="color-option"></div>
+            <div class="opt-group-title" data-i18n="fontLabel">本文フォント</div>
+            <div id="font-option"></div>
+            <div class="opt-group-title" data-i18n="fontSizeLabel">本文サイズ</div>
+            <div id="fontsize-option"></div>
+            <div class="opt-group-title" data-i18n="outlinePosLabel">アウトラインの位置</div>
+            <div id="outline-pos-option"></div>
+          </section>
+          <section class="settings-pane" data-pane="width" role="tabpanel">
+            <div class="settings-section-title" data-i18n="widthSection">プレビューの幅</div>
+            <div id="width-option"></div>
+          </section>
+          <section class="settings-pane" data-pane="toolbar" role="tabpanel">
+            <div class="settings-section-title" data-i18n="toolbarSection">ツールバーに表示するボタン</div>
+            <div id="toolbar-options"></div>
+          </section>
+          <section class="settings-pane" data-pane="lang" role="tabpanel">
+            <div class="settings-section-title" data-i18n="langSection">言語</div>
+            <div id="lang-options"></div>
+          </section>
+          <section class="settings-pane" data-pane="licenses" role="tabpanel">
+            <div class="settings-section-title" data-i18n="licensesSection">ライセンス</div>
+            <button id="licenses-btn" type="button" class="link-btn" data-i18n="licensesOpen">サードパーティ・ライセンス</button>
+          </section>
+        </div>
       </div>
     </div>
   </div>

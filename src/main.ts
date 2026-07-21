@@ -74,6 +74,8 @@ const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement;
 const editor = document.getElementById('editor') as HTMLTextAreaElement;
 const editorHighlights = document.getElementById('editor-highlights')!;
 const formatBar = document.getElementById('format-bar')!;
+const searchBtn = document.getElementById('search-btn') as HTMLButtonElement;
+const searchMenu = document.getElementById('search-menu') as HTMLElement;
 const settingsBtn = document.getElementById('settings-btn')!;
 const settingsOverlay = document.getElementById('settings-overlay') as HTMLElement;
 const settingsClose = document.getElementById('settings-close')!;
@@ -551,6 +553,7 @@ function showDocUI() {
   output.style.display = 'block';
   reloadBtn.disabled = false;
   editBtn.disabled = false;
+  searchBtn.disabled = false;
   setMenuDocState(true);
 }
 
@@ -564,6 +567,8 @@ function showEmpty() {
   emptyState.style.display = '';
   reloadBtn.disabled = true;
   editBtn.disabled = true;
+  searchBtn.disabled = true;
+  closeSearchMenu();
   setMenuDocState(false);
   saveBtn.disabled = true;
   deleteBtn.disabled = true;
@@ -1926,6 +1931,7 @@ function openSettings() {
   buildAppearanceOptions();
   buildPreviewThemeOption();
   buildOutlinePosOption();
+  selectSettingsTab('appearance');
   settingsOverlay.hidden = false;
 }
 function closeSettings() {
@@ -1939,6 +1945,20 @@ licensesBtn.addEventListener('click', async () => {
   if (!path) return;
   closeSettings();
   await openFile(path, { recent: false });
+});
+
+// Left-rail navigation: clicking a category shows its pane, hides the rest.
+const settingsNav = document.querySelector('.settings-nav') as HTMLElement;
+const settingsPanes = Array.from(document.querySelectorAll<HTMLElement>('.settings-pane'));
+function selectSettingsTab(tab: string) {
+  settingsNav.querySelectorAll<HTMLElement>('.settings-nav-item').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  settingsPanes.forEach((p) => p.classList.toggle('active', p.dataset.pane === tab));
+}
+settingsNav.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>('.settings-nav-item');
+  if (btn?.dataset.tab) selectSettingsTab(btn.dataset.tab);
 });
 
 settingsBtn.addEventListener('click', openSettings);
@@ -2996,6 +3016,14 @@ replaceInput.addEventListener('keydown', (e) => {
 findPrevBtn.addEventListener('click', () => stepFind(-1));
 findNextBtn.addEventListener('click', () => stepFind(1));
 findCloseBtn.addEventListener('click', closeFind);
+// Clicking anywhere off the find bar (the document, sidebar, …) dismisses it —
+// but not the search button/menu that opens it, or the bar itself.
+document.addEventListener('mousedown', (e) => {
+  if (findBar.hidden) return;
+  const el = e.target as HTMLElement;
+  if (el.closest('#find-bar') || el.closest('.search-wrap')) return;
+  closeFind();
+});
 replaceOneBtn.addEventListener('click', doReplaceOne);
 replaceAllBtn.addEventListener('click', doReplaceAll);
 optCaseBtn.addEventListener('click', () => toggleOpt('caseSensitive'));
@@ -3200,8 +3228,42 @@ function closeDocSearch() {
   docSearchOverlay.hidden = true;
 }
 
+// The toolbar magnifier drops a menu so both scopes have a home: find in the
+// current document (⌘F) and search across every open document (⌘⇧F).
+function openSearchMenu() {
+  searchMenu.hidden = false;
+  searchBtn.setAttribute('aria-expanded', 'true');
+}
+function closeSearchMenu() {
+  if (searchMenu.hidden) return;
+  searchMenu.hidden = true;
+  searchBtn.setAttribute('aria-expanded', 'false');
+}
+searchBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (searchMenu.hidden) openSearchMenu();
+  else closeSearchMenu();
+});
+document.getElementById('search-in-doc')!.addEventListener('click', () => {
+  closeSearchMenu();
+  openFind();
+});
+document.getElementById('search-cross')!.addEventListener('click', () => {
+  closeSearchMenu();
+  openDocSearch();
+});
+// Any click outside the menu (or Escape) dismisses it.
+document.addEventListener('click', (e) => {
+  if (searchMenu.hidden) return;
+  if (!(e.target as HTMLElement).closest('.search-wrap')) closeSearchMenu();
+});
+
 docSearchInput.addEventListener('input', runDocSearch);
 document.getElementById('docsearch-close')!.addEventListener('click', closeDocSearch);
+// Clicking the dimmed backdrop (outside the panel) closes it, like Settings/History.
+docSearchOverlay.addEventListener('click', (e) => {
+  if (e.target === docSearchOverlay) closeDocSearch();
+});
 
 applyI18n();
 applyPreviewWidth(storedWidth());
@@ -3226,6 +3288,11 @@ sidebarBtn.addEventListener('click', () => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !historyOverlay.hidden) {
     closeHistory();
+    return;
+  }
+  if (e.key === 'Escape' && !searchMenu.hidden) {
+    closeSearchMenu();
+    searchBtn.focus();
     return;
   }
   if (e.key === 'Escape' && !settingsOverlay.hidden) {
