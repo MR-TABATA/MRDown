@@ -93,7 +93,8 @@ const output = document.getElementById('output')!;
 const docStatsEl = document.getElementById('doc-stats')!;
 const emptyState = document.getElementById('empty-state')!;
 const recentBox = document.getElementById('recent')!;
-const filepath = document.getElementById('filepath')!;
+const statusbar = document.getElementById('statusbar')!;
+const statusPath = document.getElementById('status-path')!;
 const divider = document.getElementById('divider')!;
 const historyBtn = document.getElementById('history-btn') as HTMLButtonElement;
 const historyOverlay = document.getElementById('history-overlay') as HTMLElement;
@@ -575,7 +576,8 @@ function showEmpty() {
   historyBtn.disabled = true;
   conflictBar.hidden = true; // no document, so no conflict to warn about
   findBar.hidden = true;
-  filepath.textContent = '';
+  statusPath.textContent = '';
+  statusbar.hidden = true;
   appWindow.setTitle('MRDown').catch(() => {});
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
 }
@@ -596,18 +598,19 @@ function updateStatus() {
   // Delete and History act on the on-disk file, so they're only available once saved.
   deleteBtn.disabled = !(active && active.path);
   historyBtn.disabled = !(active && active.path);
-  filepath.textContent = '';
+  statusPath.textContent = '';
   docStatsEl.textContent = active ? formatDocStats(active.workingText) : '';
-  // Window title shows the file name; the toolbar shows the full (~) path.
+  statusbar.hidden = !active;
+  // Window title shows the file name; the status bar shows the full (~) path.
   appWindow.setTitle(active ? active.name : 'MRDown').catch(() => {});
   if (!active) return;
   if (dirty) {
     const dot = document.createElement('span');
     dot.className = 'dirty-dot';
     dot.textContent = '●';
-    filepath.appendChild(dot);
+    statusPath.appendChild(dot);
   }
-  filepath.append(active.path ? tildify(active.path, home) : active.name);
+  statusPath.append(active.path ? tildify(active.path, home) : active.name);
 }
 
 // Reading mode: hide every piece of chrome (toolbar, sidebar, outline) and
@@ -914,7 +917,8 @@ async function openFile(path: string, opts: { recent?: boolean } = {}) {
   try {
     content = await invoke<string>('read_file', { path });
   } catch (e) {
-    filepath.textContent = t('openFailed', { e: String(e) });
+    statusbar.hidden = false;
+    statusPath.textContent = t('openFailed', { e: String(e) });
     return;
   }
   const mtime = await invoke<number>('file_mtime', { path }).catch(() => 0);
@@ -974,7 +978,8 @@ async function deleteActive() {
   try {
     await invoke('delete_file', { path: doc.path });
   } catch (e) {
-    filepath.textContent = t('deleteFailed', { e: String(e) });
+    statusbar.hidden = false;
+    statusPath.textContent = t('deleteFailed', { e: String(e) });
     return;
   }
   await removeDoc(doc);
@@ -1010,7 +1015,8 @@ async function persistTo(path: string) {
   try {
     await invoke('save_file', { path, content: saved });
   } catch (e) {
-    filepath.textContent = t('saveFailed', { e: String(e) });
+    statusbar.hidden = false;
+    statusPath.textContent = t('saveFailed', { e: String(e) });
     return;
   }
 

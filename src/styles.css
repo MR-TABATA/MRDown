@@ -106,12 +106,27 @@ button:disabled { opacity: 0.3; cursor: default; }
 #open-btn { background: var(--mrd-accent); color: var(--mrd-accent-text); border-color: var(--mrd-accent); }
 #open-btn:hover { background: var(--mrd-accent-hover); }
 
-#filepath {
-  font-size: 12px;
+/* Status bar (bottom): the active file's full (~) path on the left, reading
+   stats on the right. Metadata lives here so the toolbar stays action-only. */
+#statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 24px;
+  padding: 0 14px;
+  border-top: 1px solid var(--mrd-border);
+  background: var(--mrd-bg);
+  flex-shrink: 0;
+}
+#statusbar[hidden] { display: none; }
+#status-path {
+  font-size: 11px;
   color: var(--mrd-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
   flex: 1;
 }
 
@@ -125,7 +140,7 @@ button:disabled { opacity: 0.3; cursor: default; }
 #doc-stats:empty { display: none; }
 
 /* Search: one toolbar button that drops a menu of "in this doc" / "across docs". */
-.search-wrap { position: relative; flex-shrink: 0; display: flex; }
+.search-wrap { position: relative; flex-shrink: 0; display: flex; margin-left: auto; }
 .popup-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -621,7 +636,7 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 #delete-btn:hover:not(:disabled) { background: #5a2a2a; color: #ff8a8a; border-color: #7a3a3a; }
 
 #save-btn.dirty { background: var(--mrd-accent); color: var(--mrd-accent-text); border-color: var(--mrd-accent); }
-#filepath .dirty-dot { color: var(--mrd-accent); margin-right: 5px; }
+.dirty-dot { color: var(--mrd-accent); margin-right: 5px; }
 
 /* Recent files (shown inside the empty state) */
 #recent { width: 100%; max-width: 420px; margin-top: 8px; }
@@ -1396,6 +1411,7 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 body.reading .toolbar,
 body.reading #sidebar,
 body.reading #outline,
+body.reading #statusbar,
 body.reading #find-bar,
 body.reading #format-bar,
 body.reading #divider,
