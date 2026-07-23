@@ -179,6 +179,8 @@ interface Doc {
 }
 
 let docs: Doc[] = [];
+// The document currently being dragged to reorder the open-docs sidebar.
+let dragDoc: Doc | null = null;
 let active: Doc | null = null;
 let isEditing = false;
 let lastActiveDirty = false;
@@ -680,8 +682,68 @@ function renderSidebar() {
     }
     li.append(close);
     li.addEventListener('click', () => setActive(doc));
+
+    // Drag to reorder within the open-docs list. The order IS the source of
+    // truth (docs[]), and it's already part of the saved session, so a drop
+    // just reorders the array and re-renders.
+    li.draggable = true;
+    li.addEventListener('dragstart', (e) => {
+      dragDoc = doc;
+      li.classList.add('dragging');
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    });
+    li.addEventListener('dragend', () => {
+      dragDoc = null;
+      docList.querySelectorAll('li').forEach((el) =>
+        el.classList.remove('dragging', 'drop-before', 'drop-after')
+      );
+    });
+    li.addEventListener('dragover', (e) => {
+      if (!dragDoc || dragDoc === doc) return;
+      e.preventDefault();
+      const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
+      li.classList.toggle('drop-after', after);
+      li.classList.toggle('drop-before', !after);
+    });
+    li.addEventListener('dragleave', () => {
+      li.classList.remove('drop-before', 'drop-after');
+    });
+    li.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!dragDoc || dragDoc === doc) return;
+      const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
+      moveDocRelativeTo(dragDoc, doc, after);
+    });
+
     docList.appendChild(li);
   }
+}
+
+// Reorder: drop `src` just before or after `target` in the open-docs list.
+function moveDocRelativeTo(src: Doc, target: Doc, after: boolean) {
+  if (src === target) return;
+  const from = docs.indexOf(src);
+  if (from < 0) return;
+  docs.splice(from, 1);
+  let to = docs.indexOf(target);
+  if (to < 0) return;
+  if (after) to += 1;
+  docs.splice(to, 0, src);
+  renderSidebar();
+  scheduleSessionSave();
+}
+
+// Move the active document one slot up (-1) or down (+1). Bound to ⌘↑/⌘↓
+// outside the editor, where those keys aren't navigating text.
+function moveActiveDoc(delta: number) {
+  if (!active) return;
+  const i = docs.indexOf(active);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= docs.length) return;
+  docs.splice(i, 1);
+  docs.splice(j, 0, active);
+  renderSidebar();
+  scheduleSessionSave();
 }
 
 // --- Folder tree (open a folder, browse its Markdown as a set) ---
@@ -3342,6 +3404,16 @@ document.addEventListener('keydown', (e) => {
     // otherwise be the native "delete to start of line".
     e.preventDefault();
     deleteActive();
+  } else if (
+    (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+    active &&
+    document.activeElement !== editor &&
+    !(document.activeElement instanceof HTMLInputElement)
+  ) {
+    // ⌘↑/⌘↓ moves the active document up/down the sidebar — but only outside
+    // a text field, where those keys are navigating text instead.
+    e.preventDefault();
+    moveActiveDoc(e.key === 'ArrowDown' ? 1 : -1);
   }
 });
 

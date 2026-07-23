@@ -239,6 +239,11 @@ body.sidebar-hidden #sidebar { display: none; }
 #doc-list .doc-close svg { width: 8px; height: 8px; display: block; }
 #doc-list li:hover .doc-close { border-color: var(--mrd-muted); color: var(--mrd-muted); }
 #doc-list .doc-close:hover { background: var(--mrd-surface-3); border-color: var(--mrd-surface-3); color: var(--mrd-text); }
+/* Drag-to-reorder: the dragged row fades; a drop target shows an accent line on
+   the edge the row would land against. */
+#doc-list li.dragging { opacity: 0.4; }
+#doc-list li.drop-before { box-shadow: inset 0 2px 0 var(--mrd-accent); }
+#doc-list li.drop-after { box-shadow: inset 0 -2px 0 var(--mrd-accent); }
 
 /* Folder tree */
 #sidebar .sidebar-title.folder-head {
