@@ -211,7 +211,13 @@ body.sidebar-hidden #sidebar { display: none; }
   color: var(--mrd-text);
   font-size: 13px;
   border-left: 2px solid transparent;
+  user-select: none;
+  -webkit-user-select: none; /* WKWebView honours the prefixed form */
+  -webkit-user-drag: none;
 }
+/* Belt-and-suspenders with the dragstart guard: keep WKWebView from starting a
+   native drag on a row or its contents while we reorder with pointer events. */
+#doc-list li * { -webkit-user-drag: none; }
 #doc-list li:hover { background: var(--mrd-surface); }
 #doc-list li.active {
   background: var(--mrd-surface-2);

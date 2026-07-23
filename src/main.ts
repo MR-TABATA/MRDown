@@ -179,8 +179,15 @@ interface Doc {
 }
 
 let docs: Doc[] = [];
-// The document currently being dragged to reorder the open-docs sidebar.
-let dragDoc: Doc | null = null;
+// Pointer-drag state for reordering the open-docs sidebar. HTML5 drag-and-drop
+// can't be used here: Tauri owns native drag/drop on the window (to open files
+// dropped onto it), which suppresses in-page DnD in the macOS WKWebView. Pointer
+// events stay entirely in the DOM, so reordering works regardless.
+let dragState: { doc: Doc; startY: number; li: HTMLElement; moved: boolean } | null = null;
+const rowDoc = new WeakMap<HTMLElement, Doc>();
+// Timestamp of the last row-reorder, so the native drag-drop handler can ignore
+// the phantom file-drop WKWebView fires right after an in-app row drag.
+let lastReorderAt = 0;
 let active: Doc | null = null;
 let isEditing = false;
 let lastActiveDirty = false;
@@ -681,43 +688,85 @@ function renderSidebar() {
       li.append(dot);
     }
     li.append(close);
-    li.addEventListener('click', () => setActive(doc));
-
-    // Drag to reorder within the open-docs list. The order IS the source of
-    // truth (docs[]), and it's already part of the saved session, so a drop
-    // just reorders the array and re-renders.
-    li.draggable = true;
-    li.addEventListener('dragstart', (e) => {
-      dragDoc = doc;
-      li.classList.add('dragging');
-      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-    });
-    li.addEventListener('dragend', () => {
-      dragDoc = null;
-      docList.querySelectorAll('li').forEach((el) =>
-        el.classList.remove('dragging', 'drop-before', 'drop-after')
-      );
-    });
-    li.addEventListener('dragover', (e) => {
-      if (!dragDoc || dragDoc === doc) return;
-      e.preventDefault();
-      const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
-      li.classList.toggle('drop-after', after);
-      li.classList.toggle('drop-before', !after);
-    });
-    li.addEventListener('dragleave', () => {
-      li.classList.remove('drop-before', 'drop-after');
-    });
-    li.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (!dragDoc || dragDoc === doc) return;
-      const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
-      moveDocRelativeTo(dragDoc, doc, after);
+    rowDoc.set(li, doc);
+    // Press to start a potential drag; activation (setActive) and the actual
+    // reorder are decided on pointerup, once we know whether it was a drag.
+    li.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if ((e.target as HTMLElement).closest('.doc-close')) return; // let close work
+      e.preventDefault(); // don't begin a text selection as the pointer drags
+      dragState = { doc, startY: e.clientY, li, moved: false };
     });
 
     docList.appendChild(li);
   }
 }
+
+function clearDropMarks() {
+  docList.querySelectorAll('li').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+}
+// The sidebar row currently under the pointer, if any.
+function rowUnder(x: number, y: number): HTMLElement | null {
+  const el = document.elementFromPoint(x, y) as HTMLElement | null;
+  return el ? el.closest<HTMLElement>('#doc-list li') : null;
+}
+
+// Once a press has moved past a small threshold it becomes a drag: highlight
+// the row that would receive the drop (accent line above/below).
+document.addEventListener('pointermove', (e) => {
+  if (!dragState) return;
+  if (!dragState.moved) {
+    if (Math.abs(e.clientY - dragState.startY) < 4) return;
+    dragState.moved = true;
+    dragState.li.classList.add('dragging');
+  }
+  clearDropMarks();
+  const over = rowUnder(e.clientX, e.clientY);
+  if (over && over !== dragState.li) {
+    const r = over.getBoundingClientRect();
+    const after = e.clientY > r.top + r.height / 2;
+    over.classList.toggle('drop-after', after);
+    over.classList.toggle('drop-before', !after);
+  }
+});
+
+document.addEventListener('pointerup', (e) => {
+  const st = dragState;
+  dragState = null;
+  if (!st) return;
+  st.li.classList.remove('dragging');
+  if (!st.moved) {
+    setActive(st.doc); // a plain click: just activate
+    return;
+  }
+  lastReorderAt = Date.now(); // arm the native-drop guard around this reorder
+  window.getSelection()?.removeAllRanges(); // clear any stray text selection
+  const over = rowUnder(e.clientX, e.clientY);
+  clearDropMarks();
+  if (over && over !== st.li) {
+    const target = rowDoc.get(over);
+    if (target) {
+      const r = over.getBoundingClientRect();
+      const after = e.clientY > r.top + r.height / 2;
+      moveDocRelativeTo(st.doc, target, after);
+    }
+  }
+  setActive(st.doc); // the doc you dragged becomes the active one (blue bar)
+});
+
+// WKWebView would otherwise start a native OS drag from a row, and Tauri then
+// treats the release as a window file-drop — re-opening the dragged file (it
+// appears "specified twice") and blocking the pointer reorder for untitled docs
+// that have no path to drag. Cancel any native drag that starts inside the list
+// (capture phase, so it's stopped before the row can begin dragging); Finder →
+// window file drops are unaffected (they don't begin with a page dragstart).
+document.addEventListener(
+  'dragstart',
+  (e) => {
+    if ((e.target as HTMLElement)?.closest?.('#doc-list')) e.preventDefault();
+  },
+  true
+);
 
 // Reorder: drop `src` just before or after `target` in the open-docs list.
 function moveDocRelativeTo(src: Doc, target: Doc, after: boolean) {
@@ -3474,6 +3523,10 @@ getCurrentWebview().onDragDropEvent((event) => {
     contentArea.classList.add('drag-over');
   } else if (p.type === 'drop') {
     contentArea.classList.remove('drag-over');
+    // Ignore the phantom drop WKWebView emits when a sidebar row is dragged to
+    // reorder — otherwise the dragged file gets re-opened ("specified twice").
+    // A real Finder → window drop never coincides with an in-app row drag.
+    if (dragState?.moved || Date.now() - lastReorderAt < 400) return;
     for (const file of p.paths.filter(isSupported)) openFile(file);
   } else {
     contentArea.classList.remove('drag-over');
