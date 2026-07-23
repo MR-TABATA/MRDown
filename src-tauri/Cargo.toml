@@ -1,6 +1,6 @@
 [package]
 name = "mrdown"
-version = "1.6.4"
+version = "1.6.5"
 description = "A minimal Markdown viewer"
 authors = ["hitoshi"]
 edition = "2021"
