@@ -183,8 +183,18 @@ let docs: Doc[] = [];
 // can't be used here: Tauri owns native drag/drop on the window (to open files
 // dropped onto it), which suppresses in-page DnD in the macOS WKWebView. Pointer
 // events stay entirely in the DOM, so reordering works regardless.
-let dragState: { doc: Doc; startY: number; li: HTMLElement; moved: boolean } | null = null;
+// `collapse` marks a press that landed inside a multi-selection: the selection is
+// kept (so the whole block can be dragged) and collapses on release if it turns
+// out to have been a plain click.
+let dragState: { doc: Doc; startY: number; moved: boolean; collapse: boolean } | null = null;
 const rowDoc = new WeakMap<HTMLElement, Doc>();
+// The row showing each document, so a gesture can reach rows other than the one
+// under the pointer (the rest of a multi-selection) and survive a re-render.
+const docRow = new Map<Doc, HTMLElement>();
+// Multi-selection in the sidebar, built with ⌘-click / ⇧-click. Empty means
+// "just the active document" — any plain click or arrow-key move clears it.
+const selected = new Set<Doc>();
+let selAnchor: Doc | null = null;
 // Timestamp of the last row-reorder, so the native drag-drop handler can ignore
 // the phantom file-drop WKWebView fires right after an in-app row drag.
 let lastReorderAt = 0;
@@ -660,10 +670,19 @@ function setEditing(on: boolean) {
 
 function renderSidebar() {
   docList.innerHTML = '';
+  docRow.clear();
+  // A closed document can't stay selected; and a selection that has shrunk to the
+  // active row alone is just the plain state, so let it go rather than leave a
+  // one-row selection lying around.
+  for (const doc of [...selected]) if (!docs.includes(doc)) selected.delete(doc);
+  if (selected.size === 1 && active && selected.has(active)) selected.clear();
   for (const doc of docs) {
     const li = document.createElement('li');
     if (doc === active) li.classList.add('active');
+    if (selected.has(doc)) li.classList.add('selected');
     if (isDirty(doc)) li.classList.add('dirty');
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', String(selected.size ? selected.has(doc) : doc === active));
     li.title = doc.path ?? doc.name;
 
     const name = document.createElement('span');
@@ -689,17 +708,71 @@ function renderSidebar() {
     }
     li.append(close);
     rowDoc.set(li, doc);
+    docRow.set(doc, li);
     // Press to start a potential drag; activation (setActive) and the actual
-    // reorder are decided on pointerup, once we know whether it was a drag.
+    // reorder are decided on pointerup, once we know whether it was a drag. The
+    // selection, though, has to settle on press — it decides what gets dragged.
     li.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       if ((e.target as HTMLElement).closest('.doc-close')) return; // let close work
       e.preventDefault(); // don't begin a text selection as the pointer drags
-      dragState = { doc, startY: e.clientY, li, moved: false };
+      let collapse = false;
+      if (e.metaKey || e.ctrlKey) {
+        // ⌘-click adds or removes a single row, leaving the others alone.
+        seedSelection();
+        if (!selected.delete(doc)) selected.add(doc);
+        selAnchor = doc;
+        renderSidebar();
+      } else if (e.shiftKey && selAnchor && selAnchor !== doc) {
+        // ⇧-click replaces the selection with the run between the anchor row and
+        // this one — the anchor stays put, so the range can be re-stretched.
+        const a = docs.indexOf(selAnchor);
+        const b = docs.indexOf(doc);
+        if (a >= 0 && b >= 0) {
+          selected.clear();
+          for (let i = Math.min(a, b); i <= Math.max(a, b); i++) selected.add(docs[i]);
+          renderSidebar();
+        }
+      } else if (selected.has(doc) && selected.size > 1) {
+        collapse = true; // keep the block draggable; collapse on release if it was a click
+      } else if (selected.size) {
+        selected.clear();
+        selAnchor = doc;
+        renderSidebar();
+      } else {
+        selAnchor = doc;
+      }
+      dragState = { doc, startY: e.clientY, moved: false, collapse };
     });
 
     docList.appendChild(li);
   }
+}
+
+// The documents a reorder applies to, in sidebar order. An empty multi-selection
+// means the gesture is about the active document alone.
+function selectionDocs(): Doc[] {
+  if (selected.size) return docs.filter((d) => selected.has(d));
+  return active ? [active] : [];
+}
+
+// Starting a multi-selection from nothing: the row you were reading is already
+// part of it, so ⌘-clicking a second row selects two, not one.
+function seedSelection() {
+  if (!selected.size && active) selected.add(active);
+}
+
+// What a press on `doc` drags: the whole multi-selection when the press landed
+// inside it, otherwise just that row.
+function dragDocs(doc: Doc): Doc[] {
+  if (selected.has(doc) && selected.size > 1) return docs.filter((d) => selected.has(d));
+  return [doc];
+}
+
+// Give the list keyboard focus so ↑/↓ walk the open documents — but never take it
+// from the editor while editing, where those keys are moving the caret.
+function focusDocList() {
+  if (!isEditing) docList.focus();
 }
 
 function clearDropMarks() {
@@ -715,14 +788,17 @@ function rowUnder(x: number, y: number): HTMLElement | null {
 // the row that would receive the drop (accent line above/below).
 document.addEventListener('pointermove', (e) => {
   if (!dragState) return;
+  const moving = dragDocs(dragState.doc);
   if (!dragState.moved) {
     if (Math.abs(e.clientY - dragState.startY) < 4) return;
     dragState.moved = true;
-    dragState.li.classList.add('dragging');
+    for (const doc of moving) docRow.get(doc)?.classList.add('dragging');
   }
   clearDropMarks();
   const over = rowUnder(e.clientX, e.clientY);
-  if (over && over !== dragState.li) {
+  const overDoc = over ? rowDoc.get(over) : null;
+  // Rows travelling with the pointer can't also be the drop target.
+  if (over && overDoc && !moving.includes(overDoc)) {
     const r = over.getBoundingClientRect();
     const after = e.clientY > r.top + r.height / 2;
     over.classList.toggle('drop-after', after);
@@ -734,24 +810,35 @@ document.addEventListener('pointerup', (e) => {
   const st = dragState;
   dragState = null;
   if (!st) return;
-  st.li.classList.remove('dragging');
+  const moving = dragDocs(st.doc);
+  for (const doc of moving) docRow.get(doc)?.classList.remove('dragging');
   if (!st.moved) {
+    // ⌘/⇧-click only changed the selection (on press); what's on screen stays.
+    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+      focusDocList();
+      return;
+    }
+    if (st.collapse) {
+      selected.clear(); // a plain click inside a multi-selection collapses it
+      renderSidebar();
+    }
+    selAnchor = st.doc;
     setActive(st.doc); // a plain click: just activate
+    focusDocList();
     return;
   }
   lastReorderAt = Date.now(); // arm the native-drop guard around this reorder
   window.getSelection()?.removeAllRanges(); // clear any stray text selection
   const over = rowUnder(e.clientX, e.clientY);
   clearDropMarks();
-  if (over && over !== st.li) {
-    const target = rowDoc.get(over);
-    if (target) {
-      const r = over.getBoundingClientRect();
-      const after = e.clientY > r.top + r.height / 2;
-      moveDocRelativeTo(st.doc, target, after);
-    }
+  const target = over ? rowDoc.get(over) : null;
+  if (target && !moving.includes(target)) {
+    const r = over!.getBoundingClientRect();
+    const after = e.clientY > r.top + r.height / 2;
+    moveDocsRelativeTo(moving, target, after);
   }
-  setActive(st.doc); // the doc you dragged becomes the active one (blue bar)
+  setActive(st.doc); // the row you dragged becomes the active one (blue bar)
+  focusDocList();
 });
 
 // WKWebView would otherwise start a native OS drag from a row, and Tauri then
@@ -768,31 +855,57 @@ document.addEventListener(
   true
 );
 
-// Reorder: drop `src` just before or after `target` in the open-docs list.
-function moveDocRelativeTo(src: Doc, target: Doc, after: boolean) {
-  if (src === target) return;
-  const from = docs.indexOf(src);
-  if (from < 0) return;
-  docs.splice(from, 1);
-  let to = docs.indexOf(target);
+// Reorder: drop `src` — one row, or a whole multi-selection in sidebar order —
+// just before or after `target` in the open-docs list.
+function moveDocsRelativeTo(src: Doc[], target: Doc, after: boolean) {
+  if (!src.length || src.includes(target)) return;
+  const rest = docs.filter((d) => !src.includes(d));
+  let to = rest.indexOf(target);
   if (to < 0) return;
   if (after) to += 1;
-  docs.splice(to, 0, src);
+  rest.splice(to, 0, ...src);
+  docs.splice(0, docs.length, ...rest);
   renderSidebar();
   scheduleSessionSave();
 }
 
-// Move the active document one slot up (-1) or down (+1). Bound to ⌘↑/⌘↓
-// outside the editor, where those keys aren't navigating text.
-function moveActiveDoc(delta: number) {
-  if (!active) return;
-  const i = docs.indexOf(active);
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= docs.length) return;
-  docs.splice(i, 1);
-  docs.splice(j, 0, active);
+// Move the selection (or the active document, when nothing is multi-selected)
+// one slot up (-1) or down (+1). Bound to ⌘↑/⌘↓ outside the editor, where those
+// keys aren't navigating text. Rows walk in the direction of travel, so a row
+// stopped by the end of the list — or by a selected row that is itself stopped —
+// stays put and the block keeps its shape.
+function moveSelection(delta: number) {
+  const sel = selectionDocs();
+  if (!sel.length) return;
+  const set = new Set(sel);
+  const idx = docs.map((d, i) => (set.has(d) ? i : -1)).filter((i) => i >= 0);
+  for (const i of delta < 0 ? idx : [...idx].reverse()) {
+    const j = i + delta;
+    if (j < 0 || j >= docs.length || set.has(docs[j])) continue;
+    [docs[i], docs[j]] = [docs[j], docs[i]];
+  }
   renderSidebar();
+  revealRow(sel[delta < 0 ? 0 : sel.length - 1]);
   scheduleSessionSave();
+}
+
+// Keep a row visible when the keyboard moves it (or moves onto it) past the edge
+// of a scrolled list.
+function revealRow(doc: Doc | null) {
+  if (doc) docRow.get(doc)?.scrollIntoView({ block: 'nearest' });
+}
+
+// ↑/↓ with the sidebar focused: read the next document up or down the list.
+async function stepActive(delta: number) {
+  const i = active ? docs.indexOf(active) : -1;
+  const j = i < 0 ? (delta > 0 ? 0 : docs.length - 1) : i + delta;
+  if (j < 0 || j >= docs.length) return;
+  const doc = docs[j];
+  selected.clear(); // walking the list is a single-row selection
+  selAnchor = doc;
+  await setActive(doc);
+  revealRow(doc);
+  docList.focus(); // setActive hands focus to the editor while editing
 }
 
 // --- Folder tree (open a folder, browse its Markdown as a set) ---
@@ -3429,6 +3542,20 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   const mod = e.metaKey || e.ctrlKey;
+  // Bare ↑/↓ with the open-docs list focused switches document, the way any list
+  // moves its selection. ⌘↑/⌘↓ (below) reorders instead.
+  if (
+    (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+    !mod &&
+    !e.altKey &&
+    !e.shiftKey &&
+    docs.length > 1 &&
+    (document.activeElement === docList || docList.contains(document.activeElement))
+  ) {
+    e.preventDefault();
+    stepActive(e.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
   if (!mod) return;
   // ⌘⇧F searches every open document; ⌘F searches the one you're reading. Shift
   // makes the key 'F', so the plain-'f' branch below never swallows it.
@@ -3459,10 +3586,10 @@ document.addEventListener('keydown', (e) => {
     document.activeElement !== editor &&
     !(document.activeElement instanceof HTMLInputElement)
   ) {
-    // ⌘↑/⌘↓ moves the active document up/down the sidebar — but only outside
+    // ⌘↑/⌘↓ moves the selected documents up/down the sidebar — but only outside
     // a text field, where those keys are navigating text instead.
     e.preventDefault();
-    moveActiveDoc(e.key === 'ArrowDown' ? 1 : -1);
+    moveSelection(e.key === 'ArrowDown' ? 1 : -1);
   }
 });
 

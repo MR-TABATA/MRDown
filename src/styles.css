@@ -201,7 +201,9 @@ body.sidebar-hidden #sidebar { display: none; }
   color: var(--mrd-text);
   padding: 6px 14px 8px;
 }
-#doc-list { list-style: none; }
+/* The list itself takes focus (↑/↓ then walk the documents); no focus ring — the
+   accented active row already says where the keys will land. */
+#doc-list { list-style: none; outline: none; }
 #doc-list li {
   display: flex;
   align-items: center;
@@ -224,6 +226,12 @@ body.sidebar-hidden #sidebar { display: none; }
   color: var(--mrd-text);
   border-left-color: var(--mrd-accent);
 }
+/* ⌘/⇧-click builds a multi-row selection: those rows drag as a block and move
+   together with ⌘↑/⌘↓. Only the active row keeps the accent bar. */
+#doc-list li.selected { background: var(--mrd-surface-2); }
+#doc-list li.selected:not(.active) { border-left-color: var(--mrd-border); }
+/* While the list has the keyboard, the row ↑/↓ act on stands out a little more. */
+#doc-list:focus li.active { background: var(--mrd-surface-3); }
 #doc-list .doc-name {
   flex: 1;
   white-space: nowrap;
