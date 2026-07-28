@@ -639,7 +639,12 @@ let reading = false;
 function setReading(on: boolean) {
   reading = on && !!active;
   if (reading && isEditing) setEditing(false);
+  // Reading mode re-centres the preview at a different width, so the text
+  // reflows under you — hold the position the same way a mode flip does.
+  const anchor = capturePreviewAnchor();
   document.body.classList.toggle('reading', reading);
+  restorePreviewAnchor(anchor);
+  if (active) rememberScroll(active);
 }
 function toggleReading() {
   setReading(!reading);
@@ -652,6 +657,10 @@ function setEditing(on: boolean) {
   // element, and the browser drops its scrollTop to 0 when it does. Capture the
   // place we were reading in the mode we're leaving, before that happens.
   if (active) rememberScroll(active);
+  // Carrying the reading position across the flip beats landing where this mode
+  // was last left: you switch to edit to change the paragraph you were reading.
+  const anchor = capturePreviewAnchor();
+  pauseScrollSync();
   isEditing = on;
   contentArea.classList.toggle('editing', on);
   editLabel.textContent = on ? t('preview') : t('edit');
@@ -659,7 +668,24 @@ function setEditing(on: boolean) {
   // for it there), so the mode flip has to re-read it.
   applyOutlineHidden();
   if (active) restoreScroll(active);
-  if (on) editor.focus();
+  restorePreviewAnchor(anchor);
+  // The anchor overrode what the per-document memory just restored; record the
+  // place we actually landed, so switching documents and back returns here.
+  if (active) rememberScroll(active);
+  if (on) {
+    // Caret, then scroll, then focus. Focusing scrolls the textarea to the
+    // caret, so the caret has to be moved to what you were reading first —
+    // otherwise a caret left at the end of the document drags the editor to the
+    // bottom, and the first keystroke would jump there anyway. Focusing last
+    // means the caret is already in view, so it has nothing left to scroll (its
+    // scroll lands asynchronously and would otherwise win by a few rows).
+    if (active) {
+      const pos = anchorSourceOffset(anchor);
+      editor.setSelectionRange(pos, pos);
+      scrollEditorToTop(pos);
+    }
+    editor.focus();
+  }
   // The outline's scroll-spy watches a different scroll container per mode.
   bindOutlineSpy();
   // Find switches between source (editor) and preview search with the mode.
@@ -1100,6 +1126,134 @@ function restoreScroll(doc: Doc) {
   const s = doc.scroll ?? { preview: 0, edit: 0 };
   contentArea.scrollTop = s.preview;
   output.scrollTop = s.edit;
+}
+
+// Where the reader is in the rendered preview: the block at the top of the pane,
+// plus how far into it the top edge sits. #output holds the preview in both
+// modes, but at half the width while editing — the text reflows, so a raw
+// scrollTop (or a ratio of it) lands somewhere else entirely. An anchor block
+// survives the reflow, so a mode switch keeps you on the same paragraph.
+// A null `el` is the very start of the document, which is its own anchor: the
+// two panes pad their top differently, so measuring against the first block
+// would nudge the document's start a few pixels off the top.
+type PreviewAnchor = { el: Element | null; frac: number };
+
+// The preview scrolls with the whole content area in preview mode; in the split
+// editor it scrolls itself.
+function previewScroller() {
+  return isEditing ? output : contentArea;
+}
+
+function capturePreviewAnchor(): PreviewAnchor | null {
+  if (!active) return null;
+  const scroller = previewScroller();
+  if (scroller.scrollTop <= 0) return { el: null, frac: 0 };
+  const top = scroller.getBoundingClientRect().top;
+  for (const el of output.children) {
+    const r = el.getBoundingClientRect();
+    // First block still reaching past the top edge of the visible pane.
+    if (r.bottom > top) return { el, frac: r.height ? (top - r.top) / r.height : 0 };
+  }
+  return null;
+}
+
+function restorePreviewAnchor(a: PreviewAnchor | null) {
+  if (!a || (a.el && !a.el.isConnected)) return;
+  const scroller = previewScroller();
+  if (!a.el) {
+    scroller.scrollTop = 0;
+  } else {
+    const r = a.el.getBoundingClientRect();
+    scroller.scrollTop += r.top + a.frac * r.height - scroller.getBoundingClientRect().top;
+  }
+}
+
+// Turning a place in the preview back into a place in the source. The caret has
+// to come along on the way into edit mode: focusing a textarea scrolls it to the
+// caret, so a caret left at the end of the document drags the editor to the
+// bottom no matter where we just scrolled it — and the first keystroke would
+// jump there anyway.
+//
+// marked's token stream is exact — every token's `raw` concatenates back into
+// the source — so walking it gives each block's true offset, with no re-guessing
+// of what is a heading and what merely looks like one inside a fenced block.
+// Lexing a large document isn't free, so the last one is kept.
+let blockCache: { text: string; blocks: Array<{ heading: boolean; at: number }> } | null = null;
+function sourceBlocks(source: string) {
+  if (blockCache?.text === source) return blockCache.blocks;
+  const { body } = extractFrontmatter(source);
+  const base = source.length - body.length;
+  const blocks: Array<{ heading: boolean; at: number }> = [];
+  let pos = 0;
+  for (const tok of marked.lexer(body)) {
+    // Blank runs render to nothing, so they would throw off the count against
+    // the preview's blocks.
+    if (tok.type !== 'space') blocks.push({ heading: tok.type === 'heading', at: base + pos });
+    pos += tok.raw.length;
+  }
+  blockCache = { text: source, blocks };
+  return blocks;
+}
+
+// The source offset of the block the reader was looking at. Headings are the
+// sync points — they survive the render and the sanitizer, and `outlineHeads`
+// already holds them in document order — and the anchor is then found by
+// counting blocks on from its heading, which keeps a long section from dumping
+// the caret at its title.
+function anchorSourceOffset(a: PreviewAnchor | null): number {
+  if (!a || !a.el) return 0;
+  let hIdx = -1;
+  for (let i = 0; i < outlineHeads.length; i++) {
+    // `compareDocumentPosition` handles the anchor being a heading itself, and
+    // headings nested in blockquotes or list items.
+    const rel = a.el.compareDocumentPosition(outlineHeads[i]);
+    if (outlineHeads[i] === a.el || rel & Node.DOCUMENT_POSITION_PRECEDING) hIdx = i;
+    else break;
+  }
+  if (hIdx < 0) return 0;
+  const children = [...output.children];
+  const from = children.indexOf(outlineHeads[hIdx]);
+  const to = children.indexOf(a.el);
+  // 0 when the heading is the anchor, or when it is nested and so not a block
+  // of the preview in its own right.
+  const skip = from >= 0 && to >= from ? to - from : 0;
+
+  const blocks = sourceBlocks(editor.value);
+  let seen = -1;
+  let last = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    if (!blocks[i].heading) continue;
+    last = blocks[i].at;
+    if (++seen !== hIdx) continue;
+    return (blocks[i + skip] ?? blocks[i]).at;
+  }
+  // Fewer headings in the source than in the preview (a heading nested inside a
+  // list, say): the last one is still a better landing than the top.
+  return last;
+}
+
+// Scroll the textarea so `pos` sits near the top. Measured against the highlight
+// mirror rather than counted in hard lines, because the editor soft-wraps and a
+// wrapped line is several rows tall. The mirror shares the editor's typography
+// and width for exactly this reason; find's own highlights are rebuilt after.
+function scrollEditorToTop(pos: number, settle = true) {
+  editorHighlights.style.width = `${editor.clientWidth}px`;
+  editorHighlights.innerHTML = `${escapeHtml(editor.value.slice(0, pos))}<span id="caret-probe"></span>`;
+  const probe = document.getElementById('caret-probe');
+  const y = probe ? probe.offsetTop : 0;
+  renderSourceHighlights();
+  editor.scrollTop = Math.max(0, y - 8);
+  syncEditorHighlights();
+  // The first switch into edit mode is the textarea's first layout at that
+  // width, and metrics read before it settles come out a few rows short. Take
+  // one more look on the next frame.
+  if (settle) {
+    requestAnimationFrame(() => {
+      if (!isEditing) return;
+      pauseScrollSync();
+      scrollEditorToTop(pos, false);
+    });
+  }
 }
 
 async function setActive(doc: Doc) {
@@ -1585,17 +1739,29 @@ async function exportPdf() {
 // is latched while it scrolls so its echo on the other pane doesn't feed back.
 let scrollDriver: HTMLElement | null = null;
 let scrollDriverTimer: number | undefined;
+// A mode switch places both panes deliberately — the preview on the block you
+// were reading, the editor on that block's source. Neither should then drag the
+// other back to its own ratio, and scroll events only arrive after the switch
+// has returned, so the block has to outlive it.
+let syncPausedUntil = 0;
+function pauseScrollSync() {
+  syncPausedUntil = performance.now() + 250;
+}
+function syncPaneScroll(from: HTMLElement, to: HTMLElement) {
+  const fromMax = from.scrollHeight - from.clientHeight;
+  const toMax = to.scrollHeight - to.clientHeight;
+  to.scrollTop = fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
+}
 function bindScrollSync(from: HTMLElement, to: HTMLElement) {
   from.addEventListener(
     'scroll',
     () => {
-      if (!isEditing || (scrollDriver && scrollDriver !== from)) return;
+      if (!isEditing || performance.now() < syncPausedUntil) return;
+      if (scrollDriver && scrollDriver !== from) return;
       scrollDriver = from;
       clearTimeout(scrollDriverTimer);
       scrollDriverTimer = window.setTimeout(() => (scrollDriver = null), 120);
-      const fromMax = from.scrollHeight - from.clientHeight;
-      const toMax = to.scrollHeight - to.clientHeight;
-      to.scrollTop = fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
+      syncPaneScroll(from, to);
     },
     { passive: true }
   );
