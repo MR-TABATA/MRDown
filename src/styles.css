@@ -627,6 +627,12 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   background: var(--mrd-bg);
 }
 
+/* Swap layout: the editor takes the whole content area and the preview steps
+   aside until you leave edit mode. No divider — there is nothing to divide. */
+.content-area.editing.swap .editor-pane { flex: 1 1 auto; }
+.content-area.editing.swap #output,
+.content-area.editing.swap #divider { display: none; }
+
 /* Draggable divider: a single 1px line that abuts both panes (no gap band),
    with an invisible wider grab zone so it stays easy to grab. */
 .content-area.editing #divider {
@@ -679,11 +685,16 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   background: var(--mrd-accent-faint);
 }
 
+/* Hidden until a document is open (the start screen takes the area instead);
+   `has-doc` is set from showDocUI/showEmpty. Kept in CSS rather than as an
+   inline style so the swap layout below can hide it while editing. */
+#output { display: none; }
+body.has-doc #output { display: block; }
+
 #output {
   max-width: var(--preview-width, none);
   margin: 0 auto;
   line-height: 1.55;
-  display: none;
   color: var(--mrd-text);
   background: var(--mrd-bg);
   font-family: var(--mrd-content-font);
@@ -1312,6 +1323,7 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 .link-btn:hover { text-decoration: underline; }
 #toolbar-options label,
 #outline-pos-option label,
+#edit-layout-option label,
 #preview-theme-option label,
 #font-option label,
 #lang-options label {
@@ -1326,11 +1338,13 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 }
 #toolbar-options label:hover,
 #outline-pos-option label:hover,
+#edit-layout-option label:hover,
 #preview-theme-option label:hover,
 #font-option label:hover,
 #lang-options label:hover { background: var(--mrd-surface-2); }
 #toolbar-options input,
 #outline-pos-option input,
+#edit-layout-option input,
 #preview-theme-option input,
 #font-option input,
 #lang-options input { accent-color: var(--mrd-accent); width: 15px; height: 15px; flex-shrink: 0; }

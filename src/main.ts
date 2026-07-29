@@ -88,6 +88,7 @@ const textOption = document.getElementById('text-option')!;
 const fontOption = document.getElementById('font-option')!;
 const fontsizeOption = document.getElementById('fontsize-option')!;
 const outlinePosOption = document.getElementById('outline-pos-option')!;
+const editLayoutOption = document.getElementById('edit-layout-option')!;
 const previewThemeOption = document.getElementById('preview-theme-option')!;
 const output = document.getElementById('output')!;
 const docStatsEl = document.getElementById('doc-stats')!;
@@ -165,10 +166,18 @@ interface Doc {
    * back where you left off, not at the top — a long document you were halfway
    * through is otherwise lost every time you glance at something else.
    *
-   * Preview and the split editor scroll different elements, so each keeps its own
+   * Preview and the editor scroll different elements, so each keeps its own
    * position; coming back in the mode you left in lands where you left.
    */
   scroll?: { preview: number; edit: number };
+  /**
+   * Where the caret was when you last left this document's editor. The editor's
+   * scroll position alone isn't enough to come back to: focusing a textarea
+   * scrolls it to the caret, so a caret parked at 0 would drag the pane back to
+   * the top the moment the document is re-activated (and the first keystroke
+   * would land there too).
+   */
+  caret?: number;
   /**
    * Something rewrote the file on disk while this buffer had unsaved edits — an
    * AI agent, most often. Three texts now exist (savedSource, this, workingText)
@@ -309,6 +318,28 @@ type OutlinePos = 'left' | 'right';
 const OUTLINE_POS_KEY = 'mrdown.outlinePos';
 let outlinePos: OutlinePos = localStorage.getItem(OUTLINE_POS_KEY) === 'left' ? 'left' : 'right';
 
+// How the editor shares the window with the preview. 'swap' gives the editor the
+// whole content area — the preview steps aside on the way in and comes back on
+// the way out, so you always read and write at full width. 'split' keeps the two
+// side by side. Swap is the default: one full-width column beats two half-width
+// ones for reading, and a viewer that turns into an editor in place is the shape
+// this app is meant to have.
+type EditLayout = 'swap' | 'split';
+const EDIT_LAYOUT_KEY = 'mrdown.editLayout';
+let editLayout: EditLayout = localStorage.getItem(EDIT_LAYOUT_KEY) === 'split' ? 'split' : 'swap';
+const isSwap = () => editLayout === 'swap';
+
+// `reposition` is for a layout change made from Settings while the editor is
+// open: the panes have just resized under the caret, so both are placed again.
+function applyEditLayout(reposition = false) {
+  contentArea.classList.toggle('swap', isSwap());
+  if (!reposition || !isEditing || !active) return;
+  const target = caretPreviewTarget();
+  scrollEditorToTop(editor.selectionStart);
+  // Split: the preview just reappeared beside the editor, on the caret's block.
+  if (!isSwap()) scrollPreviewToTarget(target);
+}
+
 // Visibility is remembered per mode, because the two modes have very different
 // room for it. Editing splits the content area into editor + preview, so at the
 // default 1100px window an outline column leaves the preview about 320px wide —
@@ -399,6 +430,21 @@ function applyOutlineCollapsed() {
   outlineList.hidden = collapsed || outlineHeads.length === 0;
 }
 
+// An outline click normally scrolls the preview to the heading. In the swap
+// layout the preview is off screen while editing, so there the jump has to land
+// in the source: the heading's own offset, counted off the same block walk the
+// mode flip uses.
+function jumpEditorToHeading(hIdx: number) {
+  let seen = -1;
+  for (const b of sourceBlocks(editor.value)) {
+    if (!b.heading || ++seen !== hIdx) continue;
+    editor.setSelectionRange(b.at, b.at);
+    scrollEditorToTop(b.at);
+    editor.focus();
+    return;
+  }
+}
+
 // Rebuild from the rendered headings. Called after every render (open, reload,
 // debounced live edit) so the outline always mirrors the current document.
 function buildOutline() {
@@ -430,6 +476,10 @@ function buildOutline() {
     li.addEventListener('click', () => {
       markOutlineActive(h.id);
       outlineClickLock = Date.now();
+      if (isEditing && isSwap()) {
+        jumpEditorToHeading(outlineHeads.indexOf(h));
+        return;
+      }
       document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     outlineList.appendChild(li);
@@ -570,7 +620,9 @@ function setMenuDocState(open: boolean) {
 
 function showDocUI() {
   emptyState.style.display = 'none';
-  output.style.display = 'block';
+  // A class rather than an inline `display`: the swap layout hides the preview
+  // from the stylesheet while editing, and an inline style would outrank it.
+  document.body.classList.add('has-doc');
   reloadBtn.disabled = false;
   editBtn.disabled = false;
   searchBtn.disabled = false;
@@ -581,7 +633,7 @@ function showEmpty() {
   setReading(false); // no document to read
   setEditing(false);
   clearOutline();
-  output.style.display = 'none';
+  document.body.classList.remove('has-doc');
   output.innerHTML = '';
   editor.value = '';
   emptyState.style.display = '';
@@ -659,7 +711,11 @@ function setEditing(on: boolean) {
   if (active) rememberScroll(active);
   // Carrying the reading position across the flip beats landing where this mode
   // was last left: you switch to edit to change the paragraph you were reading.
-  const anchor = capturePreviewAnchor();
+  // Leaving the swap editor the preview holds no such position (it has been off
+  // screen), so the caret supplies it instead.
+  const fromSwapEditor = !on && isEditing && isSwap();
+  const target = fromSwapEditor ? caretPreviewTarget() : null;
+  const anchor = fromSwapEditor ? null : capturePreviewAnchor();
   pauseScrollSync();
   isEditing = on;
   contentArea.classList.toggle('editing', on);
@@ -668,7 +724,18 @@ function setEditing(on: boolean) {
   // for it there), so the mode flip has to re-read it.
   applyOutlineHidden();
   if (active) restoreScroll(active);
-  restorePreviewAnchor(anchor);
+  if (fromSwapEditor) {
+    // A keystroke may still be sitting in the debounce, and the preview is about
+    // to fill the window — render it before landing on a block of it.
+    const pending = flushPreview();
+    if (pending) {
+      pending.then(() => {
+        if (isEditing) return; // flipped back before the render landed
+        scrollPreviewToTarget(target);
+        if (active) rememberScroll(active);
+      });
+    } else scrollPreviewToTarget(target);
+  } else restorePreviewAnchor(anchor);
   // The anchor overrode what the per-document memory just restored; record the
   // place we actually landed, so switching documents and back returns here.
   if (active) rememberScroll(active);
@@ -1113,19 +1180,23 @@ function scheduleSessionSave() {
 // Last-chance flush so the final keystrokes before a close survive the debounce.
 window.addEventListener('beforeunload', saveSession);
 
-// Preview scrolls the content area; the split editor scrolls #output. Each mode
-// therefore keeps its own position, and coming back in the mode you left in
-// lands where you left.
+// Preview scrolls the content area. What scrolls while editing depends on the
+// layout: the preview pane beside the editor in the split, the textarea itself
+// in the swap (where the preview isn't on screen at all). Each mode keeps its
+// own position, so coming back in the mode you left in lands where you left.
 function rememberScroll(doc: Doc) {
   const s = (doc.scroll ??= { preview: 0, edit: 0 });
-  if (isEditing) s.edit = output.scrollTop;
-  else s.preview = contentArea.scrollTop;
+  if (isEditing) {
+    s.edit = isSwap() ? editor.scrollTop : output.scrollTop;
+    doc.caret = editor.selectionStart;
+  } else s.preview = contentArea.scrollTop;
 }
 
 function restoreScroll(doc: Doc) {
   const s = doc.scroll ?? { preview: 0, edit: 0 };
   contentArea.scrollTop = s.preview;
-  output.scrollTop = s.edit;
+  if (isSwap()) editor.scrollTop = s.edit;
+  else output.scrollTop = s.edit;
 }
 
 // Where the reader is in the rendered preview: the block at the top of the pane,
@@ -1186,6 +1257,12 @@ function sourceBlocks(source: string) {
   const blocks: Array<{ heading: boolean; at: number }> = [];
   let pos = 0;
   for (const tok of marked.lexer(body)) {
+    // Extensions can inject tokens that are not source text at all — the
+    // footnote plugin puts a `footnotes` section token (raw: its own title) at
+    // the head of every stream, footnotes or not. Counting its raw would shift
+    // every offset after it, so only walk on tokens that really are the text
+    // sitting at this position.
+    if (!body.startsWith(tok.raw, pos)) continue;
     // Blank runs render to nothing, so they would throw off the count against
     // the preview's blocks.
     if (tok.type !== 'space') blocks.push({ heading: tok.type === 'heading', at: base + pos });
@@ -1232,6 +1309,54 @@ function anchorSourceOffset(a: PreviewAnchor | null): number {
   return last;
 }
 
+// The reverse of `anchorSourceOffset`: the place in the preview that matches the
+// caret. Leaving the editor in the swap layout there is no preview position to
+// carry — the pane has been off screen the whole time — so the caret *is* the
+// reading position. It is expressed the way the forward map reads it: the
+// heading the caret sits under, plus how many blocks past that heading it is.
+// Both numbers come from the source alone, so the target survives the re-render
+// that may land before it is used.
+type PreviewTarget = { hIdx: number; skip: number };
+
+function caretPreviewTarget(): PreviewTarget | null {
+  if (!active) return null;
+  const pos = editor.selectionStart;
+  const blocks = sourceBlocks(editor.value);
+  // The block holding the caret: the last one starting at or before it.
+  let bIdx = -1;
+  for (let i = 0; i < blocks.length && blocks[i].at <= pos; i++) bIdx = i;
+  let hIdx = -1;
+  let hBlock = -1;
+  for (let i = 0; i <= bIdx; i++) {
+    if (blocks[i].heading) {
+      hIdx++;
+      hBlock = i;
+    }
+  }
+  // Nothing above the caret to sync on (no heading yet, or the caret is before
+  // the first block): the top of the document is the honest answer.
+  return hIdx < 0 ? null : { hIdx, skip: bIdx - hBlock };
+}
+
+// Put the target block at the top of the preview. Resolved against the preview
+// as it stands at call time — which is why the target travels as indices and not
+// as an element: a re-render replaces every element it could have pointed at.
+function scrollPreviewToTarget(tg: PreviewTarget | null) {
+  const scroller = previewScroller();
+  if (!tg) {
+    scroller.scrollTop = 0;
+    return;
+  }
+  const head = outlineHeads[tg.hIdx];
+  if (!head) return;
+  const children = [...output.children];
+  const from = children.indexOf(head);
+  // A heading nested in a list or quote isn't a block of the preview in its own
+  // right, so there is nothing to count from; land on the heading itself.
+  const el = (from >= 0 ? children[from + tg.skip] : null) ?? head;
+  scroller.scrollTop += el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+}
+
 // Scroll the textarea so `pos` sits near the top. Measured against the highlight
 // mirror rather than counted in hard lines, because the editor soft-wraps and a
 // wrapped line is several rows tall. The mirror shares the editor's typography
@@ -1268,8 +1393,11 @@ async function setActive(doc: Doc) {
   editor.value = doc.workingText;
   // Assigning `.value` drops the caret at the end; left there, the first switch
   // into edit mode would `focus()` and scroll the textarea to the bottom. Put it
-  // back at the top so editing starts where reading did.
-  editor.setSelectionRange(0, 0);
+  // back where this document was last being edited — the top, until it has been
+  // edited once — so editing resumes where it stopped, and the `focus()` below
+  // has nothing to scroll away from the position `restoreScroll` just set.
+  const caret = Math.min(doc.caret ?? 0, editor.value.length);
+  editor.setSelectionRange(caret, caret);
   await renderSource(doc.workingText, doc.path ?? '');
   showDocUI();
   // The conflict banner belongs to a specific document; re-sync it to this one so
@@ -1629,9 +1757,21 @@ editor.addEventListener('input', () => {
   if (!findBar.hidden && isEditing && findInput.value) refreshSourceMatches();
   clearTimeout(previewTimer);
   previewTimer = window.setTimeout(() => {
+    previewTimer = undefined;
     if (active) renderSource(active.workingText, active.path ?? '');
   }, 250);
 });
+
+// Render now rather than waiting out the debounce, for when something is about
+// to depend on the preview being current — leaving the swap editor, where the
+// preview goes straight from hidden to filling the window. Returns the render's
+// promise, or null when nothing was pending.
+function flushPreview(): Promise<void> | null {
+  if (previewTimer === undefined) return null;
+  clearTimeout(previewTimer);
+  previewTimer = undefined;
+  return active ? renderSource(active.workingText, active.path ?? '') : null;
+}
 
 // Editor typing niceties: list auto-continue (Enter), list indent (Tab), and
 // bracket/quote auto-pairing. Each pure transform returns the new text+selection
@@ -1732,7 +1872,8 @@ async function exportPdf() {
   await invoke('print_document');
 }
 
-// Editor ⇄ preview scroll sync (edit mode only). Proportional: match the
+// Editor ⇄ preview scroll sync (split layout only — in the swap layout there is
+// no second pane on screen to keep up). Proportional: match the
 // scrolled fraction of one pane onto the other. Exact source-line mapping is
 // impractical against a soft-wrapping <textarea>, and proportional tracks well
 // for prose (it only drifts around tall images / code blocks). A "driver" pane
@@ -1756,7 +1897,7 @@ function bindScrollSync(from: HTMLElement, to: HTMLElement) {
   from.addEventListener(
     'scroll',
     () => {
-      if (!isEditing || performance.now() < syncPausedUntil) return;
+      if (!isEditing || isSwap() || performance.now() < syncPausedUntil) return;
       if (scrollDriver && scrollDriver !== from) return;
       scrollDriver = from;
       clearTimeout(scrollDriverTimer);
@@ -2030,6 +2171,34 @@ function buildOutlinePosOption() {
     name.textContent = c.label;
     label.append(radio, name);
     outlinePosOption.appendChild(label);
+  }
+}
+
+// Editing layout: the editor takes over the window, or sits beside the preview.
+function buildEditLayoutOption() {
+  const choices: Array<{ value: EditLayout; label: string }> = [
+    { value: 'swap', label: t('editLayoutSwap') },
+    { value: 'split', label: t('editLayoutSplit') },
+  ];
+  editLayoutOption.innerHTML = '';
+  for (const c of choices) {
+    const label = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'edit-layout';
+    radio.checked = c.value === editLayout;
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      editLayout = c.value;
+      localStorage.setItem(EDIT_LAYOUT_KEY, c.value);
+      // Settings can be opened mid-edit, so the panes may be resizing under a
+      // caret that has to stay put.
+      applyEditLayout(true);
+    });
+    const name = document.createElement('span');
+    name.textContent = c.label;
+    label.append(radio, name);
+    editLayoutOption.appendChild(label);
   }
 }
 
@@ -2315,6 +2484,7 @@ function applyI18n() {
   buildAppearanceOptions();
   buildPreviewThemeOption();
   buildOutlinePosOption();
+  buildEditLayoutOption();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
   invoke('apply_menu', { lang: getLang() }).catch(() => {});
@@ -2327,6 +2497,7 @@ function openSettings() {
   buildAppearanceOptions();
   buildPreviewThemeOption();
   buildOutlinePosOption();
+  buildEditLayoutOption();
   selectSettingsTab('appearance');
   settingsOverlay.hidden = false;
 }
@@ -3673,6 +3844,10 @@ document.body.classList.toggle('sidebar-hidden', localStorage.getItem(SIDEBAR_KE
 // View ▸ Outline toggle it; Settings ▸ Appearance moves it).
 applyOutlinePos();
 applyOutlineHidden();
+
+// Editing layout (Settings ▸ Appearance), applied before anything is opened so
+// the first ⌘E lands in the right shape.
+applyEditLayout();
 sidebarBtn.addEventListener('click', () => {
   const hidden = !document.body.classList.contains('sidebar-hidden');
   document.body.classList.toggle('sidebar-hidden', hidden);
