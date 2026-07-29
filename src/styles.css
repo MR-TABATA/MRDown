@@ -632,6 +632,16 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 .content-area.editing.swap .editor-pane { flex: 1 1 auto; }
 .content-area.editing.swap #output,
 .content-area.editing.swap #divider { display: none; }
+/* The source column obeys the same width the preview does (Settings ▸ Preview
+   width), so ⌘E swaps the text for its source in place instead of reflowing it
+   to a different measure. Full-window is the default there, which on a wide
+   display is a long line — set a width once and both modes take it. The format
+   bar stays full width: it's chrome, not text. */
+.content-area.editing.swap .editor-area {
+  width: 100%;
+  max-width: var(--preview-width, none);
+  margin: 0 auto;
+}
 
 /* Draggable divider: a single 1px line that abuts both panes (no gap band),
    with an invisible wider grab zone so it stays easy to grab. */
