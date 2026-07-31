@@ -7,7 +7,7 @@ import { homeDir, resolveResource } from '@tauri-apps/api/path';
 import { open, save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
-import { EditorSurface } from './editor-surface';
+import { EditorSurface, setImageResolver } from './editor-surface';
 import markedFootnote from 'marked-footnote';
 import markedKatex from 'marked-katex-extension';
 import 'katex/dist/katex.min.css';
@@ -1397,6 +1397,11 @@ async function setActive(doc: Doc) {
   // has nothing to scroll away from the position `restoreScroll` just set.
   const caret = Math.min(doc.caret ?? 0, editor.value.length);
   editor.setSelectionRange(caret, caret);
+  // The editor draws images inline too, and they resolve against this file.
+  setImageResolver((src) => {
+    const abs = resolveImagePath(doc.path ?? '', src);
+    return abs ? convertFileSrc(abs) : src;
+  });
   await renderSource(doc.workingText, doc.path ?? '');
   showDocUI();
   // The conflict banner belongs to a specific document; re-sync it to this one so

@@ -16,12 +16,13 @@ import {
   type DecorationSet,
   ViewPlugin,
   type ViewUpdate,
+  WidgetType,
   drawSelection,
   highlightActiveLine,
 } from '@codemirror/view';
 import { EditorState, StateEffect, StateField, Prec, type Extension } from '@codemirror/state';
 import { history, historyKeymap, undo, redo } from '@codemirror/commands';
-import { markdown } from '@codemirror/lang-markdown';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { syntaxTree } from '@codemirror/language';
 
 /** A find match, in source offsets — the same shape find.ts produces. */
@@ -41,21 +42,76 @@ export interface Hit {
 // buffer, so the file on disk and every offset-based feature are untouched.
 const hideMark = Decoration.replace({});
 const dimMark = Decoration.mark({ class: 'cm-md-marker' });
-/** Markup worth keeping visible even when hidden elsewhere would read better:
- *  list bullets carry the list's shape, and a task box is the content. */
-const KEEP_DIM = new Set(['ListMark', 'QuoteMark', 'TaskMarker']);
+/** Markup that still reads better left in place: list bullets and quote bars
+ *  carry the shape of the block they mark. */
+const KEEP_DIM = new Set(['ListMark', 'QuoteMark']);
 const strongMark = Decoration.mark({ class: 'cm-md-strong' });
 const emphasisMark = Decoration.mark({ class: 'cm-md-em' });
 const codeMark = Decoration.mark({ class: 'cm-md-code' });
 const linkMark = Decoration.mark({ class: 'cm-md-link' });
 const lineDeco = (cls: string) => Decoration.line({ class: cls });
 
+// --- Widgets ---------------------------------------------------------------
+// Where markup *is* the content — a task's checkbox, an image — hiding it is
+// not enough; something has to stand in its place.
+
+/** `[ ]` / `[x]` drawn as a real checkbox. Clicking it rewrites the source. */
+class TaskWidget extends WidgetType {
+  constructor(readonly checked: boolean, readonly from: number) {
+    super();
+  }
+  eq(other: TaskWidget) {
+    return other.checked === this.checked && other.from === this.from;
+  }
+  toDOM(view: EditorView): HTMLElement {
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'cm-md-task';
+    box.checked = this.checked;
+    box.addEventListener('mousedown', (e) => {
+      // The editor would otherwise move the caret here and re-render us away
+      // mid-click.
+      e.preventDefault();
+      view.dispatch({ changes: { from: this.from + 1, to: this.from + 2, insert: this.checked ? ' ' : 'x' } });
+    });
+    return box;
+  }
+  ignoreEvent() {
+    return false;
+  }
+}
+
+/** An inline image, drawn where its `![alt](src)` sits. */
+class ImageWidget extends WidgetType {
+  constructor(readonly src: string, readonly alt: string) {
+    super();
+  }
+  eq(other: ImageWidget) {
+    return other.src === this.src && other.alt === this.alt;
+  }
+  toDOM(): HTMLElement {
+    const img = document.createElement('img');
+    img.className = 'cm-md-image';
+    img.src = resolveImageSrc(this.src);
+    img.alt = this.alt;
+    return img;
+  }
+}
+
+// How to turn a Markdown image path into something the WebView can load. The
+// app knows (it depends on the document's folder and the asset protocol); the
+// editor only needs to be told.
+let resolveImageSrc: (src: string) => string = (src) => src;
+export function setImageResolver(fn: (src: string) => string) {
+  resolveImageSrc = fn;
+}
+
 /** Node names whose *content* (not markup) carries an inline style. */
 const INLINE: Record<string, Decoration> = {
   StrongEmphasis: strongMark,
   Emphasis: emphasisMark,
   InlineCode: codeMark,
-  URL: linkMark,
+  Link: linkMark,
 };
 
 function buildDecorations(view: EditorView): DecorationSet {
@@ -76,6 +132,37 @@ function buildDecorations(view: EditorView): DecorationSet {
 
   syntaxTree(state).iterate({
     enter: (n) => {
+      const onCaretLine = state.doc.lineAt(n.from).number === caretLine;
+
+      // `- [ ]` becomes a checkbox you can click. On the caret's line it stays
+      // text, so the source is always reachable by moving the caret there.
+      if (n.name === 'TaskMarker' && !onCaretLine) {
+        const checked = /[xX]/.test(state.doc.sliceString(n.from, n.to));
+        ranges.push(
+          Decoration.replace({ widget: new TaskWidget(checked, n.from) }).range(n.from, n.to)
+        );
+        return false;
+      }
+
+      // An image draws itself; its `![alt](src)` collapses into the picture.
+      if (n.name === 'Image' && !onCaretLine) {
+        const raw = state.doc.sliceString(n.from, n.to);
+        const m = /^!\[([^\]]*)\]\(([^)\s]+)/.exec(raw);
+        if (m) {
+          ranges.push(
+            Decoration.replace({ widget: new ImageWidget(m[2], m[1]) }).range(n.from, n.to)
+          );
+          return false;
+        }
+      }
+
+      // A link keeps its text and loses its plumbing: `[text](url)` reads as
+      // `text`, coloured like a link.
+      if (n.name === 'URL' && !onCaretLine) {
+        ranges.push(hideMark.range(n.from, n.to));
+        return false;
+      }
+
       const inline = INLINE[n.name];
       if (inline && n.to > n.from) {
         ranges.push(inline.range(n.from, n.to));
@@ -84,9 +171,14 @@ function buildDecorations(view: EditorView): DecorationSet {
       // Markup characters. On the caret's own line they stay as typed — that
       // line is the one being edited, and hiding what you are typing is the
       // thing every WYSIWYG editor gets wrong.
-      if (!/Mark$|^TaskMarker$/.test(n.name) || n.to <= n.from) return;
-      if (state.doc.lineAt(n.from).number === caretLine) return;
-      ranges.push((KEEP_DIM.has(n.name) ? dimMark : hideMark).range(n.from, n.to));
+      if (!/Mark$/.test(n.name) || n.to <= n.from) return;
+      if (onCaretLine) return;
+      // A task's `- ` is redundant once its checkbox is drawn, so it goes with
+      // the rest of the markup; a plain list keeps its bullet.
+      const isTaskBullet =
+        n.name === 'ListMark' && /^\s*\[[ xX]\]/.test(state.doc.sliceString(n.to, n.to + 5));
+      const keep = KEEP_DIM.has(n.name) && !isTaskBullet;
+      ranges.push((keep ? dimMark : hideMark).range(n.from, n.to));
     },
   });
   return Decoration.set(ranges, true);
@@ -179,7 +271,9 @@ export class EditorSurface {
           ...historyKeymap,
         ])
       ),
-      markdown(),
+      // GFM, so task lists / tables / strikethrough parse the way the preview
+      // (marked, also GFM) renders them.
+      markdown({ base: markdownLanguage }),
       livePreview,
       findField,
       drawSelection(),

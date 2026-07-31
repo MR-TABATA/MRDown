@@ -599,6 +599,8 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 .editor-area .cm-md-fence { background: var(--mrd-surface); }
 .editor-area .cm-md-quote { color: var(--md-quote, var(--mrd-muted)); }
 .editor-area .cm-md-link { color: var(--md-link, var(--mrd-accent)); }
+.editor-area .cm-md-task { vertical-align: -1px; margin-right: 6px; accent-color: var(--mrd-accent); }
+.editor-area .cm-md-image { max-width: 100%; border-radius: 6px; vertical-align: top; }
 .editor-area .find-hit { background: var(--mrd-hit); border-radius: 2px; }
 .editor-area .find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit-current-text); }
 
