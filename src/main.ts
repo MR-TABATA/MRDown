@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -6,6 +7,7 @@ import { homeDir, resolveResource } from '@tauri-apps/api/path';
 import { open, save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
+import { EditorSurface, setImageResolver } from './editor-surface';
 import markedFootnote from 'marked-footnote';
 import markedKatex from 'marked-katex-extension';
 import 'katex/dist/katex.min.css';
@@ -71,8 +73,10 @@ const editBtn = document.getElementById('edit-btn') as HTMLButtonElement;
 const editLabel = document.getElementById('edit-label')!;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement;
-const editor = document.getElementById('editor') as HTMLTextAreaElement;
-const editorHighlights = document.getElementById('editor-highlights')!;
+// The editing surface is CodeMirror (see editor-surface.ts); it keeps the
+// textarea-shaped API the rest of this file uses, so everything below still
+// works in source offsets.
+const editorArea = document.querySelector('.editor-area') as HTMLElement;
 const formatBar = document.getElementById('format-bar')!;
 const searchBtn = document.getElementById('search-btn') as HTMLButtonElement;
 const searchMenu = document.getElementById('search-menu') as HTMLElement;
@@ -289,7 +293,8 @@ function enableTaskCheckboxes() {
         replaceEditorText(next, caret, caret);
       } else {
         editor.value = next;
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        // `.value` is a silent write (it always was), so tell the app itself.
+        onEditorInput();
       }
     });
   });
@@ -1362,16 +1367,10 @@ function scrollPreviewToTarget(tg: PreviewTarget | null) {
 // wrapped line is several rows tall. The mirror shares the editor's typography
 // and width for exactly this reason; find's own highlights are rebuilt after.
 function scrollEditorToTop(pos: number, settle = true) {
-  editorHighlights.style.width = `${editor.clientWidth}px`;
-  editorHighlights.innerHTML = `${escapeHtml(editor.value.slice(0, pos))}<span id="caret-probe"></span>`;
-  const probe = document.getElementById('caret-probe');
-  const y = probe ? probe.offsetTop : 0;
-  renderSourceHighlights();
-  editor.scrollTop = Math.max(0, y - 8);
-  syncEditorHighlights();
-  // The first switch into edit mode is the textarea's first layout at that
-  // width, and metrics read before it settles come out a few rows short. Take
-  // one more look on the next frame.
+  editor.scrollToOffset(pos);
+  // Entering edit mode is the editor's first layout at that width; a scroll
+  // measured before it settles lands a few rows short. Take one more look on
+  // the next frame.
   if (settle) {
     requestAnimationFrame(() => {
       if (!isEditing) return;
@@ -1398,6 +1397,11 @@ async function setActive(doc: Doc) {
   // has nothing to scroll away from the position `restoreScroll` just set.
   const caret = Math.min(doc.caret ?? 0, editor.value.length);
   editor.setSelectionRange(caret, caret);
+  // The editor draws images inline too, and they resolve against this file.
+  setImageResolver((src) => {
+    const abs = resolveImagePath(doc.path ?? '', src);
+    return abs ? convertFileSrc(abs) : src;
+  });
   await renderSource(doc.workingText, doc.path ?? '');
   showDocUI();
   // The conflict banner belongs to a specific document; re-sync it to this one so
@@ -1743,7 +1747,7 @@ editBtn.addEventListener('click', () => {
 
 // Live preview while typing, debounced so large documents stay responsive.
 let previewTimer: number | undefined;
-editor.addEventListener('input', () => {
+function onEditorInput() {
   if (!active) return;
   active.workingText = editor.value;
   updateStatus();
@@ -1760,7 +1764,7 @@ editor.addEventListener('input', () => {
     previewTimer = undefined;
     if (active) renderSource(active.workingText, active.path ?? '');
   }, 250);
-});
+}
 
 // Render now rather than waiting out the debounce, for when something is about
 // to depend on the preview being current — leaving the swap editor, where the
@@ -1777,18 +1781,17 @@ function flushPreview(): Promise<void> | null {
 // bracket/quote auto-pairing. Each pure transform returns the new text+selection
 // (or null to fall through to the default keypress); applying it through
 // replaceEditorText keeps the change on the native undo stack and fires `input`.
-editor.addEventListener('keydown', (e) => {
-  if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return; // leave IME & shortcuts alone
+function onEditorKeydown(e: KeyboardEvent): boolean {
+  if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return false; // leave IME & shortcuts alone
   const s: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
   let r: Sel | null = null;
   if (e.key === 'Enter' && !e.shiftKey) r = listContinue(s);
   else if (e.key === 'Tab') r = listIndent(s, e.shiftKey);
   else if (e.key.length === 1) r = autoPair(s, e.key);
-  if (r) {
-    e.preventDefault();
-    replaceEditorText(r.text, r.start, r.end);
-  }
-});
+  if (!r) return false;
+  replaceEditorText(r.text, r.start, r.end);
+  return true;
+}
 
 // Save a pasted image next to the document (in an `assets/` folder) and insert
 // a relative `![]()` so the existing image resolver renders it.
@@ -1811,7 +1814,7 @@ async function pasteImage(file: File, docPath: string) {
 
 // Paste handling: an image is saved and linked; otherwise a URL pasted over a
 // selection becomes a Markdown link. Anything else pastes normally.
-editor.addEventListener('paste', (e) => {
+function onEditorPaste(e: ClipboardEvent): boolean {
   const img = [...(e.clipboardData?.items ?? [])].find(
     (it) => it.kind === 'file' && it.type.startsWith('image/')
   );
@@ -1819,18 +1822,27 @@ editor.addEventListener('paste', (e) => {
     const file = img.getAsFile();
     // Images need a folder to live next to, so only handle a saved document.
     if (file && active?.path) {
-      e.preventDefault();
       void pasteImage(file, active.path);
+      return true;
     }
-    return;
+    return false;
   }
   const s: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
   const r = linkFromPaste(s, e.clipboardData?.getData('text') ?? '');
-  if (r) {
-    e.preventDefault();
-    replaceEditorText(r.text, r.start, r.end);
-  }
+  if (!r) return false;
+  replaceEditorText(r.text, r.start, r.end);
+  return true;
+}
+
+const editor = new EditorSurface(editorArea, {
+  onInput: onEditorInput,
+  onScroll: () => {},
+  onKeydown: onEditorKeydown,
+  onPaste: onEditorPaste,
 });
+// The browser harness (demo/) drives the real UI and needs to read the editor
+// the way it used to read the textarea. Dev only — stripped from the app build.
+if (import.meta.env.DEV) (window as unknown as { __editor: EditorSurface }).__editor = editor;
 
 // --- Export ---------------------------------------------------------------
 
@@ -1907,14 +1919,14 @@ function bindScrollSync(from: HTMLElement, to: HTMLElement) {
     { passive: true }
   );
 }
-bindScrollSync(editor, output);
-bindScrollSync(output, editor);
+bindScrollSync(editor.scroller, output);
+bindScrollSync(output, editor.scroller);
 
-// Replace the editor's text through execCommand so the change lands on the
-// WebView's native undo stack — assigning `editor.value` directly would wipe
-// it, breaking ⌘Z and Edit ▸ Undo. Only the differing middle span is replaced
-// (common prefix/suffix preserved). Falls back to a plain assignment if the
-// command is unavailable.
+// Replace the editor's text as one undoable step. Only the differing middle
+// span is replaced (common prefix/suffix preserved), so an undo rewinds the
+// edit you made rather than the whole document. CodeMirror's own history is
+// the undo stack now — the old execCommand('insertText') trick, which existed
+// only to keep a <textarea>'s native undo alive, is gone.
 function replaceEditorText(newText: string, selStart: number, selEnd: number) {
   const old = editor.value;
   let p = 0;
@@ -1927,12 +1939,11 @@ function replaceEditorText(newText: string, selStart: number, selEnd: number) {
   ) {
     s++;
   }
+  editor.replaceRange(p, old.length - s, newText.slice(p, newText.length - s), {
+    start: selStart,
+    end: selEnd,
+  });
   editor.focus();
-  editor.setSelectionRange(p, old.length - s);
-  if (!document.execCommand('insertText', false, newText.slice(p, newText.length - s))) {
-    editor.value = newText;
-  }
-  editor.setSelectionRange(selStart, selEnd);
 }
 
 // All Markdown formatting actions the toolbar can offer. `group` drives the
@@ -3379,45 +3390,20 @@ function setCurrentPreview(scroll = true) {
   updateFindCount();
 }
 
-// Scroll the editor so the line containing `pos` sits roughly centered.
+// Scroll the editor so `pos` is in view (the find bar's jump).
 function scrollEditorTo(pos: number) {
-  const line = editor.value.slice(0, pos).split('\n').length - 1;
-  const cs = getComputedStyle(editor);
-  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
-  editor.scrollTop = Math.max(0, line * lh - editor.clientHeight / 2);
+  editor.scrollToOffset(pos);
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
-}
-
-// Keep the highlight layer scrolled in lockstep with the textarea.
-function syncEditorHighlights() {
-  editorHighlights.style.transform = `translateY(${-editor.scrollTop}px)`;
-}
-
-// Paint every source match onto the backdrop layer behind the textarea. The
-// layer's text is transparent — only the <mark> rects show, under the real
-// text. Width is pinned to the textarea's content box so wrapping lines up.
+// Mark every source match in the editor. Decorations sit on the real text, so
+// there is no second copy of the document to keep in step (the textarea needed
+// one; CodeMirror does not).
 function renderSourceHighlights() {
   if (findBar.hidden || !isEditing) {
-    editorHighlights.innerHTML = '';
+    editor.clearHighlights();
     return;
   }
-  editorHighlights.style.width = `${editor.clientWidth}px`;
-  const text = editor.value;
-  let html = '';
-  let last = 0;
-  findMatchList.forEach((m, i) => {
-    html += escapeHtml(text.slice(last, m.start));
-    const cls = i === findIdx ? 'find-hit find-hit-current' : 'find-hit';
-    html += `<mark class="${cls}">${escapeHtml(text.slice(m.start, m.end))}</mark>`;
-    last = m.end;
-  });
-  // Trailing "\n" keeps the layer's height in step with the textarea when the
-  // document ends on a newline.
-  editorHighlights.innerHTML = html + escapeHtml(text.slice(last)) + '\n';
-  syncEditorHighlights();
+  editor.setHighlights(findMatchList, findIdx);
 }
 
 function selectSourceMatch(scroll = true) {
@@ -3438,12 +3424,6 @@ function refreshSourceMatches() {
   updateFindCount();
 }
 
-editor.addEventListener('scroll', syncEditorHighlights);
-// The split divider or window can resize the editor; re-pin width/wrapping.
-new ResizeObserver(() => {
-  if (!findBar.hidden && isEditing) renderSourceHighlights();
-}).observe(editor);
-
 // Rebuild the match list for the current query and mode. Keeps the current
 // index when asked (e.g. re-run after an edit), otherwise resets to the first.
 function runFind(keepIdx = false) {
@@ -3454,7 +3434,7 @@ function runFind(keepIdx = false) {
     clearFindHighlights();
     findMatchList = findMatches(editor.value, buildMatcher(findInput.value, findOpts));
   } else {
-    editorHighlights.innerHTML = '';
+    editor.clearHighlights();
     renderPreviewHighlights();
   }
   if (findMatchList.length) {
@@ -3555,7 +3535,7 @@ function openFind() {
 function closeFind() {
   findBar.hidden = true;
   clearFindHighlights();
-  editorHighlights.innerHTML = '';
+  editor.clearHighlights();
   findMatchList = [];
   findIdx = -1;
   if (isEditing) editor.focus();
@@ -3916,7 +3896,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'i' && active && isEditing) {
     e.preventDefault();
     applyFmt('italic');
-  } else if (e.key === 'Backspace' && active?.path && document.activeElement !== editor) {
+  } else if (e.key === 'Backspace' && active?.path && !editor.focused) {
     // ⌘⌫ trashes the file — but only outside the editor, where it would
     // otherwise be the native "delete to start of line".
     e.preventDefault();
@@ -3924,7 +3904,7 @@ document.addEventListener('keydown', (e) => {
   } else if (
     (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
     active &&
-    document.activeElement !== editor &&
+    !editor.focused &&
     !(document.activeElement instanceof HTMLInputElement)
   ) {
     // ⌘↑/⌘↓ moves the selected documents up/down the sidebar — but only outside
