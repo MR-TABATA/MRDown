@@ -35,7 +35,15 @@ export interface Hit {
 // line the caret is on is left alone, so the moment you go to edit a heading
 // its `##` is right there — no mode to leave, nothing to reveal.
 
+// Off the caret's line, markup is *hidden* rather than dimmed — that is the
+// difference between "styled source" and something you can read as a document.
+// `Decoration.replace` removes it from the layout; the text is still in the
+// buffer, so the file on disk and every offset-based feature are untouched.
+const hideMark = Decoration.replace({});
 const dimMark = Decoration.mark({ class: 'cm-md-marker' });
+/** Markup worth keeping visible even when hidden elsewhere would read better:
+ *  list bullets carry the list's shape, and a task box is the content. */
+const KEEP_DIM = new Set(['ListMark', 'QuoteMark', 'TaskMarker']);
 const strongMark = Decoration.mark({ class: 'cm-md-strong' });
 const emphasisMark = Decoration.mark({ class: 'cm-md-em' });
 const codeMark = Decoration.mark({ class: 'cm-md-code' });
@@ -73,10 +81,12 @@ function buildDecorations(view: EditorView): DecorationSet {
         ranges.push(inline.range(n.from, n.to));
         return;
       }
-      // Markup characters: dimmed, except on the caret's own line.
-      if (!/Mark$/.test(n.name) || n.to <= n.from) return;
+      // Markup characters. On the caret's own line they stay as typed — that
+      // line is the one being edited, and hiding what you are typing is the
+      // thing every WYSIWYG editor gets wrong.
+      if (!/Mark$|^TaskMarker$/.test(n.name) || n.to <= n.from) return;
       if (state.doc.lineAt(n.from).number === caretLine) return;
-      ranges.push(dimMark.range(n.from, n.to));
+      ranges.push((KEEP_DIM.has(n.name) ? dimMark : hideMark).range(n.from, n.to));
     },
   });
   return Decoration.set(ranges, true);
@@ -96,7 +106,13 @@ const livePreview = ViewPlugin.fromClass(
       }
     }
   },
-  { decorations: (v) => v.decorations }
+  {
+    decorations: (v) => v.decorations,
+    // Hidden markup should not swallow the caret: arrow keys step over it in
+    // one go instead of landing inside text that is not on screen.
+    provide: (plugin) =>
+      EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
+  }
 );
 
 // --- Find highlights -------------------------------------------------------
