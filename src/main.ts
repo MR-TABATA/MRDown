@@ -6,6 +6,7 @@ import { homeDir, resolveResource } from '@tauri-apps/api/path';
 import { open, save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { marked } from 'marked';
+import { mountSpike, unmountSpike } from './live-preview-spike'; // 試着（このブランチ限定）
 import markedFootnote from 'marked-footnote';
 import markedKatex from 'marked-katex-extension';
 import 'katex/dist/katex.min.css';
@@ -753,6 +754,10 @@ function setEditing(on: boolean) {
     }
     editor.focus();
   }
+  // 試着（このブランチ限定）: 編集に入ったら CodeMirror の Live Preview を被せる。
+  const spikeArea = document.querySelector('.editor-area') as HTMLElement | null;
+  if (on && spikeArea) mountSpike(spikeArea, editor.value);
+  else unmountSpike();
   // The outline's scroll-spy watches a different scroll container per mode.
   bindOutlineSpy();
   // Find switches between source (editor) and preview search with the mode.
