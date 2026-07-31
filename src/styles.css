@@ -562,9 +562,8 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   margin: 0 5px;
   flex-shrink: 0;
 }
-/* The editor sits above a backdrop layer that draws find highlights, since a
-   <textarea> can't hold styled spans. Both share identical typography so the
-   highlight rects line up under the text; JS syncs width and scroll. */
+/* The editing surface is CodeMirror (src/editor-surface.ts). It fills the pane;
+   the app's own tokens drive its colours so themes reach it for free. */
 .content-area.editing .editor-area {
   position: relative;
   flex: 1 1 0;
@@ -572,50 +571,39 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   overflow: hidden;
   background: var(--mrd-bg);
 }
-#editor-backdrop {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-#editor-highlights {
-  position: absolute;
-  top: 0;
-  left: 0;
-  color: transparent;
-  will-change: transform;
-}
-#editor-highlights mark.find-hit {
-  background: var(--mrd-hit);
-  color: transparent;
-  border-radius: 2px;
-}
-#editor-highlights mark.find-hit-current { background: var(--mrd-hit-current); }
-.content-area.editing #editor,
-#editor-highlights {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 24px 28px;
+.editor-area .cm-editor { height: 100%; }
+.editor-area .cm-scroller { overflow-y: auto; }
+.editor-area .cm-cursor { border-left-color: var(--mrd-accent); }
+.editor-area .cm-selectionBackground,
+.editor-area .cm-editor.cm-focused .cm-selectionBackground { background: var(--mrd-accent-soft); }
+.editor-area .cm-activeLine { background: color-mix(in srgb, var(--mrd-text) 4%, transparent); }
+
+/* Live preview: the source stays source, but reads like the document it is.
+   Markup on the caret's line is left alone (see editor-surface.ts), so editing
+   a heading always shows you its `##`. */
+.editor-area .cm-md-marker { color: var(--mrd-faint); font-family: 'SF Mono', Menlo, monospace; font-size: 0.85em; }
+.editor-area .cm-md-h1 { font-size: 1.9em; font-weight: 700; line-height: 1.35; }
+.editor-area .cm-md-h2 { font-size: 1.45em; font-weight: 700; line-height: 1.4; }
+.editor-area .cm-md-h3 { font-size: 1.2em; font-weight: 700; }
+.editor-area .cm-md-h4,
+.editor-area .cm-md-h5,
+.editor-area .cm-md-h6 { font-weight: 700; }
+.editor-area .cm-md-strong { font-weight: 700; }
+.editor-area .cm-md-em { font-style: italic; }
+.editor-area .cm-md-code,
+.editor-area .cm-md-fence {
   font-family: 'SF Mono', Menlo, monospace;
-  font-size: 13.5px;
-  line-height: 1.7;
-  tab-size: 2;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
+  font-size: 0.88em;
 }
-.content-area.editing #editor {
-  display: block;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  resize: none;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--mrd-text);
-  z-index: 1;
-}
+.editor-area .cm-md-code { background: var(--mrd-surface-2); border-radius: 4px; padding: 0 3px; }
+.editor-area .cm-md-fence { background: var(--mrd-surface); }
+.editor-area .cm-md-quote { color: var(--md-quote, var(--mrd-muted)); }
+.editor-area .cm-md-link { color: var(--md-link, var(--mrd-accent)); }
+.editor-area .find-hit { background: var(--mrd-hit); border-radius: 2px; }
+.editor-area .find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit-current-text); }
+
+/* Beside the editor, the preview is its own scrolling column (in preview mode
+   the whole content area scrolls instead). */
 .content-area.editing #output {
   flex: 1 1 0;
   min-width: 0;
