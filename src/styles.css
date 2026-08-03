@@ -601,6 +601,25 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 .editor-area .cm-md-link { color: var(--md-link, var(--mrd-accent)); }
 .editor-area .cm-md-task { vertical-align: -1px; margin-right: 6px; accent-color: var(--mrd-accent); }
 .editor-area .cm-md-image { max-width: 100%; border-radius: 6px; vertical-align: top; }
+.editor-area .cm-md-del { text-decoration: line-through; color: var(--mrd-muted); }
+/* A table is drawn whole (a block widget), so it can carry real borders; the
+   look follows the preview's own table. Click a cell to edit it — the caret
+   goes there and the rows come back as pipes. */
+.editor-area .cm-md-tablewrap { overflow-x: auto; margin: 0.6em 0; }
+.editor-area .cm-md-table { border-collapse: collapse; font-size: 0.95em; cursor: text; }
+.editor-area .cm-md-table th,
+.editor-area .cm-md-table td {
+  border: 1px solid var(--mrd-border);
+  padding: 6px 12px;
+  line-height: 1.5;
+}
+.editor-area .cm-md-table th { background: var(--mrd-surface-2); font-weight: 700; text-align: left; }
+.editor-area .cm-md-table tr:nth-child(even) td { background: var(--mrd-surface); }
+/* A picture in a cell must not decide the column's width. */
+.editor-area .cm-md-cell-image { max-height: 4em; }
+.editor-area .cm-md-table td:hover, .editor-area .cm-md-table th:hover {
+  box-shadow: inset 0 0 0 1px var(--mrd-accent);
+}
 .editor-area .find-hit { background: var(--mrd-hit); border-radius: 2px; }
 .editor-area .find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit-current-text); }
 
