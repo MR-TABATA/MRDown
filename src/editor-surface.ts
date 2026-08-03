@@ -24,6 +24,7 @@ import { EditorState, StateEffect, StateField, Prec, type Extension } from '@cod
 import { history, historyKeymap, undo, redo } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { syntaxTree } from '@codemirror/language';
+import { findTables, inlineSegments, type TableBlock, type Cell } from './table';
 
 /** A find match, in source offsets — the same shape find.ts produces. */
 export interface Hit {
@@ -207,6 +208,146 @@ const livePreview = ViewPlugin.fromClass(
   }
 );
 
+// --- Tables ----------------------------------------------------------------
+// The one construct the rest of this file's approach can't reach: a table's
+// markup is not decoration *around* content, it *is* the grid, and a grid spans
+// lines. Hiding pipes line by line would leave columns that don't line up, so a
+// whole table is replaced by one block widget that draws real ruled borders.
+//
+// The caret rule stays the same in spirit — the text you are editing is never
+// hidden — but its unit is the block: while the caret (or a selection) is inside
+// a table, the table goes back to being rows of pipes, all of it at once. Click
+// a cell to put the caret there; ↑/↓ across the border does the same.
+
+/** A whole table, drawn where its rows sit. */
+class TableWidget extends WidgetType {
+  /** Where it starts plus its own source: same key, same table, no re-render —
+   *  and never a reused grid whose cells point at stale offsets. */
+  constructor(readonly block: TableBlock, readonly key: string) {
+    super();
+  }
+  eq(other: TableWidget) {
+    return other.key === this.key;
+  }
+  toDOM(view: EditorView): HTMLElement {
+    // A wrapper, so a table wider than the pane scrolls sideways instead of
+    // stretching the editor.
+    const wrap = document.createElement('div');
+    wrap.className = 'cm-md-tablewrap';
+    const table = document.createElement('table');
+    table.className = 'cm-md-table';
+    const head = document.createElement('thead');
+    head.appendChild(this.buildRow(view, this.block.header, 'th'));
+    table.appendChild(head);
+    if (this.block.rows.length) {
+      const body = document.createElement('tbody');
+      for (const row of this.block.rows) body.appendChild(this.buildRow(view, row, 'td'));
+      table.appendChild(body);
+    }
+    wrap.appendChild(table);
+    return wrap;
+  }
+  private buildRow(view: EditorView, cells: Cell[], tag: 'th' | 'td'): HTMLElement {
+    const tr = document.createElement('tr');
+    cells.forEach((cell, i) => {
+      const el = document.createElement(tag);
+      const align = this.block.align[i];
+      if (align) el.style.textAlign = align;
+      // Built as nodes, never as HTML: a cell is source text, and this editor
+      // is not in the business of parsing it into markup.
+      for (const seg of inlineSegments(cell.text)) {
+        if (seg.style === 'plain') {
+          el.appendChild(document.createTextNode(seg.text));
+        } else if (seg.style === 'image') {
+          const img = document.createElement('img');
+          img.className = 'cm-md-image cm-md-cell-image';
+          img.src = resolveImageSrc(seg.src ?? '');
+          img.alt = seg.text;
+          el.appendChild(img);
+        } else {
+          const span = document.createElement('span');
+          span.className = `cm-md-${seg.style}`;
+          span.textContent = seg.text;
+          el.appendChild(span);
+        }
+      }
+      // Clicking a cell is the way *into* the table: the caret lands in that
+      // cell's source, which turns the block back into text under your hands.
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        view.dispatch({ selection: { anchor: cell.from } });
+        view.focus();
+      });
+      tr.appendChild(el);
+    });
+    return tr;
+  }
+  /** Our own listeners handle the clicks; the editor should keep out. */
+  ignoreEvent() {
+    return true;
+  }
+}
+
+interface TableState {
+  deco: DecorationSet;
+  /** Every table in the document, drawn or not — ↑/↓ needs the ones nearby. */
+  blocks: TableBlock[];
+}
+
+/** `cached` is last update's parse, reusable when only the selection moved. */
+function buildTables(state: EditorState, cached: TableBlock[] | null): TableState {
+  const blocks = cached ?? findTables(state.doc.toString());
+  const ranges: Array<ReturnType<Decoration['range']>> = [];
+  for (const b of blocks) {
+    if (state.selection.ranges.some((r) => r.from <= b.to && r.to >= b.from)) continue;
+    const key = `${b.from}:${state.doc.sliceString(b.from, b.to)}`;
+    ranges.push(
+      Decoration.replace({ widget: new TableWidget(b, key), block: true }).range(b.from, b.to)
+    );
+  }
+  return { deco: Decoration.set(ranges, true), blocks };
+}
+
+// A StateField rather than a ViewPlugin: decorations that swallow line breaks
+// change the block structure, which CodeMirror only accepts from the state.
+const tableField = StateField.define<TableState>({
+  create: (state) => buildTables(state, null),
+  update: (value, tr) => {
+    if (!tr.docChanged && !tr.selection) return value;
+    // Moving the caret changes which tables are drawn, not where they are, so
+    // only an edit is worth re-reading the document for.
+    return buildTables(tr.state, tr.docChanged ? null : value.blocks);
+  },
+  provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
+});
+
+/**
+ * ↑/↓ off the line next to a drawn table land inside it instead of stepping
+ * over it. Without this the table is a wall to the keyboard: its lines have no
+ * place on screen for the caret to be, so the cursor skips the whole block.
+ *
+ * Only the *neighbouring* table is considered, and only once the normal move
+ * would leave the current line — a long wrapped line still scrolls through its
+ * own rows first, and a mis-measured move can never throw the caret further
+ * than the table next door.
+ */
+const stepIntoTable = (forward: boolean) => (view: EditorView): boolean => {
+  const { state } = view;
+  const range = state.selection.main;
+  if (!range.empty) return false;
+  const line = state.doc.lineAt(range.head);
+  const target = view.moveVertically(range, forward).head;
+  if (forward ? target <= line.to : target >= line.from) return false;
+  for (const b of state.field(tableField).blocks) {
+    const next = forward ? b.from === line.to + 1 : b.to === line.from - 1;
+    if (!next) continue;
+    const anchor = forward ? b.from : state.doc.lineAt(b.to).from;
+    view.dispatch({ selection: { anchor }, scrollIntoView: true });
+    return true;
+  }
+  return false;
+};
+
 // --- Find highlights -------------------------------------------------------
 // Decorations rather than a mirrored copy of the text under the editor: the
 // same information, none of the "keep two elements pixel-identical" upkeep.
@@ -268,6 +409,8 @@ export class EditorSurface {
         keymap.of([
           { key: 'Mod-z', run: undo, preventDefault: true },
           { key: 'Mod-Shift-z', run: redo, preventDefault: true },
+          { key: 'ArrowDown', run: stepIntoTable(true) },
+          { key: 'ArrowUp', run: stepIntoTable(false) },
           ...historyKeymap,
         ])
       ),
@@ -275,6 +418,7 @@ export class EditorSurface {
       // (marked, also GFM) renders them.
       markdown({ base: markdownLanguage }),
       livePreview,
+      tableField,
       findField,
       drawSelection(),
       highlightActiveLine(),
