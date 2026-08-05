@@ -18,6 +18,9 @@ import {
   firstHeadingTitle,
   extractFrontmatter,
   frontmatterToHtml,
+  parseDocHeader,
+  docHeaderToHtml,
+  type DocHeaderField,
   docStats,
   toggleTaskListItem,
 } from './markdown';
@@ -94,6 +97,7 @@ const fontsizeOption = document.getElementById('fontsize-option')!;
 const outlinePosOption = document.getElementById('outline-pos-option')!;
 const editLayoutOption = document.getElementById('edit-layout-option')!;
 const previewThemeOption = document.getElementById('preview-theme-option')!;
+const logoOption = document.getElementById('logo-option')!;
 const output = document.getElementById('output')!;
 const docStatsEl = document.getElementById('doc-stats')!;
 const emptyState = document.getElementById('empty-state')!;
@@ -589,17 +593,59 @@ function resolveLocalImages(filePath: string) {
   });
 }
 
+// The company logo shown in a document header. Kept as a data URI rather than a
+// path so it survives an HTML export as one self-contained file and can't break
+// when the image moves — see storeDocLogo() for how it is shrunk on the way in.
+const LOGO_KEY = 'mrdown.docLogo';
+const docLogo = () => localStorage.getItem(LOGO_KEY);
+
+function docHeaderLabels(): Record<DocHeaderField, string> {
+  return {
+    title: t('dhTitle'),
+    docNumber: t('dhDocNumber'),
+    version: t('dhVersion'),
+    date: t('dhDate'),
+    author: t('dhAuthor'),
+    classification: t('dhClassification'),
+  };
+}
+
+/**
+ * Frontmatter becomes two things: the fields a corporate document header knows
+ * are drawn as a band at the top, and whatever is left stays the tidy collapsed
+ * panel it has always been (rather than the broken <hr> + text `marked` would
+ * make of `--- … ---`). A document with neither renders nothing.
+ */
+function frontmatterHtml(frontmatter: string | null): string {
+  if (frontmatter === null) return '';
+  const { fields, rest } = parseDocHeader(frontmatter);
+  const header = docHeaderToHtml(fields, docHeaderLabels(), !!docLogo());
+  const panel = rest.trim() ? frontmatterToHtml(rest, t('frontmatter')) : '';
+  return header + panel;
+}
+
+/**
+ * Fill in the header logo on the sanitized DOM. The sanitizer drops `data:` URLs
+ * from markup, so the <img> arrives empty and gets its source here — the same
+ * detour resolveLocalImages() takes for the document's own images.
+ */
+function applyDocLogo() {
+  const img = output.querySelector<HTMLImageElement>('img.doc-header-logo');
+  if (!img) return;
+  const logo = docLogo();
+  if (logo) img.src = logo;
+  else img.remove();
+}
+
 // Render Markdown source into the preview pane (no disk I/O).
 async function renderSource(source: string, filePath: string) {
-  // Pull any leading YAML frontmatter out so it renders as a tidy collapsed
-  // panel instead of the broken <hr> + text marked would make of `--- … ---`.
   const { frontmatter, body } = extractFrontmatter(source);
-  const meta = frontmatter ? frontmatterToHtml(frontmatter, t('frontmatter')) : '';
-  const html = meta + (await marked.parse(body));
+  const html = frontmatterHtml(frontmatter) + (await marked.parse(body));
   output.innerHTML = DOMPurify.sanitize(html);
   addHeadingIds();
   buildOutline();
   resolveLocalImages(filePath);
+  applyDocLogo();
   enableTaskCheckboxes();
   await highlightCode();
   await renderMermaid();
@@ -2236,6 +2282,138 @@ function buildPreviewThemeOption() {
   }
 }
 
+// --- Document header logo -------------------------------------------------
+// Held as a data URI so an exported HTML file stays self-contained and a moved
+// or renamed image file can't break every document at once. That makes its size
+// the thing to watch: localStorage also carries the session, so the picture is
+// shrunk to the band's own scale on the way in rather than stored as shot.
+
+// 2× the ~120px the band draws, so it stays crisp on retina and in print.
+const LOGO_MAX_H = 240;
+const LOGO_MAX_BYTES = 256 * 1024;
+
+// The picture is chosen through the native dialog and its bytes read in Rust,
+// the same pair the app already opens documents with. An <input type="file">
+// would be less code, but a file picker inside WKWebView is not something to
+// take on trust — HTML5 drag-and-drop looked fine in a browser and did nothing
+// in the real window (v1.6.5). Fetching the asset URL instead would have the
+// same shape of problem: no `connect-src` in the CSP means it falls back to
+// 'self', which a plain browser doesn't enforce and the real window does.
+const LOGO_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+};
+
+const readAsDataUrl = (file: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('decode'));
+    img.src = src;
+  });
+
+/** Shrink a chosen image to a storable logo, or throw when it can't be made to fit. */
+async function toStoredLogo(blob: Blob, mime: string): Promise<string> {
+  const raw = await readAsDataUrl(blob);
+  // SVG is already resolution-independent and small; rasterising it would only
+  // cost quality in print.
+  if (mime === 'image/svg+xml') {
+    if (raw.length > LOGO_MAX_BYTES) throw new Error('too-large');
+    return raw;
+  }
+  const img = await loadImage(raw);
+  const scale = Math.min(1, LOGO_MAX_H / (img.naturalHeight || LOGO_MAX_H));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('decode');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  // PNG keeps a flat logo sharp and is usually the smaller of the two; a
+  // photographic one blows past the cap, and there WebP wins by a mile.
+  let out = canvas.toDataURL('image/png');
+  if (out.length > LOGO_MAX_BYTES) out = canvas.toDataURL('image/webp', 0.9);
+  if (out.length > LOGO_MAX_BYTES) throw new Error('too-large');
+  return out;
+}
+
+function buildLogoOption() {
+  logoOption.innerHTML = '';
+  const current = docLogo();
+
+  const preview = document.createElement('div');
+  preview.className = 'logo-preview';
+  if (current) {
+    const img = document.createElement('img');
+    img.src = current;
+    img.alt = '';
+    preview.appendChild(img);
+  } else {
+    preview.classList.add('empty');
+    preview.textContent = t('logoNone');
+  }
+
+  const error = document.createElement('div');
+  error.className = 'logo-error';
+  error.hidden = true;
+
+  const choose = document.createElement('button');
+  choose.type = 'button';
+  choose.className = 'link-btn';
+  choose.textContent = current ? t('logoReplace') : t('logoChoose');
+  choose.addEventListener('click', async () => {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: t('logoLabel'), extensions: Object.keys(LOGO_MIME) }],
+    });
+    if (typeof picked !== 'string') return;
+    const mime = LOGO_MIME[picked.split('.').pop()?.toLowerCase() ?? ''];
+    try {
+      if (!mime) throw new Error('decode');
+      const bytes = await invoke<number[]>('read_image', { path: picked });
+      localStorage.setItem(LOGO_KEY, await toStoredLogo(new Blob([new Uint8Array(bytes)], { type: mime }), mime));
+    } catch (e) {
+      // A quota failure reads the same to the user as an oversized image: the
+      // picture is too big to keep, and a smaller one is the way out.
+      error.textContent = e instanceof Error && e.message === 'decode' ? t('logoBadImage') : t('logoTooLarge');
+      error.hidden = false;
+      return;
+    }
+    buildLogoOption();
+    if (active) void renderSource(active.workingText, active.path ?? '');
+  });
+
+  const row = document.createElement('div');
+  row.className = 'logo-actions';
+  row.appendChild(choose);
+  if (current) {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'link-btn';
+    clear.textContent = t('logoClear');
+    clear.addEventListener('click', () => {
+      localStorage.removeItem(LOGO_KEY);
+      buildLogoOption();
+      if (active) void renderSource(active.workingText, active.path ?? '');
+    });
+    row.appendChild(clear);
+  }
+
+  logoOption.append(preview, row, error);
+}
+
 // Language picker: System (follow the OS) / 日本語 / English.
 function buildLangOptions() {
   const choices: Array<{ value: Lang | 'system'; label: string }> = [
@@ -2496,6 +2674,7 @@ function applyI18n() {
   buildPreviewThemeOption();
   buildOutlinePosOption();
   buildEditLayoutOption();
+  buildLogoOption();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
   invoke('apply_menu', { lang: getLang() }).catch(() => {});
@@ -2509,6 +2688,7 @@ function openSettings() {
   buildPreviewThemeOption();
   buildOutlinePosOption();
   buildEditLayoutOption();
+  buildLogoOption();
   selectSettingsTab('appearance');
   settingsOverlay.hidden = false;
 }

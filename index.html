@@ -197,6 +197,7 @@
           <button class="settings-nav-item active" data-tab="appearance" role="tab" data-i18n="navAppearance">外観</button>
           <button class="settings-nav-item" data-tab="width" role="tab" data-i18n="navWidth">プレビュー幅</button>
           <button class="settings-nav-item" data-tab="toolbar" role="tab" data-i18n="navToolbar">ツールバー</button>
+          <button class="settings-nav-item" data-tab="docheader" role="tab" data-i18n="navDocHeader">文書ヘッダー</button>
           <button class="settings-nav-item" data-tab="lang" role="tab" data-i18n="navLang">言語</button>
           <button class="settings-nav-item" data-tab="licenses" role="tab" data-i18n="navLicenses">ライセンス</button>
         </nav>
@@ -227,6 +228,12 @@
           <section class="settings-pane" data-pane="toolbar" role="tabpanel">
             <div class="settings-section-title" data-i18n="toolbarSection">ツールバーに表示するボタン</div>
             <div id="toolbar-options"></div>
+          </section>
+          <section class="settings-pane" data-pane="docheader" role="tabpanel">
+            <div class="settings-section-title" data-i18n="docHeaderSection">文書ヘッダー</div>
+            <p class="settings-note" data-i18n="docHeaderNote">タイトル・文書番号・版数・作成者・機密区分をメタデータに書くと、文書の先頭に見出しの帯として表示します。ロゴはその帯に入ります。</p>
+            <div class="opt-group-title" data-i18n="logoLabel">ロゴ画像</div>
+            <div id="logo-option"></div>
           </section>
           <section class="settings-pane" data-pane="lang" role="tabpanel">
             <div class="settings-section-title" data-i18n="langSection">言語</div>

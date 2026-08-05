@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, firstHeadingTitle, extractFrontmatter, frontmatterToHtml, docStats, toggleTaskListItem } from './markdown';
+import {
+  slugify,
+  firstHeadingTitle,
+  extractFrontmatter,
+  frontmatterToHtml,
+  parseDocHeader,
+  docHeaderToHtml,
+  type DocHeaderField,
+  docStats,
+  toggleTaskListItem,
+} from './markdown';
 
 describe('slugify', () => {
   it('lowercases and hyphenates whitespace', () => {
@@ -68,6 +78,86 @@ describe('frontmatterToHtml', () => {
     expect(html).toContain('<td colspan="2"><code>tags:</code></td>');
     expect(html).toContain('<td colspan="2"><code>  - a</code></td>');
     expect(html).not.toContain('<th>tags</th>');
+  });
+});
+
+const LABELS: Record<DocHeaderField, string> = {
+  title: 'Title',
+  docNumber: 'Document No.',
+  version: 'Version',
+  date: 'Date',
+  author: 'Author',
+  classification: 'Classification',
+};
+
+describe('parseDocHeader', () => {
+  it('picks up English header keys', () => {
+    const { fields } = parseDocHeader('title: Spec\ndoc: DOC-14\nversion: 1.2\nauthor: Ada');
+    expect(fields).toEqual({ title: 'Spec', docNumber: 'DOC-14', version: '1.2', author: 'Ada' });
+  });
+  it('picks up Japanese header keys', () => {
+    const { fields } = parseDocHeader('タイトル: 要件定義書\n文書番号: DOC-14\n版数: 1.2\n機密区分: 社外秘');
+    expect(fields).toEqual({
+      title: '要件定義書',
+      docNumber: 'DOC-14',
+      version: '1.2',
+      classification: '社外秘',
+    });
+  });
+  it('matches keys case-insensitively and trims the value', () => {
+    const { fields } = parseDocHeader('Version:   2.0   ');
+    expect(fields.version).toBe('2.0');
+  });
+  it('leaves unknown keys for the metadata panel', () => {
+    const { fields, rest } = parseDocHeader('title: Spec\ntags: a, b\ndraft: true');
+    expect(fields).toEqual({ title: 'Spec' });
+    expect(rest).toBe('tags: a, b\ndraft: true');
+  });
+  it('keeps a duplicate of a known key rather than dropping it', () => {
+    // `updated` and `date` share a field: first wins, the loser stays visible.
+    const { fields, rest } = parseDocHeader('date: 2026-08-04\nupdated: 2026-08-05');
+    expect(fields.date).toBe('2026-08-04');
+    expect(rest).toBe('updated: 2026-08-05');
+  });
+  it('does not read indented nested YAML as a header field', () => {
+    const { fields, rest } = parseDocHeader('meta:\n  title: Nested');
+    expect(fields.title).toBeUndefined();
+    expect(rest).toBe('meta:\n  title: Nested');
+  });
+  it('treats a key with an empty value as not set', () => {
+    const { fields, rest } = parseDocHeader('title:');
+    expect(fields.title).toBeUndefined();
+    expect(rest).toBe('title:');
+  });
+});
+
+describe('docHeaderToHtml', () => {
+  it('renders nothing when no known field is present', () => {
+    expect(docHeaderToHtml({}, LABELS, true)).toBe('');
+  });
+  it('draws the title, marking and labelled meta', () => {
+    const html = docHeaderToHtml(
+      { title: '要件定義書', classification: '社外秘', docNumber: 'DOC-14', version: '1.2' },
+      LABELS,
+      false,
+    );
+    expect(html).toContain('<div class="doc-header-title">要件定義書</div>');
+    expect(html).toContain('<span class="doc-header-mark">社外秘</span>');
+    expect(html).toContain('>Document No.</span><span class="doc-header-val">DOC-14<');
+    expect(html).not.toContain('doc-header-logo');
+  });
+  it('emits the logo without a src, for the caller to fill after sanitizing', () => {
+    const html = docHeaderToHtml({ title: 'Spec' }, LABELS, true);
+    expect(html).toContain('<img class="doc-header-logo" alt="">');
+    expect(html).not.toContain('src=');
+  });
+  it('does not draw a band for the logo alone', () => {
+    expect(docHeaderToHtml({}, LABELS, true)).toBe('');
+  });
+  it('escapes HTML in field values', () => {
+    const html = docHeaderToHtml({ title: '<b>x</b> & "y"' }, LABELS, false);
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt; &amp; &quot;y&quot;');
+    expect(html).not.toContain('<b>x</b>');
   });
 });
 

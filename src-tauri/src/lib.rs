@@ -66,6 +66,25 @@ fn print_document(window: tauri::WebviewWindow) -> Result<(), String> {
     window.print().map_err(|e| e.to_string())
 }
 
+/// Read an image file's bytes, used when a logo is picked for the document
+/// header. Reading it here rather than fetching the asset URL from the webview
+/// keeps the CSP as tight as it is: `connect-src` falls back to `'self'`, so a
+/// fetch of `asset:` would be blocked in the real window even though it works in
+/// a plain browser. Guards the extension the way save_image does, so the command
+/// can't be turned into an arbitrary file read.
+#[tauri::command]
+fn read_image(path: String) -> Result<Vec<u8>, String> {
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    if !["png", "jpg", "jpeg", "gif", "webp", "svg"].contains(&ext.as_str()) {
+        return Err("Unsupported image type".to_string());
+    }
+    std::fs::read(&path).map_err(|e| e.to_string())
+}
+
 /// Write pasted image bytes to disk (creating the parent folder if needed), used
 /// when the user pastes an image into the editor. Guards the extension to common
 /// image types so the command can't be coerced into writing arbitrary files.
@@ -761,6 +780,7 @@ pub fn run() {
             save_image,
             export_file,
             print_document,
+            read_image,
             delete_file,
             file_mtime,
             read_dir,
@@ -1076,6 +1096,26 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert!(save_file("/tmp/x.png".to_string(), "data".to_string()).is_err());
+    }
+
+    #[test]
+    fn read_image_reads_images_and_rejects_others() {
+        let dir = scratch("readimg");
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = dir.join("logo.PNG"); // upper case: the guard lowercases first
+        std::fs::write(&png, [0x89, b'P', b'N', b'G']).unwrap();
+        assert_eq!(
+            read_image(png.to_str().unwrap().to_string()).unwrap(),
+            vec![0x89, b'P', b'N', b'G']
+        );
+
+        // The guard is what keeps this from being an arbitrary file read.
+        let key = dir.join("id_rsa");
+        std::fs::write(&key, "secret").unwrap();
+        assert!(read_image(key.to_str().unwrap().to_string()).is_err());
+        assert!(read_image(dir.join("notes.md").to_str().unwrap().to_string()).is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

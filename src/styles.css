@@ -849,6 +849,44 @@ body.has-doc #output { display: block; }
 #output details.frontmatter[open] > summary::before { content: '▾  '; }
 #output details.frontmatter table { margin: 0; width: 100%; }
 
+/* The document header: the corporate letterhead a design doc or a spec is
+   expected to carry. It is drawn once, at the top of the document, because the
+   preview has no pages — a band repeated per printed page would have nowhere
+   honest to appear on screen. What you see here is what lands in the PDF.
+   Colours come from the #output tokens, so it follows the preview theme. */
+#output .doc-header {
+  margin: 0 0 2em; padding: 0 0 1em; border-bottom: 2px solid var(--mrd-border);
+  break-inside: avoid; break-after: avoid;
+}
+#output .doc-header-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 0.75em; min-height: 1em;
+}
+#output img.doc-header-logo {
+  height: 40px; width: auto; max-width: 45%; object-fit: contain;
+  margin: 0; border-radius: 0;
+}
+/* Outlined rather than filled: browsers drop background fills when printing
+   unless the user ticks "background graphics", but text and borders always
+   print — and a confidentiality marking that silently vanishes is the one
+   thing this band must never do. */
+#output .doc-header-mark {
+  margin-left: auto; padding: 3px 10px; border: 1px solid currentColor; border-radius: 4px;
+  /* Nudged toward the reading text colour so it stays legible whether the page
+     under it is dark or light, the way --mrd-faint does. */
+  color: color-mix(in srgb, #e5484d 80%, var(--mrd-text));
+  font-size: 0.8em; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap;
+}
+#output .doc-header-title {
+  font-size: 1.6em; font-weight: 700; line-height: 1.3; color: var(--mrd-text);
+}
+#output .doc-header-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 24px; margin-top: 0.6em; font-size: 0.85em;
+}
+#output .doc-header-item { display: flex; gap: 8px; }
+#output .doc-header-key { color: var(--mrd-muted); }
+#output .doc-header-val { color: var(--mrd-text); font-variant-numeric: tabular-nums; }
+
 /* Preview themes: retint the reading surface to look like GitHub's rendered
    Markdown, for reading AI-generated .md the way you'd read it on GitHub. Each
    overrides the app's colour tokens *scoped to #output only*, so the app chrome
@@ -1340,6 +1378,23 @@ body.has-doc #output { display: block; }
   cursor: pointer;
 }
 .link-btn:hover { text-decoration: underline; }
+
+/* An explanatory line under a section title, for settings whose effect isn't
+   obvious from the control alone. */
+.settings-note {
+  margin: 0 0 4px; font-size: 12px; line-height: 1.55; color: var(--mrd-muted); max-width: 46em;
+}
+
+/* Logo picker: what is stored today, then the actions on it. */
+.logo-preview {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 64px; padding: 10px;
+  border: 1px solid var(--mrd-border); border-radius: 8px; background: var(--mrd-surface);
+}
+.logo-preview img { max-height: 44px; max-width: 100%; object-fit: contain; }
+.logo-preview.empty { color: var(--mrd-faint); font-size: 12px; }
+.logo-actions { display: flex; gap: 16px; margin-top: 8px; }
+.logo-error { margin-top: 8px; font-size: 12px; color: color-mix(in srgb, #e5484d 80%, var(--mrd-text)); }
 #toolbar-options label,
 #outline-pos-option label,
 #edit-layout-option label,
@@ -1499,10 +1554,24 @@ body.reading #output {
   }
   @page { margin: 16mm; }
 
+  /* A preview theme retints #output itself, so those tokens outrank the :root
+     overrides above for everything inside the document — reset them here, or
+     printing while GitHub-dark is on lays near-white text onto white paper. */
+  #output, #output[data-preview-theme] {
+    --mrd-bg: #ffffff;
+    --mrd-text: #16181d;
+    --mrd-muted: #57606a;
+    --mrd-border: #d1d9e0;
+    --mrd-surface: #f6f8fa;
+    --mrd-surface-2: #f0f1f4;
+  }
+
   /* Don't split a block across a page, and never strand a heading at the foot. */
   #output pre, #output table, #output img, #output blockquote,
   #output .mermaid-diagram, #output .katex-display { break-inside: avoid; }
   #output h1, #output h2, #output h3, #output h4 { break-after: avoid; }
+  /* The header belongs to the first page with the document it introduces. */
+  #output .doc-header { break-inside: avoid; break-after: avoid; }
 
   /* The syntax palette is tuned for the dark preview; swap in a light one so
      code is legible on paper. */
