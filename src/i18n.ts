@@ -97,6 +97,8 @@ const DICT = {
     templatesSection: 'テンプレート',
     templatesNote:
       'フォルダに入れた .md が、そのまま新規作成のテンプレートになります。直すときはその .md を開いて編集してください。{{date}} と書いた箇所は作成日に置き換わります。フォルダが空のときは組み込みの2つを使います。',
+    templatesRepoNote:
+      'リポジトリの中に置くのがおすすめです。clone しただけでチーム全員に配られ、AI エージェントも指示なしで読みます（雛形自体の変更履歴も残ります）。',
     templateFolderLabel: 'テンプレートフォルダ',
     templateFolderNone: '未設定（組み込みの2つを使います）',
     templateFolderChoose: 'フォルダを選ぶ…',
@@ -106,6 +108,10 @@ const DICT = {
     templateSeeded: '書き出しました',
     templateSeedFailed: '書き出せませんでした',
     templateNoShape: 'この文書には雛形にできる構造（見出し・表・メタデータ）がありません。',
+    templateIntoRepo: '開いているフォルダの {dir} に置く',
+    templateForAgents: 'エージェント向けの指示をコピー',
+    templateForAgentsCopied: 'コピーしました。AGENTS.md（や CLAUDE.md）に貼ってください。',
+    templateForAgentsFailed: 'コピーできませんでした。',
     // preview
     frontmatter: 'メタデータ',
     // settings
@@ -277,6 +283,8 @@ const DICT = {
     templatesSection: 'Templates',
     templatesNote:
       'Any .md file in this folder becomes a template for new documents. To change one, open that .md and edit it. Anywhere you write {{date}} is replaced with the date the document is created. An empty folder falls back to the two built-in templates.',
+    templatesRepoNote:
+      'Keep them inside a repository. Then they arrive with the clone for everyone on the team, an AI agent reads them without being told, and changes to the templates themselves are reviewable.',
     templateFolderLabel: 'Template folder',
     templateFolderNone: 'Not set — using the two built-in templates',
     templateFolderChoose: 'Choose a folder…',
@@ -286,6 +294,10 @@ const DICT = {
     templateSeeded: 'Written',
     templateSeedFailed: "Couldn't write the templates",
     templateNoShape: 'This document has no structure (headings, tables, metadata) to make a template from.',
+    templateIntoRepo: 'Put them in {dir} of the open folder',
+    templateForAgents: 'Copy the instructions for agents',
+    templateForAgentsCopied: 'Copied — paste it into AGENTS.md (or CLAUDE.md).',
+    templateForAgentsFailed: "Couldn't copy.",
     frontmatter: 'Metadata',
     settingsTitle: 'Settings',
     navAppearance: 'Appearance',

@@ -236,6 +236,43 @@ export function fillTemplate(text: string, today: Date = new Date()): string {
 }
 
 /**
+ * The convention block to paste into a repository's AGENTS.md (or CLAUDE.md, or
+ * whatever that team's agent reads).
+ *
+ * This is the whole enforcement mechanism, and it isn't one. A document written
+ * by an agent in an editor is born without your format, and no gate placed after
+ * that moment can put it back — the only thing that works is for the template to
+ * be what the agent reaches for first. Committed to the repository it arrives by
+ * clone, is read without anyone being told, and changes to it are reviewable.
+ */
+export function agentInstructions(dir: string, lang: Lang): string {
+  return lang === 'ja'
+    ? `## 文書の雛形
+
+\`${dir}\` の .md は、設計書・要件定義書などを書くための雛形です。
+この種の文書を作るときは、必ず該当する雛形を読み、その構成を保ったまま中身を埋めてください。
+
+- 見出しの構成と順序は変えない
+- frontmatter のキーは残す（値を埋める）
+- \`{{date}}\` はその日の日付に置き換える
+- 表は列を保ったまま行を足す
+- 当てはまる雛形が無いときだけ、自由な構成で書く
+`
+    : `## Document templates
+
+The .md files in \`${dir}\` are the templates for design docs, specs and the like.
+When writing one of those, read the matching template first and fill it in without
+changing its shape.
+
+- Keep the headings, and their order
+- Keep the frontmatter keys; fill in their values
+- Replace \`{{date}}\` with the current date
+- Add rows to the tables, keeping their columns
+- Only write your own structure when no template fits
+`;
+}
+
+/**
  * Strip a filled-in document down to its shape, so a document you liked — one
  * you wrote, or one a client sent — can become a template without retyping it.
  * This is the mechanical half of what turning a real spec into a skeleton

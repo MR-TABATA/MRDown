@@ -20,6 +20,9 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
       if (!e) throw new Error(`No such file: ${args.path}`);
       return r(e.mtime);
     }
+    // Templates are written the same way here; the real command's extra job is
+    // creating the folder, which an in-memory map has no equivalent of.
+    case 'write_template':
     case 'save_file':
     case 'export_file': {
       const prev = files.get(args.path);
@@ -95,6 +98,12 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
       return r(refs.get(args.path) ?? []);
     case 'git_ref_content':
       return r(refContent.get(`${args.path}\0${args.rev}`) ?? null);
+
+    // No image bytes live in the fixtures, so a logo can't be picked here — the
+    // command exists to keep the demo failing loudly if the app starts needing
+    // it for something the scenario does cover.
+    case 'read_image':
+      throw new Error('mock invoke: read_image has no fixture');
 
     case 'save_image': {
       files.set(args.path, { content: `<binary ${basename(args.path)}>`, mtime: Date.now() });

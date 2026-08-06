@@ -24,7 +24,14 @@ import {
   docStats,
   toggleTaskListItem,
 } from './markdown';
-import { docTemplate, fillTemplate, toTemplateSkeleton, TEMPLATE_KINDS, type TemplateKind } from './templates';
+import {
+  docTemplate,
+  fillTemplate,
+  toTemplateSkeleton,
+  agentInstructions,
+  TEMPLATE_KINDS,
+  type TemplateKind,
+} from './templates';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts, type Match } from './find';
 import {
   sideBySide,
@@ -1565,7 +1572,13 @@ const TEMPLATE_LABEL: Record<TemplateKind, Key> = {
 // and no editor for them: a template is a document, so the way to change one is
 // to open it here like any other. Sharing a set is sending the folder — which is
 // also what a distributed format pack would have to be.
+// Kept in a repository rather than a personal folder wherever possible: that is
+// what actually gets the templates used. A folder under ~/Documents reaches one
+// machine and has to be pointed at by hand every time; committed to the repo it
+// arrives with the clone, and the agent writing the document reads it without
+// anyone being told to.
 const TEMPLATE_FOLDER_KEY = 'mrdown.templateFolder';
+const TEMPLATE_DIR_IN_REPO = 'docs/_templates';
 const templateFolder = () => localStorage.getItem(TEMPLATE_FOLDER_KEY);
 
 /** What the picker offers: the user's folder when it holds any, else the built-ins. */
@@ -1615,7 +1628,10 @@ function updateTemplatePicker() {
   templatePicker.hidden = !(isEditing && !!active && active.path === null && active.workingText === '');
 }
 
-function buildTemplateFolderOption() {
+// `message` survives the rebuild: several of the actions below change what the
+// pane should show *and* have something to report, and setting the text before
+// re-rendering would only throw it away.
+function buildTemplateFolderOption(message?: string) {
   templateFolderOption.innerHTML = '';
   const folder = templateFolder();
 
@@ -1625,7 +1641,8 @@ function buildTemplateFolderOption() {
 
   const status = document.createElement('div');
   status.className = 'template-folder-status';
-  status.hidden = true;
+  status.textContent = message ?? '';
+  status.hidden = !message;
 
   const choose = document.createElement('button');
   choose.type = 'button';
@@ -1642,6 +1659,52 @@ function buildTemplateFolderOption() {
   const row = document.createElement('div');
   row.className = 'logo-actions';
   row.appendChild(choose);
+
+  // The one-click version of the whole idea: put them in the repository that is
+  // already open, where the team and their agents will find them.
+  if (folderRoot) {
+    const sep = folderRoot.includes('\\') ? '\\' : '/';
+    const dir = `${folderRoot}${sep}${TEMPLATE_DIR_IN_REPO.split('/').join(sep)}`;
+    const intoRepo = document.createElement('button');
+    intoRepo.type = 'button';
+    intoRepo.className = 'link-btn';
+    intoRepo.textContent = t('templateIntoRepo', { dir: TEMPLATE_DIR_IN_REPO });
+    intoRepo.addEventListener('click', async () => {
+      const lang = getLang();
+      try {
+        for (const kind of TEMPLATE_KINDS) {
+          const name = sanitizeFilename(t(TEMPLATE_LABEL[kind]));
+          await invoke('write_template', { path: `${dir}${sep}${name}.md`, content: docTemplate(kind, lang) });
+        }
+        localStorage.setItem(TEMPLATE_FOLDER_KEY, dir);
+        buildTemplateFolderOption(t('templateSeeded'));
+      } catch {
+        buildTemplateFolderOption(t('templateSeedFailed'));
+      }
+      void buildTemplateChoices();
+    });
+    row.appendChild(intoRepo);
+  }
+
+  if (folder) {
+    // The instructions go to the clipboard rather than into a file: which file an
+    // agent reads is the team's convention (AGENTS.md, CLAUDE.md, …), and
+    // appending to one this app didn't write is not its call to make.
+    const forAgents = document.createElement('button');
+    forAgents.type = 'button';
+    forAgents.className = 'link-btn';
+    forAgents.textContent = t('templateForAgents');
+    forAgents.addEventListener('click', async () => {
+      const shown = folderRoot && folder.startsWith(folderRoot)
+        ? folder.slice(folderRoot.length).replace(/^[/\\]/, '')
+        : tildify(folder, home);
+      status.textContent = (await copyText(agentInstructions(shown, getLang())))
+        ? t('templateForAgentsCopied')
+        : t('templateForAgentsFailed');
+      status.hidden = false;
+    });
+    row.appendChild(forAgents);
+  }
 
   if (folder) {
     // Seeding beats starting from an empty folder: most people want the shipped

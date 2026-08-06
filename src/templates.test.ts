@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { docTemplate, fillTemplate, isoDate, toTemplateSkeleton, TEMPLATE_KINDS } from './templates';
+import {
+  agentInstructions,
+  docTemplate,
+  fillTemplate,
+  isoDate,
+  toTemplateSkeleton,
+  TEMPLATE_KINDS,
+} from './templates';
 import { extractFrontmatter, parseDocHeader } from './markdown';
 
 describe('isoDate', () => {
@@ -192,4 +199,20 @@ describe('templates feed the document header', () => {
       });
     }
   }
+});
+
+describe('agentInstructions', () => {
+  it('names the folder the templates actually live in', () => {
+    expect(agentInstructions('docs/_templates', 'ja')).toContain('`docs/_templates`');
+    expect(agentInstructions('docs/_templates', 'en')).toContain('`docs/_templates`');
+  });
+  it('is written in the language it wants the agent to work in', () => {
+    expect(agentInstructions('x', 'ja')).toContain('雛形');
+    expect(agentInstructions('x', 'en')).not.toContain('雛形');
+  });
+  it('tells the agent the things that keep a document readable by the header', () => {
+    const ja = agentInstructions('x', 'ja');
+    expect(ja).toContain('frontmatter');
+    expect(ja).toContain('{{date}}');
+  });
 });

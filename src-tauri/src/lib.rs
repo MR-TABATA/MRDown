@@ -43,6 +43,21 @@ fn save_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// Write a template, building the folder it belongs in. Separate from save_file
+/// because saving a document should never quietly create a directory tree from a
+/// mistyped path — whereas seeding `docs/_templates/` into a repository exists to
+/// create exactly that folder.
+#[tauri::command]
+fn write_template(path: String, content: String) -> Result<(), String> {
+    if !is_supported(&path) {
+        return Err("Unsupported file type".to_string());
+    }
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
 /// Write an exported document to disk. Guards the extension so this can't be
 /// used to write arbitrary files, mirroring `save_file`'s restriction.
 #[tauri::command]
@@ -797,6 +812,7 @@ pub fn run() {
             export_file,
             print_document,
             read_image,
+            write_template,
             delete_file,
             file_mtime,
             read_dir,
