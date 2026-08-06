@@ -116,12 +116,22 @@
         <p>ほかのエディタと違うところ。</p>
       </div>
 
-      <!-- The four that carry the argument. -->
+      <!-- The ones that carry the argument. -->
       <div class="features primary">
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg></div>
           <h3>何が変わったかを読む</h3>
           <p>保存も、外部からの書き換えも、すべて版として記録。任意の2版を並べて差分を見られます。Git リポジトリなら <code>HEAD</code> も同じ一覧に並ぶので、コミット済みとの差分もそのまま。ワンクリックで復元でき、保存するまで上書きしません。<strong>Git は無くても動きます。</strong></p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="7" y1="6" x2="10" y2="6"/></svg></div>
+          <h3>社名の入った文書として出せる</h3>
+          <p>タイトル・文書番号・版数・作成者・機密区分をメタデータに書くと、文書の先頭に<strong>帯</strong>として描かれます。ロゴは一度登録すれば全文書に。<strong>プレビューに出るものが、そのまま PDF に出ます。</strong>社内の設計書や要件定義書を、Markdown のまま最後まで持っていけます。</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></div>
+          <h3>雛形はリポジトリに置く</h3>
+          <p>テンプレートは<strong>フォルダに置いたただの <code>.md</code></strong>。開いているフォルダの <code>docs/_templates/</code> は自動で使われるので、リポジトリを移れば雛形も切り替わります。clone しただけでチーム全員に配られ、<code>AGENTS.md</code> に一行足せば <strong>AI エージェントもその書式で書きます</strong>。気に入った文書から型だけ抜くこともできます。</p>
         </div>
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
