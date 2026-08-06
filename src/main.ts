@@ -1818,6 +1818,16 @@ async function buildTemplateFolderOption(message?: string) {
     row.append(seed, clear);
   }
 
+  // With no folder open the repository option isn't merely absent, it has
+  // nothing to act on — and the pane's whole advice is "keep them in the
+  // repository". Say so rather than leaving a gap where a button would be.
+  if (!repoDir) {
+    const hint = document.createElement('div');
+    hint.className = 'template-folder-status';
+    hint.textContent = t('templateNeedsFolder');
+    templateFolderOption.append(where, row, hint, status);
+    return;
+  }
   templateFolderOption.append(where, row, status);
 }
 
