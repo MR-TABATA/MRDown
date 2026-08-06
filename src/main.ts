@@ -1109,6 +1109,29 @@ async function loadFolder(root: string, expanded: string[] = []) {
   renderTree();
 }
 
+/**
+ * Re-read the open folder from disk, keeping what was expanded. The tree caches
+ * every listing it has made, so anything this app writes into the folder itself
+ * stays invisible until something asks for it again.
+ *
+ * `reveal` expands the path down to a folder that was just created, so it can be
+ * seen rather than merely existing.
+ */
+async function refreshFolderTree(reveal?: string) {
+  if (!folderRoot) return;
+  const expanded = [...expandedFolders];
+  if (reveal?.startsWith(folderRoot)) {
+    const sep = folderRoot.includes('\\') ? '\\' : '/';
+    let path = folderRoot;
+    for (const part of reveal.slice(folderRoot.length).split(/[/\\]/).filter(Boolean)) {
+      path += sep + part;
+      if (!expanded.includes(path)) expanded.push(path);
+    }
+  }
+  await loadFolder(folderRoot, expanded);
+  saveFolderState();
+}
+
 function closeFolder() {
   folderRoot = null;
   expandedFolders.clear();
@@ -1725,6 +1748,9 @@ async function buildTemplateFolderOption(message?: string) {
           const name = sanitizeFilename(t(TEMPLATE_LABEL[kind]));
           await invoke('write_template', { path: `${repoDir}${sep}${name}.md`, content: docTemplate(kind, lang) });
         }
+        // Show them in the tree: files this app just created shouldn't need a
+        // reopen of the folder to become visible.
+        await refreshFolderTree(repoDir);
         void buildTemplateFolderOption(t('templateSeeded'));
       } catch {
         void buildTemplateFolderOption(t('templateSeedFailed'));
@@ -1771,6 +1797,7 @@ async function buildTemplateFolderOption(message?: string) {
           const name = sanitizeFilename(t(TEMPLATE_LABEL[kind]));
           await invoke('write_template', { path: `${override}${sep}${name}.md`, content: docTemplate(kind, lang) });
         }
+        await refreshFolderTree(override);
         void buildTemplateFolderOption(t('templateSeeded'));
       } catch {
         void buildTemplateFolderOption(t('templateSeedFailed'));
