@@ -24,7 +24,7 @@ import {
   docStats,
   toggleTaskListItem,
 } from './markdown';
-import { docTemplate, TEMPLATE_KINDS, type TemplateKind } from './templates';
+import { docTemplate, fillTemplate, toTemplateSkeleton, TEMPLATE_KINDS, type TemplateKind } from './templates';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts, type Match } from './find';
 import {
   sideBySide,
@@ -101,6 +101,7 @@ const previewThemeOption = document.getElementById('preview-theme-option')!;
 const logoOption = document.getElementById('logo-option')!;
 const templatePicker = document.getElementById('template-picker')!;
 const templateChoices = document.getElementById('template-choices')!;
+const templateFolderOption = document.getElementById('template-folder-option')!;
 const output = document.getElementById('output')!;
 const docStatsEl = document.getElementById('doc-stats')!;
 const emptyState = document.getElementById('empty-state')!;
@@ -1560,14 +1561,52 @@ const TEMPLATE_LABEL: Record<TemplateKind, Key> = {
   requirements: 'templateRequirements',
 };
 
-function buildTemplateChoices() {
+// A folder of plain .md files is the whole storage format. No template registry
+// and no editor for them: a template is a document, so the way to change one is
+// to open it here like any other. Sharing a set is sending the folder — which is
+// also what a distributed format pack would have to be.
+const TEMPLATE_FOLDER_KEY = 'mrdown.templateFolder';
+const templateFolder = () => localStorage.getItem(TEMPLATE_FOLDER_KEY);
+
+/** What the picker offers: the user's folder when it holds any, else the built-ins. */
+async function templateEntries(): Promise<Array<{ label: string; load: () => Promise<string> }>> {
+  const folder = templateFolder();
+  if (folder) {
+    const files = (await listDir(folder))
+      .filter((e) => !e.is_dir && /\.md$/i.test(e.path))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    // An empty (or missing) folder falls back rather than leaving no way to
+    // start — the setting shouldn't be able to take the feature away.
+    if (files.length) {
+      return files.map((f) => ({
+        label: f.name.replace(/\.md$/i, ''),
+        load: () => invoke<string>('read_file', { path: f.path }),
+      }));
+    }
+  }
+  const lang = getLang();
+  return TEMPLATE_KINDS.map((kind) => ({
+    label: t(TEMPLATE_LABEL[kind]),
+    load: async () => docTemplate(kind, lang),
+  }));
+}
+
+async function buildTemplateChoices() {
+  const entries = await templateEntries();
   templateChoices.innerHTML = '';
-  for (const kind of TEMPLATE_KINDS) {
+  for (const entry of entries) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'template-choice';
-    btn.textContent = t(TEMPLATE_LABEL[kind]);
-    btn.addEventListener('click', () => applyTemplate(kind));
+    btn.textContent = entry.label;
+    btn.addEventListener('click', async () => {
+      try {
+        applyTemplate(await entry.load());
+      } catch {
+        /* the file went away between listing and clicking — refresh the chips */
+        void buildTemplateChoices();
+      }
+    });
     templateChoices.appendChild(btn);
   }
 }
@@ -1576,9 +1615,76 @@ function updateTemplatePicker() {
   templatePicker.hidden = !(isEditing && !!active && active.path === null && active.workingText === '');
 }
 
-function applyTemplate(kind: TemplateKind) {
+function buildTemplateFolderOption() {
+  templateFolderOption.innerHTML = '';
+  const folder = templateFolder();
+
+  const where = document.createElement('div');
+  where.className = folder ? 'template-folder-path' : 'template-folder-path empty';
+  where.textContent = folder ? tildify(folder, home) : t('templateFolderNone');
+
+  const status = document.createElement('div');
+  status.className = 'template-folder-status';
+  status.hidden = true;
+
+  const choose = document.createElement('button');
+  choose.type = 'button';
+  choose.className = 'link-btn';
+  choose.textContent = folder ? t('templateFolderChange') : t('templateFolderChoose');
+  choose.addEventListener('click', async () => {
+    const picked = await open({ directory: true, multiple: false });
+    if (typeof picked !== 'string') return;
+    localStorage.setItem(TEMPLATE_FOLDER_KEY, picked);
+    buildTemplateFolderOption();
+    void buildTemplateChoices();
+  });
+
+  const row = document.createElement('div');
+  row.className = 'logo-actions';
+  row.appendChild(choose);
+
+  if (folder) {
+    // Seeding beats starting from an empty folder: most people want the shipped
+    // skeletons *adjusted*, not written from nothing.
+    const seed = document.createElement('button');
+    seed.type = 'button';
+    seed.className = 'link-btn';
+    seed.textContent = t('templateSeed');
+    seed.addEventListener('click', async () => {
+      const lang = getLang();
+      const sep = folder.includes('\\') ? '\\' : '/';
+      try {
+        for (const kind of TEMPLATE_KINDS) {
+          const name = sanitizeFilename(t(TEMPLATE_LABEL[kind]));
+          await invoke('save_file', { path: `${folder}${sep}${name}.md`, content: docTemplate(kind, lang) });
+        }
+        status.textContent = t('templateSeeded');
+      } catch {
+        status.textContent = t('templateSeedFailed');
+      }
+      status.hidden = false;
+      void buildTemplateChoices();
+    });
+
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'link-btn';
+    clear.textContent = t('templateFolderClear');
+    clear.addEventListener('click', () => {
+      localStorage.removeItem(TEMPLATE_FOLDER_KEY);
+      buildTemplateFolderOption();
+      void buildTemplateChoices();
+    });
+
+    row.append(seed, clear);
+  }
+
+  templateFolderOption.append(where, row, status);
+}
+
+function applyTemplate(raw: string) {
   if (!active) return;
-  const text = docTemplate(kind, getLang());
+  const text = fillTemplate(raw);
   // Land the caret on the title, the one field that has to be filled in before
   // the document header means anything.
   const m = /^(?:タイトル|title):[ \t]*/m.exec(text);
@@ -1596,6 +1702,26 @@ function applyTemplate(kind: TemplateKind) {
   renderSource(active.workingText, active.path ?? '');
   updateTemplatePicker();
   editor.focus();
+}
+
+/**
+ * Take the shape of the active document into a new one, for the author to trim
+ * and then save wherever their templates live. It is deliberately not written
+ * to the template folder: the extraction can't tell a section's instructions
+ * from its content, so the result is a draft to look at, not a decision made.
+ */
+function templateFromDoc() {
+  if (!active) return;
+  const skeleton = toTemplateSkeleton(active.workingText);
+  if (!skeleton) {
+    // Nothing structural to take — say so rather than opening a blank document
+    // that looks like a failure of the save.
+    statusbar.hidden = false;
+    statusPath.textContent = t('templateNoShape');
+    return;
+  }
+  newDoc();
+  applyTemplate(skeleton);
 }
 
 // Create a new, empty "untitled" document and start editing it.
@@ -2736,7 +2862,8 @@ function applyI18n() {
   buildOutlinePosOption();
   buildEditLayoutOption();
   buildLogoOption();
-  buildTemplateChoices();
+  buildTemplateFolderOption();
+  void buildTemplateChoices();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
   invoke('apply_menu', { lang: getLang() }).catch(() => {});
@@ -2751,6 +2878,7 @@ function openSettings() {
   buildOutlinePosOption();
   buildEditLayoutOption();
   buildLogoOption();
+  buildTemplateFolderOption();
   selectSettingsTab('appearance');
   settingsOverlay.hidden = false;
 }
@@ -4355,6 +4483,7 @@ listen<string>('open-file', (e) => {
 listen<string>('menu', (e) => {
   switch (e.payload) {
     case 'new': newDoc(); break;
+    case 'template_from_doc': templateFromDoc(); break;
     case 'open': openBtn.click(); break;
     case 'save': save(); break;
     case 'save_as': saveAs(); break;

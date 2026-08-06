@@ -256,9 +256,10 @@ fn handle_opened_file(app: &tauri::AppHandle, path: String) {
 /// Menu items that act on the active document, and so are dead without one.
 /// Their frontend handlers all bail out when nothing is open, which made them
 /// look clickable but do nothing; `set_doc_items_enabled` greys them out instead.
-const DOC_ITEMS: [&str; 10] = [
+const DOC_ITEMS: [&str; 11] = [
     "save",
     "save_as",
+    "template_from_doc",
     "reload",
     "export_html",
     "export_pdf",
@@ -324,6 +325,9 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
             &sep()?,
             &MenuItem::with_id(app, "save", pick("保存", "Save"), has_doc, Some("CmdOrCtrl+S"))?,
             &MenuItem::with_id(app, "save_as", pick("別名で保存…", "Save As…"), has_doc, Some("CmdOrCtrl+Shift+S"))?,
+            // Opens the extracted skeleton as a new document rather than writing
+            // it anywhere: what to keep is a judgement the author has to make.
+            &MenuItem::with_id(app, "template_from_doc", pick("この文書から雛形を作る", "Make a Template from This Document"), has_doc, None::<&str>)?,
             &MenuItem::with_id(app, "reload", pick("再読み込み", "Reload"), has_doc, Some("CmdOrCtrl+R"))?,
             &sep()?,
             &MenuItem::with_id(app, "export_html", pick("HTML として書き出す…", "Export as HTML…"), has_doc, Some("CmdOrCtrl+Shift+E"))?,

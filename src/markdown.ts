@@ -156,6 +156,11 @@ for (const [field, names] of Object.entries(DOC_HEADER_KEYS) as [DocHeaderField,
   for (const name of names) DOC_HEADER_ALIAS.set(name, field);
 }
 
+/** Which header field a frontmatter key names, if any. Case-insensitive. */
+export function docHeaderFieldFor(key: string): DocHeaderField | undefined {
+  return DOC_HEADER_ALIAS.get(key.trim().toLowerCase());
+}
+
 /** The order fields appear in the header's meta row (title/classification sit apart). */
 const DOC_HEADER_META_ORDER: DocHeaderField[] = ['docNumber', 'version', 'date', 'author'];
 

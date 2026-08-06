@@ -1433,6 +1433,19 @@ body.has-doc #output { display: block; }
 .logo-preview.empty { color: var(--mrd-faint); font-size: 12px; }
 .logo-actions { display: flex; gap: 16px; margin-top: 8px; }
 .logo-error { margin-top: 8px; font-size: 12px; color: color-mix(in srgb, #e5484d 80%, var(--mrd-text)); }
+
+/* Template folder: where the .md files are read from. */
+.template-folder-path {
+  padding: 8px 10px;
+  border: 1px solid var(--mrd-border); border-radius: 6px; background: var(--mrd-surface);
+  font-size: 12px; color: var(--mrd-text); word-break: break-all;
+}
+.template-folder-path.empty { color: var(--mrd-faint); }
+.template-folder-status { margin-top: 8px; font-size: 12px; color: var(--mrd-muted); }
+.settings-note code {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 0.92em;
+  background: var(--mrd-surface-2); border-radius: 3px; padding: 0 3px;
+}
 #toolbar-options label,
 #outline-pos-option label,
 #edit-layout-option label,

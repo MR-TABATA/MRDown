@@ -10,6 +10,7 @@
 // from a template shows its letterhead the moment a title is typed.
 
 import type { Lang } from './i18n';
+import { docHeaderFieldFor } from './markdown';
 
 export type TemplateKind = 'design' | 'requirements';
 export const TEMPLATE_KINDS: TemplateKind[] = ['design', 'requirements'];
@@ -21,11 +22,11 @@ export function isoDate(d: Date): string {
 }
 
 const JA = {
-  design: (date: string) => `---
+  design: `---
 タイトル:
 文書番号:
 版数: 0.1
-日付: ${date}
+日付: {{date}}
 作成者:
 機密区分: 社外秘
 ---
@@ -64,11 +65,11 @@ const JA = {
 
 - [ ]
 `,
-  requirements: (date: string) => `---
+  requirements: `---
 タイトル:
 文書番号:
 版数: 0.1
-日付: ${date}
+日付: {{date}}
 作成者:
 機密区分: 社外秘
 ---
@@ -116,11 +117,11 @@ const JA = {
 };
 
 const EN = {
-  design: (date: string) => `---
+  design: `---
 title:
 doc:
 version: 0.1
-date: ${date}
+date: {{date}}
 author:
 classification: Confidential
 ---
@@ -159,11 +160,11 @@ classification: Confidential
 
 - [ ]
 `,
-  requirements: (date: string) => `---
+  requirements: `---
 title:
 doc:
 version: 0.1
-date: ${date}
+date: {{date}}
 author:
 classification: Confidential
 ---
@@ -213,8 +214,133 @@ classification: Confidential
 /**
  * The template body for a kind, in the app's language. Bilingual side-by-side
  * would only mean deleting half of it before writing, so each language gets its
- * own; the header keys differ to match ([[parseDocHeader]] accepts both).
+ * own; the header keys differ to match (parseDocHeader accepts both).
+ *
+ * Still holds its placeholders — fillTemplate() resolves them, so the built-ins
+ * and a template the user wrote take exactly the same path.
  */
-export function docTemplate(kind: TemplateKind, lang: Lang, today: Date = new Date()): string {
-  return (lang === 'ja' ? JA : EN)[kind](isoDate(today));
+export function docTemplate(kind: TemplateKind, lang: Lang): string {
+  return (lang === 'ja' ? JA : EN)[kind];
+}
+
+/**
+ * Resolve the placeholders a template may carry, on the way into the editor.
+ *
+ * Deliberately one placeholder. `{{date}}` is the one a document can't sensibly
+ * ship without and can't be typed once and reused; everything past it —
+ * `{{author}}`, `{{year}}`, conditionals — is the start of a small template
+ * language, and a Markdown editor is the wrong place to grow one.
+ */
+export function fillTemplate(text: string, today: Date = new Date()): string {
+  return text.replace(/\{\{\s*date\s*\}\}/g, isoDate(today));
+}
+
+/**
+ * Strip a filled-in document down to its shape, so a document you liked — one
+ * you wrote, or one a client sent — can become a template without retyping it.
+ * This is the mechanical half of what turning a real spec into a skeleton
+ * involves; the judgement half stays with the author.
+ *
+ * Kept: frontmatter keys, headings, table headers, one task-list item per run,
+ * HTML comments (already instructions), thematic breaks.
+ * Dropped: prose, quotes, code, images, plain lists, table bodies.
+ *
+ * The one place it can't be right by construction is prose — a single line
+ * under a heading may be the section's instructions or may be its content, and
+ * nothing in the text says which. It is dropped, which is why the caller must
+ * open the result for review instead of saving it: a wrong guess then costs one
+ * undo, not a bad template kept forever.
+ */
+export function toTemplateSkeleton(source: string): string {
+  const lines = source.replace(/\r\n?/g, '\n').split('\n');
+  const blocks: string[] = [];
+  let i = 0;
+
+  if (/^---[ \t]*$/.test(lines[0] ?? '')) {
+    let end = -1;
+    for (let n = 1; n < lines.length; n++) {
+      if (/^(---|\.\.\.)[ \t]*$/.test(lines[n])) {
+        end = n;
+        break;
+      }
+    }
+    if (end > 0) {
+      const kept: string[] = [];
+      const fm = lines.slice(1, end);
+      for (let n = 0; n < fm.length; n++) {
+        // Flat `key: value` only. Nested YAML is this document's own data, not
+        // a field the next author is meant to fill in.
+        const m = /^([^\s:][^:]*?)[ \t]*:[ \t]*(.*)$/.exec(fm[n]);
+        if (!m) continue;
+        // `tags:` with its list indented underneath is that same data wearing a
+        // flat key. Keeping the bare key would leave the new document showing a
+        // metadata panel holding one empty word.
+        if (m[2].trim() === '' && /^[ \t]+\S/.test(fm[n + 1] ?? '')) continue;
+        // The confidentiality marking belongs to the format rather than to the
+        // document, and a template that quietly drops it is exactly the failure
+        // the header band exists to prevent. Every other value starts blank.
+        const keepValue = docHeaderFieldFor(m[1]) === 'classification' && m[2].trim() !== '';
+        kept.push(keepValue ? `${m[1]}: ${m[2].trim()}` : `${m[1]}:`);
+      }
+      if (kept.length) blocks.push(['---', ...kept, '---'].join('\n'));
+      i = end + 1;
+    }
+  }
+
+  let table: string[] = [];
+  const flushTable = () => {
+    // A header and its delimiter make a table; a stray pipe line is prose.
+    const sep = table[1] ?? '';
+    if (table.length >= 2 && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(sep)) {
+      const cols = sep.split('|').filter((c) => c.trim() !== '').length;
+      blocks.push([table[0].trimEnd(), sep.trimEnd(), `|${'  |'.repeat(Math.max(1, cols))}`].join('\n'));
+    }
+    table = [];
+  };
+
+  let lastWasTask = false;
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    const text = line.trim();
+
+    if (/^(```|~~~)/.test(text)) {
+      // Skip the fence whole — a code block is never the shape of a document.
+      for (i++; i < lines.length && !/^(```|~~~)/.test(lines[i].trim()); i++);
+      continue;
+    }
+
+    if (text.startsWith('|')) {
+      table.push(line);
+      continue;
+    }
+    if (table.length) flushTable();
+
+    if (/^#{1,6}\s/.test(text)) {
+      blocks.push(text);
+      lastWasTask = false;
+      continue;
+    }
+    if (text.startsWith('<!--')) {
+      const comment = [line.trimEnd()];
+      while (!comment.join('\n').includes('-->') && i + 1 < lines.length) comment.push(lines[++i].trimEnd());
+      blocks.push(comment.join('\n'));
+      lastWasTask = false;
+      continue;
+    }
+    if (/^[-*+][ \t]+\[[ xX]\]/.test(text)) {
+      // The shape is "there is a checklist here", not how long this one ran.
+      if (!lastWasTask) blocks.push('- [ ]');
+      lastWasTask = true;
+      continue;
+    }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(text)) {
+      blocks.push('---');
+      lastWasTask = false;
+      continue;
+    }
+    if (text !== '') lastWasTask = false;
+  }
+  if (table.length) flushTable();
+
+  return blocks.length ? `${blocks.join('\n\n')}\n` : '';
 }
