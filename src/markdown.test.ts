@@ -124,10 +124,23 @@ describe('parseDocHeader', () => {
     expect(fields.title).toBeUndefined();
     expect(rest).toBe('meta:\n  title: Nested');
   });
-  it('treats a key with an empty value as not set', () => {
-    const { fields, rest } = parseDocHeader('title:');
+  it('swallows a known key left blank, rather than showing it in the panel', () => {
+    // The templates ship `title:`/`author:` empty for the author to fill in.
+    const { fields, rest } = parseDocHeader('title:\nauthor:   ');
     expect(fields.title).toBeUndefined();
-    expect(rest).toBe('title:');
+    expect(rest).toBe('');
+  });
+  it('still takes the value when a blank key is filled in later', () => {
+    const { fields, rest } = parseDocHeader('title:\ntitle: Spec');
+    expect(fields.title).toBe('Spec');
+    expect(rest).toBe('');
+  });
+  it('keeps an unknown key even when it is blank', () => {
+    // Only the header's own fields are swallowed; anything else is the
+    // document's own metadata and stays visible.
+    const { fields, rest } = parseDocHeader('tags:');
+    expect(fields).toEqual({});
+    expect(rest).toBe('tags:');
   });
 });
 

@@ -163,6 +163,13 @@
         <!-- CodeMirror mounts here (see src/editor-surface.ts). -->
         <div class="editor-area">
         </div>
+        <!-- Offered over an untitled document that is still empty, and gone the
+             moment anything is typed — so ⌘N stays instant for a blank page
+             while the templates are still impossible to miss. -->
+        <div id="template-picker" hidden>
+          <div class="template-picker-title" data-i18n="templateStart">テンプレートから始める</div>
+          <div id="template-choices"></div>
+        </div>
       </div>
       <div id="divider"></div>
       <div id="output"></div>

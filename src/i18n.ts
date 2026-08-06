@@ -89,6 +89,10 @@ const DICT = {
     emptyTitle: 'Markdownファイルを開いてください',
     emptyHint: '⌘O ・ボタン ・ドラッグ&ドロップ',
     recentTitle: '最近のファイル',
+    // templates (offered over an empty untitled document)
+    templateStart: 'テンプレートから始める',
+    templateDesign: '設計書',
+    templateRequirements: '要件定義書',
     // preview
     frontmatter: 'メタデータ',
     // settings
@@ -253,6 +257,9 @@ const DICT = {
     emptyTitle: 'Open a Markdown file',
     emptyHint: '⌘O · button · drag & drop',
     recentTitle: 'Recent Files',
+    templateStart: 'Start from a template',
+    templateDesign: 'Design doc',
+    templateRequirements: 'Requirements',
     frontmatter: 'Metadata',
     settingsTitle: 'Settings',
     navAppearance: 'Appearance',

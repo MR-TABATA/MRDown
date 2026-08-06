@@ -24,6 +24,7 @@ import {
   docStats,
   toggleTaskListItem,
 } from './markdown';
+import { docTemplate, TEMPLATE_KINDS, type TemplateKind } from './templates';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts, type Match } from './find';
 import {
   sideBySide,
@@ -98,6 +99,8 @@ const outlinePosOption = document.getElementById('outline-pos-option')!;
 const editLayoutOption = document.getElementById('edit-layout-option')!;
 const previewThemeOption = document.getElementById('preview-theme-option')!;
 const logoOption = document.getElementById('logo-option')!;
+const templatePicker = document.getElementById('template-picker')!;
+const templateChoices = document.getElementById('template-choices')!;
 const output = document.getElementById('output')!;
 const docStatsEl = document.getElementById('doc-stats')!;
 const emptyState = document.getElementById('empty-state')!;
@@ -806,6 +809,8 @@ function setEditing(on: boolean) {
   }
   // The outline's scroll-spy watches a different scroll container per mode.
   bindOutlineSpy();
+  // The templates are an editing affordance; the preview shouldn't carry them.
+  updateTemplatePicker();
   // Find switches between source (editor) and preview search with the mode.
   if (!findBar.hidden) runFind();
 }
@@ -1458,6 +1463,7 @@ async function setActive(doc: Doc) {
   renderTree();
   saveSession();
   restoreScroll(doc);
+  updateTemplatePicker();
   if (isEditing) editor.focus();
 }
 
@@ -1543,6 +1549,55 @@ async function deleteActive() {
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
 }
 
+// --- Template picker ------------------------------------------------------
+// Offered over an untitled document that is still empty. ⌘N stays instant and
+// blank — the templates sit in the space an empty page leaves anyway, and go
+// away at the first keystroke, so a blank sheet costs nothing while a design
+// doc no longer starts from one.
+
+const TEMPLATE_LABEL: Record<TemplateKind, Key> = {
+  design: 'templateDesign',
+  requirements: 'templateRequirements',
+};
+
+function buildTemplateChoices() {
+  templateChoices.innerHTML = '';
+  for (const kind of TEMPLATE_KINDS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'template-choice';
+    btn.textContent = t(TEMPLATE_LABEL[kind]);
+    btn.addEventListener('click', () => applyTemplate(kind));
+    templateChoices.appendChild(btn);
+  }
+}
+
+function updateTemplatePicker() {
+  templatePicker.hidden = !(isEditing && !!active && active.path === null && active.workingText === '');
+}
+
+function applyTemplate(kind: TemplateKind) {
+  if (!active) return;
+  const text = docTemplate(kind, getLang());
+  // Land the caret on the title, the one field that has to be filled in before
+  // the document header means anything.
+  const m = /^(?:タイトル|title):[ \t]*/m.exec(text);
+  const caret = m ? m.index + m[0].length : text.length;
+  // Through the editing path rather than a raw assignment, so undo puts the
+  // blank page back if this was the wrong template.
+  replaceEditorText(text, caret, caret);
+  active.workingText = editor.value;
+  updateStatus();
+  if (isDirty(active) !== lastActiveDirty) {
+    lastActiveDirty = isDirty(active);
+    renderSidebar();
+  }
+  scheduleSessionSave();
+  renderSource(active.workingText, active.path ?? '');
+  updateTemplatePicker();
+  editor.focus();
+}
+
 // Create a new, empty "untitled" document and start editing it.
 function newDoc() {
   untitledCount++;
@@ -1561,6 +1616,7 @@ function newDoc() {
   renderTree();
   saveSession();
   contentArea.scrollTop = 0;
+  updateTemplatePicker();
 }
 
 // Write the active document to `path`, switch it to that file, and refresh
@@ -1796,6 +1852,7 @@ let previewTimer: number | undefined;
 function onEditorInput() {
   if (!active) return;
   active.workingText = editor.value;
+  updateTemplatePicker();
   updateStatus();
   if (isDirty(active) !== lastActiveDirty) {
     lastActiveDirty = isDirty(active);
@@ -2679,6 +2736,7 @@ function applyI18n() {
   buildOutlinePosOption();
   buildEditLayoutOption();
   buildLogoOption();
+  buildTemplateChoices();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
   invoke('apply_menu', { lang: getLang() }).catch(() => {});

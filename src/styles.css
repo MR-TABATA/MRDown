@@ -535,6 +535,44 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
   min-width: 0;
   height: 100%;
   background: var(--mrd-bg);
+  position: relative; /* anchors the template picker over the empty page */
+}
+
+/* Shown only over an untitled document with nothing in it yet. It floats in the
+   space an empty page leaves rather than taking a row of its own, so ⌘N still
+   lands on a blank sheet with the caret ready. The panel doesn't take the
+   pointer — clicking the empty area beside it still puts the caret in the
+   editor — only the buttons do. Left/top line up with .cm-content's padding,
+   pushed down far enough to leave the first lines clear. */
+#template-picker {
+  position: absolute;
+  top: 92px;
+  left: 28px;
+  right: 28px;
+  pointer-events: none;
+  z-index: 2;
+}
+#template-picker[hidden] { display: none; }
+.template-picker-title {
+  font-size: 12px;
+  color: var(--mrd-faint);
+  margin-bottom: 8px;
+}
+#template-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.template-choice {
+  pointer-events: auto;
+  padding: 7px 14px;
+  border: 1px solid var(--mrd-border);
+  border-radius: 999px;
+  background: var(--mrd-surface);
+  color: var(--mrd-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.template-choice:hover {
+  border-color: var(--mrd-accent);
+  color: var(--mrd-accent);
 }
 
 /* Markdown formatting toolbar above the editor */

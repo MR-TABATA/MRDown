@@ -164,6 +164,12 @@ const DOC_HEADER_META_ORDER: DocHeaderField[] = ['docNumber', 'version', 'date',
  * else. `rest` keeps its original lines so it can go through `frontmatterToHtml`
  * unchanged — an unrecognised key is never lost, it just stays in the panel.
  *
+ * A known key left blank is swallowed rather than passed on: the templates ship
+ * `title:` and `author:` empty for the author to fill in, and showing those in
+ * the metadata panel would greet every new document with a card full of empty
+ * keys. A blank one doesn't claim the field either, so filling in a later
+ * duplicate still works.
+ *
  * Indented lines are nested YAML belonging to the key above, so they are never
  * read as a header field of their own.
  */
@@ -173,11 +179,17 @@ export function parseDocHeader(frontmatter: string): { fields: DocHeaderFields; 
   for (const line of frontmatter.split('\n')) {
     const m = /^([^\s:][^:]*?)[ \t]*:[ \t]*(.*)$/.exec(line);
     const field = m ? DOC_HEADER_ALIAS.get(m[1].trim().toLowerCase()) : undefined;
-    if (m && field && m[2].trim() !== '' && fields[field] === undefined) {
-      fields[field] = m[2].trim();
-    } else if (line.trim() !== '') {
-      rest.push(line);
+    if (m && field) {
+      const value = m[2].trim();
+      if (value === '') continue; // waiting to be filled in
+      if (fields[field] === undefined) {
+        fields[field] = value;
+        continue;
+      }
+      // A second name for a field already set (`date` then `updated`): keep it
+      // visible in the panel rather than drop it on the floor.
     }
+    if (line.trim() !== '') rest.push(line);
   }
   return { fields, rest: rest.join('\n') };
 }
