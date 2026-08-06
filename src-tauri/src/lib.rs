@@ -43,6 +43,21 @@ fn save_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// Write a template, building the folder it belongs in. Separate from save_file
+/// because saving a document should never quietly create a directory tree from a
+/// mistyped path — whereas seeding `docs/_templates/` into a repository exists to
+/// create exactly that folder.
+#[tauri::command]
+fn write_template(path: String, content: String) -> Result<(), String> {
+    if !is_supported(&path) {
+        return Err("Unsupported file type".to_string());
+    }
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
 /// Write an exported document to disk. Guards the extension so this can't be
 /// used to write arbitrary files, mirroring `save_file`'s restriction.
 #[tauri::command]
@@ -64,6 +79,37 @@ fn export_file(path: String, content: String) -> Result<(), String> {
 #[tauri::command]
 fn print_document(window: tauri::WebviewWindow) -> Result<(), String> {
     window.print().map_err(|e| e.to_string())
+}
+
+/// Read an image file's bytes, used when a logo is picked for the document
+/// header. Reading it here rather than fetching the asset URL from the webview
+/// keeps the CSP as tight as it is: `connect-src` falls back to `'self'`, so a
+/// fetch of `asset:` would be blocked in the real window even though it works in
+/// a plain browser. Guards the extension the way save_image does, so the command
+/// can't be turned into an arbitrary file read.
+///
+/// The size is checked before the file is opened. A logo is a few hundred
+/// kilobytes; anything far past that is a mistake, and letting it through costs
+/// more than a slow read — the bytes cross the IPC boundary as a JSON array of
+/// numbers, so a 17 MB pick becomes tens of millions of JSON elements and the
+/// window stops answering long before the picture is ever decoded.
+const IMAGE_READ_MAX_BYTES: u64 = 8 * 1024 * 1024;
+
+#[tauri::command]
+fn read_image(path: String) -> Result<Vec<u8>, String> {
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    if !["png", "jpg", "jpeg", "gif", "webp", "svg"].contains(&ext.as_str()) {
+        return Err("Unsupported image type".to_string());
+    }
+    let len = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    if len > IMAGE_READ_MAX_BYTES {
+        return Err("Image too large".to_string());
+    }
+    std::fs::read(&path).map_err(|e| e.to_string())
 }
 
 /// Write pasted image bytes to disk (creating the parent folder if needed), used
@@ -225,9 +271,10 @@ fn handle_opened_file(app: &tauri::AppHandle, path: String) {
 /// Menu items that act on the active document, and so are dead without one.
 /// Their frontend handlers all bail out when nothing is open, which made them
 /// look clickable but do nothing; `set_doc_items_enabled` greys them out instead.
-const DOC_ITEMS: [&str; 10] = [
+const DOC_ITEMS: [&str; 11] = [
     "save",
     "save_as",
+    "template_from_doc",
     "reload",
     "export_html",
     "export_pdf",
@@ -293,6 +340,9 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
             &sep()?,
             &MenuItem::with_id(app, "save", pick("保存", "Save"), has_doc, Some("CmdOrCtrl+S"))?,
             &MenuItem::with_id(app, "save_as", pick("別名で保存…", "Save As…"), has_doc, Some("CmdOrCtrl+Shift+S"))?,
+            // Opens the extracted skeleton as a new document rather than writing
+            // it anywhere: what to keep is a judgement the author has to make.
+            &MenuItem::with_id(app, "template_from_doc", pick("この文書から雛形を作る", "Make a Template from This Document"), has_doc, None::<&str>)?,
             &MenuItem::with_id(app, "reload", pick("再読み込み", "Reload"), has_doc, Some("CmdOrCtrl+R"))?,
             &sep()?,
             &MenuItem::with_id(app, "export_html", pick("HTML として書き出す…", "Export as HTML…"), has_doc, Some("CmdOrCtrl+Shift+E"))?,
@@ -761,6 +811,8 @@ pub fn run() {
             save_image,
             export_file,
             print_document,
+            read_image,
+            write_template,
             delete_file,
             file_mtime,
             read_dir,
@@ -1076,6 +1128,32 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert!(save_file("/tmp/x.png".to_string(), "data".to_string()).is_err());
+    }
+
+    #[test]
+    fn read_image_reads_images_and_rejects_others() {
+        let dir = scratch("readimg");
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = dir.join("logo.PNG"); // upper case: the guard lowercases first
+        std::fs::write(&png, [0x89, b'P', b'N', b'G']).unwrap();
+        assert_eq!(
+            read_image(png.to_str().unwrap().to_string()).unwrap(),
+            vec![0x89, b'P', b'N', b'G']
+        );
+
+        // The guard is what keeps this from being an arbitrary file read.
+        let key = dir.join("id_rsa");
+        std::fs::write(&key, "secret").unwrap();
+        assert!(read_image(key.to_str().unwrap().to_string()).is_err());
+        assert!(read_image(dir.join("notes.md").to_str().unwrap().to_string()).is_err());
+
+        // Refused on size before the read, so an outsized pick can't be turned
+        // into millions of JSON numbers crossing the IPC boundary.
+        let huge = dir.join("huge.png");
+        std::fs::write(&huge, vec![0u8; (IMAGE_READ_MAX_BYTES + 1) as usize]).unwrap();
+        assert!(read_image(huge.to_str().unwrap().to_string()).is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

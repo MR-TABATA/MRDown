@@ -128,3 +128,115 @@ export function frontmatterToHtml(frontmatter: string, label: string): string {
     `<table>${rows.join('')}</table></details>`
   );
 }
+
+/** The fields a corporate document header shows, in the order it shows them. */
+export type DocHeaderField = 'title' | 'docNumber' | 'version' | 'date' | 'author' | 'classification';
+export type DocHeaderFields = Partial<Record<DocHeaderField, string>>;
+
+/**
+ * Frontmatter names that map onto each header field. Japanese and English both:
+ * the templates ship in both languages, and a document one person writes gets
+ * read by someone whose app is in the other. Matching is case-insensitive.
+ *
+ * Several names share a field on purpose (`updated`/`created` are both a date) —
+ * the first one present in the document wins and any later one falls through to
+ * the plain metadata panel, so nothing is silently dropped.
+ */
+const DOC_HEADER_KEYS: Record<DocHeaderField, string[]> = {
+  title: ['title', 'タイトル', '文書名', '件名'],
+  docNumber: ['doc', 'docnumber', 'doc_number', 'doc-number', 'document', '文書番号', '管理番号', '番号'],
+  version: ['version', 'ver', 'rev', 'revision', 'バージョン', '版数', '版'],
+  date: ['date', 'updated', 'created', '日付', '作成日', '更新日'],
+  author: ['author', 'owner', '作成者', '担当', '作成'],
+  classification: ['classification', 'confidential', 'confidentiality', '機密区分', '取扱区分', '取扱', '区分'],
+};
+
+const DOC_HEADER_ALIAS = new Map<string, DocHeaderField>();
+for (const [field, names] of Object.entries(DOC_HEADER_KEYS) as [DocHeaderField, string[]][]) {
+  for (const name of names) DOC_HEADER_ALIAS.set(name, field);
+}
+
+/** Which header field a frontmatter key names, if any. Case-insensitive. */
+export function docHeaderFieldFor(key: string): DocHeaderField | undefined {
+  return DOC_HEADER_ALIAS.get(key.trim().toLowerCase());
+}
+
+/** The order fields appear in the header's meta row (title/classification sit apart). */
+const DOC_HEADER_META_ORDER: DocHeaderField[] = ['docNumber', 'version', 'date', 'author'];
+
+/**
+ * Split frontmatter into the fields a document header can draw and everything
+ * else. `rest` keeps its original lines so it can go through `frontmatterToHtml`
+ * unchanged — an unrecognised key is never lost, it just stays in the panel.
+ *
+ * A known key left blank is swallowed rather than passed on: the templates ship
+ * `title:` and `author:` empty for the author to fill in, and showing those in
+ * the metadata panel would greet every new document with a card full of empty
+ * keys. A blank one doesn't claim the field either, so filling in a later
+ * duplicate still works.
+ *
+ * Indented lines are nested YAML belonging to the key above, so they are never
+ * read as a header field of their own.
+ */
+export function parseDocHeader(frontmatter: string): { fields: DocHeaderFields; rest: string } {
+  const fields: DocHeaderFields = {};
+  const rest: string[] = [];
+  for (const line of frontmatter.split('\n')) {
+    const m = /^([^\s:][^:]*?)[ \t]*:[ \t]*(.*)$/.exec(line);
+    const field = m ? DOC_HEADER_ALIAS.get(m[1].trim().toLowerCase()) : undefined;
+    if (m && field) {
+      const value = m[2].trim();
+      if (value === '') continue; // waiting to be filled in
+      if (fields[field] === undefined) {
+        fields[field] = value;
+        continue;
+      }
+      // A second name for a field already set (`date` then `updated`): keep it
+      // visible in the panel rather than drop it on the floor.
+    }
+    if (line.trim() !== '') rest.push(line);
+  }
+  return { fields, rest: rest.join('\n') };
+}
+
+/**
+ * Draw the document header as a band at the top of the preview: logo and
+ * confidentiality marking on one row, the title under them, then the document
+ * number / version / date / author.
+ *
+ * The band is deliberately tied to the document's own frontmatter — with no
+ * known field there is nothing to draw, and `withLogo` alone will not summon
+ * one. Otherwise every README you opened would sprout your company's logo.
+ *
+ * The logo `<img>` is emitted without a `src`: the app's sanitizer drops
+ * `data:`/`asset:` URLs, so the caller fills it in on the sanitized DOM (the
+ * same route local images take).
+ */
+export function docHeaderToHtml(
+  fields: DocHeaderFields,
+  labels: Record<DocHeaderField, string>,
+  withLogo: boolean,
+): string {
+  const has = DOC_HEADER_META_ORDER.some((f) => fields[f]) || !!fields.title || !!fields.classification;
+  if (!has) return '';
+
+  const logo = withLogo ? '<img class="doc-header-logo" alt="">' : '';
+  const mark = fields.classification
+    ? `<span class="doc-header-mark">${escapeHtml(fields.classification)}</span>`
+    : '';
+  // Keep the row even when only one side is filled, so the logo stays left and
+  // the marking stays right instead of collapsing onto each other.
+  const top = logo || mark ? `<div class="doc-header-top">${logo}${mark}</div>` : '';
+  const title = fields.title
+    ? `<div class="doc-header-title">${escapeHtml(fields.title)}</div>`
+    : '';
+  const meta = DOC_HEADER_META_ORDER.filter((f) => fields[f])
+    .map(
+      (f) =>
+        `<span class="doc-header-item"><span class="doc-header-key">${escapeHtml(labels[f])}</span>` +
+        `<span class="doc-header-val">${escapeHtml(fields[f]!)}</span></span>`,
+    )
+    .join('');
+  const metaRow = meta ? `<div class="doc-header-meta">${meta}</div>` : '';
+  return `<div class="doc-header">${top}${title}${metaRow}</div>`;
+}

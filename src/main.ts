@@ -18,9 +18,20 @@ import {
   firstHeadingTitle,
   extractFrontmatter,
   frontmatterToHtml,
+  parseDocHeader,
+  docHeaderToHtml,
+  type DocHeaderField,
   docStats,
   toggleTaskListItem,
 } from './markdown';
+import {
+  docTemplate,
+  fillTemplate,
+  toTemplateSkeleton,
+  agentInstructions,
+  TEMPLATE_KINDS,
+  type TemplateKind,
+} from './templates';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts, type Match } from './find';
 import {
   sideBySide,
@@ -94,6 +105,10 @@ const fontsizeOption = document.getElementById('fontsize-option')!;
 const outlinePosOption = document.getElementById('outline-pos-option')!;
 const editLayoutOption = document.getElementById('edit-layout-option')!;
 const previewThemeOption = document.getElementById('preview-theme-option')!;
+const logoOption = document.getElementById('logo-option')!;
+const templatePicker = document.getElementById('template-picker')!;
+const templateChoices = document.getElementById('template-choices')!;
+const templateFolderOption = document.getElementById('template-folder-option')!;
 const output = document.getElementById('output')!;
 const docStatsEl = document.getElementById('doc-stats')!;
 const emptyState = document.getElementById('empty-state')!;
@@ -589,17 +604,59 @@ function resolveLocalImages(filePath: string) {
   });
 }
 
+// The company logo shown in a document header. Kept as a data URI rather than a
+// path so it survives an HTML export as one self-contained file and can't break
+// when the image moves — see storeDocLogo() for how it is shrunk on the way in.
+const LOGO_KEY = 'mrdown.docLogo';
+const docLogo = () => localStorage.getItem(LOGO_KEY);
+
+function docHeaderLabels(): Record<DocHeaderField, string> {
+  return {
+    title: t('dhTitle'),
+    docNumber: t('dhDocNumber'),
+    version: t('dhVersion'),
+    date: t('dhDate'),
+    author: t('dhAuthor'),
+    classification: t('dhClassification'),
+  };
+}
+
+/**
+ * Frontmatter becomes two things: the fields a corporate document header knows
+ * are drawn as a band at the top, and whatever is left stays the tidy collapsed
+ * panel it has always been (rather than the broken <hr> + text `marked` would
+ * make of `--- … ---`). A document with neither renders nothing.
+ */
+function frontmatterHtml(frontmatter: string | null): string {
+  if (frontmatter === null) return '';
+  const { fields, rest } = parseDocHeader(frontmatter);
+  const header = docHeaderToHtml(fields, docHeaderLabels(), !!docLogo());
+  const panel = rest.trim() ? frontmatterToHtml(rest, t('frontmatter')) : '';
+  return header + panel;
+}
+
+/**
+ * Fill in the header logo on the sanitized DOM. The sanitizer drops `data:` URLs
+ * from markup, so the <img> arrives empty and gets its source here — the same
+ * detour resolveLocalImages() takes for the document's own images.
+ */
+function applyDocLogo() {
+  const img = output.querySelector<HTMLImageElement>('img.doc-header-logo');
+  if (!img) return;
+  const logo = docLogo();
+  if (logo) img.src = logo;
+  else img.remove();
+}
+
 // Render Markdown source into the preview pane (no disk I/O).
 async function renderSource(source: string, filePath: string) {
-  // Pull any leading YAML frontmatter out so it renders as a tidy collapsed
-  // panel instead of the broken <hr> + text marked would make of `--- … ---`.
   const { frontmatter, body } = extractFrontmatter(source);
-  const meta = frontmatter ? frontmatterToHtml(frontmatter, t('frontmatter')) : '';
-  const html = meta + (await marked.parse(body));
+  const html = frontmatterHtml(frontmatter) + (await marked.parse(body));
   output.innerHTML = DOMPurify.sanitize(html);
   addHeadingIds();
   buildOutline();
   resolveLocalImages(filePath);
+  applyDocLogo();
   enableTaskCheckboxes();
   await highlightCode();
   await renderMermaid();
@@ -760,6 +817,8 @@ function setEditing(on: boolean) {
   }
   // The outline's scroll-spy watches a different scroll container per mode.
   bindOutlineSpy();
+  // The templates are an editing affordance; the preview shouldn't carry them.
+  updateTemplatePicker();
   // Find switches between source (editor) and preview search with the mode.
   if (!findBar.hidden) runFind();
 }
@@ -1048,6 +1107,29 @@ async function loadFolder(root: string, expanded: string[] = []) {
   for (const p of expanded) expandedFolders.add(p);
   updateFolderHeader();
   renderTree();
+}
+
+/**
+ * Re-read the open folder from disk, keeping what was expanded. The tree caches
+ * every listing it has made, so anything this app writes into the folder itself
+ * stays invisible until something asks for it again.
+ *
+ * `reveal` expands the path down to a folder that was just created, so it can be
+ * seen rather than merely existing.
+ */
+async function refreshFolderTree(reveal?: string) {
+  if (!folderRoot) return;
+  const expanded = [...expandedFolders];
+  if (reveal?.startsWith(folderRoot)) {
+    const sep = folderRoot.includes('\\') ? '\\' : '/';
+    let path = folderRoot;
+    for (const part of reveal.slice(folderRoot.length).split(/[/\\]/).filter(Boolean)) {
+      path += sep + part;
+      if (!expanded.includes(path)) expanded.push(path);
+    }
+  }
+  await loadFolder(folderRoot, expanded);
+  saveFolderState();
 }
 
 function closeFolder() {
@@ -1412,6 +1494,7 @@ async function setActive(doc: Doc) {
   renderTree();
   saveSession();
   restoreScroll(doc);
+  updateTemplatePicker();
   if (isEditing) editor.focus();
 }
 
@@ -1497,6 +1580,299 @@ async function deleteActive() {
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
 }
 
+// --- Template picker ------------------------------------------------------
+// Offered over an untitled document that is still empty. ⌘N stays instant and
+// blank — the templates sit in the space an empty page leaves anyway, and go
+// away at the first keystroke, so a blank sheet costs nothing while a design
+// doc no longer starts from one.
+
+const TEMPLATE_LABEL: Record<TemplateKind, Key> = {
+  design: 'templateDesign',
+  requirements: 'templateRequirements',
+};
+
+// A folder of plain .md files is the whole storage format. No template registry
+// and no editor for them: a template is a document, so the way to change one is
+// to open it here like any other. Sharing a set is sending the folder — which is
+// also what a distributed format pack would have to be.
+// Kept in a repository rather than a personal folder wherever possible: that is
+// what actually gets the templates used. A folder under ~/Documents reaches one
+// machine and has to be pointed at by hand every time; committed to the repo it
+// arrives with the clone, and the agent writing the document reads it without
+// anyone being told to.
+const TEMPLATE_FOLDER_KEY = 'mrdown.templateFolder';
+const TEMPLATE_DIR_IN_REPO = 'docs/_templates';
+/** The explicit override. Empty means "follow whichever repository is open". */
+const templateFolderOverride = () => localStorage.getItem(TEMPLATE_FOLDER_KEY);
+
+/** `docs/_templates` inside the folder currently open, if one is. */
+function repoTemplateDir(): string | null {
+  if (!folderRoot) return null;
+  const sep = folderRoot.includes('\\') ? '\\' : '/';
+  return `${folderRoot}${sep}${TEMPLATE_DIR_IN_REPO.split('/').join(sep)}`;
+}
+
+/**
+ * Where the templates come from, most specific first:
+ *
+ *   1. the folder set in Settings — an explicit override
+ *   2. `docs/_templates` in the repository that is open
+ *   3. the built-ins
+ *
+ * (2) is what makes the "keep them in the repository" advice hold together. A
+ * single remembered path is the wrong shape for it: point it at one client's
+ * repo and their format follows you into the next one. Reading it from whatever
+ * is open means each project brings its own, with nothing to configure.
+ */
+async function templateSource(): Promise<{ dir: string; files: TreeEntry[] } | null> {
+  for (const dir of [templateFolderOverride(), repoTemplateDir()]) {
+    if (!dir) continue;
+    const files = (await listDir(dir))
+      .filter((e) => !e.is_dir && /\.md$/i.test(e.path))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    // An empty or missing folder falls through rather than leaving no way to
+    // start — neither the setting nor an unrelated repo should be able to take
+    // the feature away.
+    if (files.length) return { dir, files };
+  }
+  return null;
+}
+
+/** What the picker offers: the templates in force, else the built-ins. */
+async function templateEntries(): Promise<Array<{ label: string; load: () => Promise<string> }>> {
+  const source = await templateSource();
+  if (source) {
+    return source.files.map((f) => ({
+      label: f.name.replace(/\.md$/i, ''),
+      load: () => invoke<string>('read_file', { path: f.path }),
+    }));
+  }
+  const lang = getLang();
+  return TEMPLATE_KINDS.map((kind) => ({
+    label: t(TEMPLATE_LABEL[kind]),
+    load: async () => docTemplate(kind, lang),
+  }));
+}
+
+async function buildTemplateChoices() {
+  const entries = await templateEntries();
+  templateChoices.innerHTML = '';
+  for (const entry of entries) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'template-choice';
+    btn.textContent = entry.label;
+    btn.addEventListener('click', async () => {
+      try {
+        applyTemplate(await entry.load());
+      } catch {
+        /* the file went away between listing and clicking — refresh the chips */
+        void buildTemplateChoices();
+      }
+    });
+    templateChoices.appendChild(btn);
+  }
+}
+
+function updateTemplatePicker() {
+  const show = isEditing && !!active && active.path === null && active.workingText === '';
+  templatePicker.hidden = !show;
+  // Built every time it is on screen rather than once at startup: which
+  // templates are in force depends on the folder that happens to be open, and
+  // the files in it can be added to or edited (in this very app) between one
+  // blank page and the next. Reading them at the moment of asking is the only
+  // version that can't go stale — and it costs one listing of a small folder,
+  // only ever while a blank page is showing.
+  if (show) void buildTemplateChoices();
+}
+
+// `message` survives the rebuild: several of the actions below change what the
+// pane should show *and* have something to report, and setting the text before
+// re-rendering would only throw it away.
+async function buildTemplateFolderOption(message?: string) {
+  templateFolderOption.innerHTML = '';
+  const override = templateFolderOverride();
+  const source = await templateSource();
+
+  // The setting is an override, so the pane has to answer "what is in force?"
+  // rather than echo the setting back — otherwise a repository quietly
+  // supplying its own templates looks like nothing is configured at all.
+  const where = document.createElement('div');
+  if (!source) {
+    where.className = 'template-folder-path empty';
+    where.textContent = t('templateFolderNone');
+  } else if (source.dir === override) {
+    where.className = 'template-folder-path';
+    where.textContent = tildify(source.dir, home);
+  } else {
+    where.className = 'template-folder-path';
+    where.textContent = t('templateFolderAuto', { dir: tildify(source.dir, home) });
+  }
+
+  const status = document.createElement('div');
+  status.className = 'template-folder-status';
+  status.textContent = message ?? '';
+  status.hidden = !message;
+
+  const row = document.createElement('div');
+  row.className = 'logo-actions';
+
+  const choose = document.createElement('button');
+  choose.type = 'button';
+  choose.className = 'link-btn';
+  choose.textContent = override ? t('templateFolderChange') : t('templateFolderChoose');
+  choose.addEventListener('click', async () => {
+    const picked = await open({ directory: true, multiple: false });
+    if (typeof picked !== 'string') return;
+    localStorage.setItem(TEMPLATE_FOLDER_KEY, picked);
+    void buildTemplateFolderOption();
+    void buildTemplateChoices();
+  });
+  row.appendChild(choose);
+
+  // The one-click version of the whole idea: put them in the repository that is
+  // already open. It deliberately does not set the override — the folder it
+  // writes to is the one the open repository is read from anyway, and pinning
+  // it would drag this project's templates into the next one.
+  const repoDir = repoTemplateDir();
+  if (repoDir) {
+    const sep = repoDir.includes('\\') ? '\\' : '/';
+    const intoRepo = document.createElement('button');
+    intoRepo.type = 'button';
+    intoRepo.className = 'link-btn';
+    intoRepo.textContent = t('templateIntoRepo', { dir: TEMPLATE_DIR_IN_REPO });
+    intoRepo.addEventListener('click', async () => {
+      const lang = getLang();
+      try {
+        for (const kind of TEMPLATE_KINDS) {
+          const name = sanitizeFilename(t(TEMPLATE_LABEL[kind]));
+          await invoke('write_template', { path: `${repoDir}${sep}${name}.md`, content: docTemplate(kind, lang) });
+        }
+        // Show them in the tree: files this app just created shouldn't need a
+        // reopen of the folder to become visible.
+        await refreshFolderTree(repoDir);
+        void buildTemplateFolderOption(t('templateSeeded'));
+      } catch {
+        void buildTemplateFolderOption(t('templateSeedFailed'));
+      }
+      void buildTemplateChoices();
+    });
+    row.appendChild(intoRepo);
+  }
+
+  if (source) {
+    // The instructions go to the clipboard rather than into a file: which file an
+    // agent reads is the team's convention (AGENTS.md, CLAUDE.md, …), and
+    // appending to one this app didn't write is not its call to make.
+    const forAgents = document.createElement('button');
+    forAgents.type = 'button';
+    forAgents.className = 'link-btn';
+    forAgents.textContent = t('templateForAgents');
+    forAgents.addEventListener('click', async () => {
+      // Relative to the repository when it sits inside it, since that is how the
+      // file being pasted into will be read.
+      const shown = folderRoot && source.dir.startsWith(folderRoot)
+        ? source.dir.slice(folderRoot.length).replace(/^[/\\]/, '')
+        : tildify(source.dir, home);
+      status.textContent = (await copyText(agentInstructions(shown, getLang())))
+        ? t('templateForAgentsCopied')
+        : t('templateForAgentsFailed');
+      status.hidden = false;
+    });
+    row.appendChild(forAgents);
+  }
+
+  if (override) {
+    // Seeding beats starting from an empty folder: most people want the shipped
+    // skeletons *adjusted*, not written from nothing.
+    const seed = document.createElement('button');
+    seed.type = 'button';
+    seed.className = 'link-btn';
+    seed.textContent = t('templateSeed');
+    seed.addEventListener('click', async () => {
+      const lang = getLang();
+      const sep = override.includes('\\') ? '\\' : '/';
+      try {
+        for (const kind of TEMPLATE_KINDS) {
+          const name = sanitizeFilename(t(TEMPLATE_LABEL[kind]));
+          await invoke('write_template', { path: `${override}${sep}${name}.md`, content: docTemplate(kind, lang) });
+        }
+        await refreshFolderTree(override);
+        void buildTemplateFolderOption(t('templateSeeded'));
+      } catch {
+        void buildTemplateFolderOption(t('templateSeedFailed'));
+      }
+      void buildTemplateChoices();
+    });
+
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'link-btn';
+    clear.textContent = t('templateFolderClear');
+    clear.addEventListener('click', () => {
+      localStorage.removeItem(TEMPLATE_FOLDER_KEY);
+      void buildTemplateFolderOption();
+      void buildTemplateChoices();
+    });
+
+    row.append(seed, clear);
+  }
+
+  // With no folder open the repository option isn't merely absent, it has
+  // nothing to act on — and the pane's whole advice is "keep them in the
+  // repository". Say so rather than leaving a gap where a button would be.
+  if (!repoDir) {
+    const hint = document.createElement('div');
+    hint.className = 'template-folder-status';
+    hint.textContent = t('templateNeedsFolder');
+    templateFolderOption.append(where, row, hint, status);
+    return;
+  }
+  templateFolderOption.append(where, row, status);
+}
+
+function applyTemplate(raw: string) {
+  if (!active) return;
+  const text = fillTemplate(raw);
+  // Land the caret on the title, the one field that has to be filled in before
+  // the document header means anything.
+  const m = /^(?:タイトル|title):[ \t]*/m.exec(text);
+  const caret = m ? m.index + m[0].length : text.length;
+  // Through the editing path rather than a raw assignment, so undo puts the
+  // blank page back if this was the wrong template.
+  replaceEditorText(text, caret, caret);
+  active.workingText = editor.value;
+  updateStatus();
+  if (isDirty(active) !== lastActiveDirty) {
+    lastActiveDirty = isDirty(active);
+    renderSidebar();
+  }
+  scheduleSessionSave();
+  renderSource(active.workingText, active.path ?? '');
+  updateTemplatePicker();
+  editor.focus();
+}
+
+/**
+ * Take the shape of the active document into a new one, for the author to trim
+ * and then save wherever their templates live. It is deliberately not written
+ * to the template folder: the extraction can't tell a section's instructions
+ * from its content, so the result is a draft to look at, not a decision made.
+ */
+function templateFromDoc() {
+  if (!active) return;
+  const skeleton = toTemplateSkeleton(active.workingText);
+  if (!skeleton) {
+    // Nothing structural to take — say so rather than opening a blank document
+    // that looks like a failure of the save.
+    statusbar.hidden = false;
+    statusPath.textContent = t('templateNoShape');
+    return;
+  }
+  newDoc();
+  applyTemplate(skeleton);
+}
+
 // Create a new, empty "untitled" document and start editing it.
 function newDoc() {
   untitledCount++;
@@ -1515,6 +1891,7 @@ function newDoc() {
   renderTree();
   saveSession();
   contentArea.scrollTop = 0;
+  updateTemplatePicker();
 }
 
 // Write the active document to `path`, switch it to that file, and refresh
@@ -1750,6 +2127,7 @@ let previewTimer: number | undefined;
 function onEditorInput() {
   if (!active) return;
   active.workingText = editor.value;
+  updateTemplatePicker();
   updateStatus();
   if (isDirty(active) !== lastActiveDirty) {
     lastActiveDirty = isDirty(active);
@@ -2236,6 +2614,142 @@ function buildPreviewThemeOption() {
   }
 }
 
+// --- Document header logo -------------------------------------------------
+// Held as a data URI so an exported HTML file stays self-contained and a moved
+// or renamed image file can't break every document at once. That makes its size
+// the thing to watch: localStorage also carries the session, so the picture is
+// shrunk to the band's own scale on the way in rather than stored as shot.
+
+// 2× the ~120px the band draws, so it stays crisp on retina and in print.
+const LOGO_MAX_H = 240;
+const LOGO_MAX_BYTES = 256 * 1024;
+
+// The picture is chosen through the native dialog and its bytes read in Rust,
+// the same pair the app already opens documents with. An <input type="file">
+// would be less code, but a file picker inside WKWebView is not something to
+// take on trust — HTML5 drag-and-drop looked fine in a browser and did nothing
+// in the real window (v1.6.5). Fetching the asset URL instead would have the
+// same shape of problem: no `connect-src` in the CSP means it falls back to
+// 'self', which a plain browser doesn't enforce and the real window does.
+const LOGO_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+};
+
+const readAsDataUrl = (file: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('decode'));
+    img.src = src;
+  });
+
+/** Shrink a chosen image to a storable logo, or throw when it can't be made to fit. */
+async function toStoredLogo(blob: Blob, mime: string): Promise<string> {
+  const raw = await readAsDataUrl(blob);
+  // SVG is already resolution-independent and small; rasterising it would only
+  // cost quality in print.
+  if (mime === 'image/svg+xml') {
+    if (raw.length > LOGO_MAX_BYTES) throw new Error('too-large');
+    return raw;
+  }
+  const img = await loadImage(raw);
+  const scale = Math.min(1, LOGO_MAX_H / (img.naturalHeight || LOGO_MAX_H));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('decode');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  // PNG keeps a flat logo sharp and is usually the smaller of the two; a
+  // photographic one blows past the cap, and there WebP wins by a mile.
+  let out = canvas.toDataURL('image/png');
+  if (out.length > LOGO_MAX_BYTES) out = canvas.toDataURL('image/webp', 0.9);
+  if (out.length > LOGO_MAX_BYTES) throw new Error('too-large');
+  return out;
+}
+
+function buildLogoOption() {
+  logoOption.innerHTML = '';
+  const current = docLogo();
+
+  const preview = document.createElement('div');
+  preview.className = 'logo-preview';
+  if (current) {
+    const img = document.createElement('img');
+    img.src = current;
+    img.alt = '';
+    preview.appendChild(img);
+  } else {
+    preview.classList.add('empty');
+    preview.textContent = t('logoNone');
+  }
+
+  const error = document.createElement('div');
+  error.className = 'logo-error';
+  error.hidden = true;
+
+  const choose = document.createElement('button');
+  choose.type = 'button';
+  choose.className = 'link-btn';
+  choose.textContent = current ? t('logoReplace') : t('logoChoose');
+  choose.addEventListener('click', async () => {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: t('logoLabel'), extensions: Object.keys(LOGO_MIME) }],
+    });
+    if (typeof picked !== 'string') return;
+    const mime = LOGO_MIME[picked.split('.').pop()?.toLowerCase() ?? ''];
+    try {
+      if (!mime) throw new Error('decode');
+      const bytes = await invoke<number[]>('read_image', { path: picked });
+      localStorage.setItem(LOGO_KEY, await toStoredLogo(new Blob([new Uint8Array(bytes)], { type: mime }), mime));
+    } catch (e) {
+      // Two things the user can act on: the picture is too big (pick a smaller
+      // one) or it isn't usable at all. A localStorage quota failure is the
+      // first kind, and Rust refuses an outsized file before reading it — an
+      // invoke rejection arrives as a plain string, not an Error.
+      const msg = e instanceof Error ? e.message : String(e);
+      const tooLarge = msg === 'too-large' || /too large/i.test(msg);
+      error.textContent = tooLarge ? t('logoTooLarge') : t('logoBadImage');
+      error.hidden = false;
+      return;
+    }
+    buildLogoOption();
+    if (active) void renderSource(active.workingText, active.path ?? '');
+  });
+
+  const row = document.createElement('div');
+  row.className = 'logo-actions';
+  row.appendChild(choose);
+  if (current) {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'link-btn';
+    clear.textContent = t('logoClear');
+    clear.addEventListener('click', () => {
+      localStorage.removeItem(LOGO_KEY);
+      buildLogoOption();
+      if (active) void renderSource(active.workingText, active.path ?? '');
+    });
+    row.appendChild(clear);
+  }
+
+  logoOption.append(preview, row, error);
+}
+
 // Language picker: System (follow the OS) / 日本語 / English.
 function buildLangOptions() {
   const choices: Array<{ value: Lang | 'system'; label: string }> = [
@@ -2496,6 +3010,9 @@ function applyI18n() {
   buildPreviewThemeOption();
   buildOutlinePosOption();
   buildEditLayoutOption();
+  buildLogoOption();
+  void buildTemplateFolderOption();
+  void buildTemplateChoices();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
   invoke('apply_menu', { lang: getLang() }).catch(() => {});
@@ -2509,6 +3026,8 @@ function openSettings() {
   buildPreviewThemeOption();
   buildOutlinePosOption();
   buildEditLayoutOption();
+  buildLogoOption();
+  void buildTemplateFolderOption();
   selectSettingsTab('appearance');
   settingsOverlay.hidden = false;
 }
@@ -4113,6 +4632,7 @@ listen<string>('open-file', (e) => {
 listen<string>('menu', (e) => {
   switch (e.payload) {
     case 'new': newDoc(); break;
+    case 'template_from_doc': templateFromDoc(); break;
     case 'open': openBtn.click(); break;
     case 'save': save(); break;
     case 'save_as': saveAs(); break;
