@@ -1579,23 +1579,50 @@ const TEMPLATE_LABEL: Record<TemplateKind, Key> = {
 // anyone being told to.
 const TEMPLATE_FOLDER_KEY = 'mrdown.templateFolder';
 const TEMPLATE_DIR_IN_REPO = 'docs/_templates';
-const templateFolder = () => localStorage.getItem(TEMPLATE_FOLDER_KEY);
+/** The explicit override. Empty means "follow whichever repository is open". */
+const templateFolderOverride = () => localStorage.getItem(TEMPLATE_FOLDER_KEY);
 
-/** What the picker offers: the user's folder when it holds any, else the built-ins. */
-async function templateEntries(): Promise<Array<{ label: string; load: () => Promise<string> }>> {
-  const folder = templateFolder();
-  if (folder) {
-    const files = (await listDir(folder))
+/** `docs/_templates` inside the folder currently open, if one is. */
+function repoTemplateDir(): string | null {
+  if (!folderRoot) return null;
+  const sep = folderRoot.includes('\\') ? '\\' : '/';
+  return `${folderRoot}${sep}${TEMPLATE_DIR_IN_REPO.split('/').join(sep)}`;
+}
+
+/**
+ * Where the templates come from, most specific first:
+ *
+ *   1. the folder set in Settings — an explicit override
+ *   2. `docs/_templates` in the repository that is open
+ *   3. the built-ins
+ *
+ * (2) is what makes the "keep them in the repository" advice hold together. A
+ * single remembered path is the wrong shape for it: point it at one client's
+ * repo and their format follows you into the next one. Reading it from whatever
+ * is open means each project brings its own, with nothing to configure.
+ */
+async function templateSource(): Promise<{ dir: string; files: TreeEntry[] } | null> {
+  for (const dir of [templateFolderOverride(), repoTemplateDir()]) {
+    if (!dir) continue;
+    const files = (await listDir(dir))
       .filter((e) => !e.is_dir && /\.md$/i.test(e.path))
       .sort((a, b) => a.name.localeCompare(b.name));
-    // An empty (or missing) folder falls back rather than leaving no way to
-    // start — the setting shouldn't be able to take the feature away.
-    if (files.length) {
-      return files.map((f) => ({
-        label: f.name.replace(/\.md$/i, ''),
-        load: () => invoke<string>('read_file', { path: f.path }),
-      }));
-    }
+    // An empty or missing folder falls through rather than leaving no way to
+    // start — neither the setting nor an unrelated repo should be able to take
+    // the feature away.
+    if (files.length) return { dir, files };
+  }
+  return null;
+}
+
+/** What the picker offers: the templates in force, else the built-ins. */
+async function templateEntries(): Promise<Array<{ label: string; load: () => Promise<string> }>> {
+  const source = await templateSource();
+  if (source) {
+    return source.files.map((f) => ({
+      label: f.name.replace(/\.md$/i, ''),
+      load: () => invoke<string>('read_file', { path: f.path }),
+    }));
   }
   const lang = getLang();
   return TEMPLATE_KINDS.map((kind) => ({
@@ -1625,46 +1652,68 @@ async function buildTemplateChoices() {
 }
 
 function updateTemplatePicker() {
-  templatePicker.hidden = !(isEditing && !!active && active.path === null && active.workingText === '');
+  const show = isEditing && !!active && active.path === null && active.workingText === '';
+  templatePicker.hidden = !show;
+  // Built every time it is on screen rather than once at startup: which
+  // templates are in force depends on the folder that happens to be open, and
+  // the files in it can be added to or edited (in this very app) between one
+  // blank page and the next. Reading them at the moment of asking is the only
+  // version that can't go stale — and it costs one listing of a small folder,
+  // only ever while a blank page is showing.
+  if (show) void buildTemplateChoices();
 }
 
 // `message` survives the rebuild: several of the actions below change what the
 // pane should show *and* have something to report, and setting the text before
 // re-rendering would only throw it away.
-function buildTemplateFolderOption(message?: string) {
+async function buildTemplateFolderOption(message?: string) {
   templateFolderOption.innerHTML = '';
-  const folder = templateFolder();
+  const override = templateFolderOverride();
+  const source = await templateSource();
 
+  // The setting is an override, so the pane has to answer "what is in force?"
+  // rather than echo the setting back — otherwise a repository quietly
+  // supplying its own templates looks like nothing is configured at all.
   const where = document.createElement('div');
-  where.className = folder ? 'template-folder-path' : 'template-folder-path empty';
-  where.textContent = folder ? tildify(folder, home) : t('templateFolderNone');
+  if (!source) {
+    where.className = 'template-folder-path empty';
+    where.textContent = t('templateFolderNone');
+  } else if (source.dir === override) {
+    where.className = 'template-folder-path';
+    where.textContent = tildify(source.dir, home);
+  } else {
+    where.className = 'template-folder-path';
+    where.textContent = t('templateFolderAuto', { dir: tildify(source.dir, home) });
+  }
 
   const status = document.createElement('div');
   status.className = 'template-folder-status';
   status.textContent = message ?? '';
   status.hidden = !message;
 
+  const row = document.createElement('div');
+  row.className = 'logo-actions';
+
   const choose = document.createElement('button');
   choose.type = 'button';
   choose.className = 'link-btn';
-  choose.textContent = folder ? t('templateFolderChange') : t('templateFolderChoose');
+  choose.textContent = override ? t('templateFolderChange') : t('templateFolderChoose');
   choose.addEventListener('click', async () => {
     const picked = await open({ directory: true, multiple: false });
     if (typeof picked !== 'string') return;
     localStorage.setItem(TEMPLATE_FOLDER_KEY, picked);
-    buildTemplateFolderOption();
+    void buildTemplateFolderOption();
     void buildTemplateChoices();
   });
-
-  const row = document.createElement('div');
-  row.className = 'logo-actions';
   row.appendChild(choose);
 
   // The one-click version of the whole idea: put them in the repository that is
-  // already open, where the team and their agents will find them.
-  if (folderRoot) {
-    const sep = folderRoot.includes('\\') ? '\\' : '/';
-    const dir = `${folderRoot}${sep}${TEMPLATE_DIR_IN_REPO.split('/').join(sep)}`;
+  // already open. It deliberately does not set the override — the folder it
+  // writes to is the one the open repository is read from anyway, and pinning
+  // it would drag this project's templates into the next one.
+  const repoDir = repoTemplateDir();
+  if (repoDir) {
+    const sep = repoDir.includes('\\') ? '\\' : '/';
     const intoRepo = document.createElement('button');
     intoRepo.type = 'button';
     intoRepo.className = 'link-btn';
@@ -1674,19 +1723,18 @@ function buildTemplateFolderOption(message?: string) {
       try {
         for (const kind of TEMPLATE_KINDS) {
           const name = sanitizeFilename(t(TEMPLATE_LABEL[kind]));
-          await invoke('write_template', { path: `${dir}${sep}${name}.md`, content: docTemplate(kind, lang) });
+          await invoke('write_template', { path: `${repoDir}${sep}${name}.md`, content: docTemplate(kind, lang) });
         }
-        localStorage.setItem(TEMPLATE_FOLDER_KEY, dir);
-        buildTemplateFolderOption(t('templateSeeded'));
+        void buildTemplateFolderOption(t('templateSeeded'));
       } catch {
-        buildTemplateFolderOption(t('templateSeedFailed'));
+        void buildTemplateFolderOption(t('templateSeedFailed'));
       }
       void buildTemplateChoices();
     });
     row.appendChild(intoRepo);
   }
 
-  if (folder) {
+  if (source) {
     // The instructions go to the clipboard rather than into a file: which file an
     // agent reads is the team's convention (AGENTS.md, CLAUDE.md, …), and
     // appending to one this app didn't write is not its call to make.
@@ -1695,9 +1743,11 @@ function buildTemplateFolderOption(message?: string) {
     forAgents.className = 'link-btn';
     forAgents.textContent = t('templateForAgents');
     forAgents.addEventListener('click', async () => {
-      const shown = folderRoot && folder.startsWith(folderRoot)
-        ? folder.slice(folderRoot.length).replace(/^[/\\]/, '')
-        : tildify(folder, home);
+      // Relative to the repository when it sits inside it, since that is how the
+      // file being pasted into will be read.
+      const shown = folderRoot && source.dir.startsWith(folderRoot)
+        ? source.dir.slice(folderRoot.length).replace(/^[/\\]/, '')
+        : tildify(source.dir, home);
       status.textContent = (await copyText(agentInstructions(shown, getLang())))
         ? t('templateForAgentsCopied')
         : t('templateForAgentsFailed');
@@ -1706,7 +1756,7 @@ function buildTemplateFolderOption(message?: string) {
     row.appendChild(forAgents);
   }
 
-  if (folder) {
+  if (override) {
     // Seeding beats starting from an empty folder: most people want the shipped
     // skeletons *adjusted*, not written from nothing.
     const seed = document.createElement('button');
@@ -1715,17 +1765,16 @@ function buildTemplateFolderOption(message?: string) {
     seed.textContent = t('templateSeed');
     seed.addEventListener('click', async () => {
       const lang = getLang();
-      const sep = folder.includes('\\') ? '\\' : '/';
+      const sep = override.includes('\\') ? '\\' : '/';
       try {
         for (const kind of TEMPLATE_KINDS) {
           const name = sanitizeFilename(t(TEMPLATE_LABEL[kind]));
-          await invoke('save_file', { path: `${folder}${sep}${name}.md`, content: docTemplate(kind, lang) });
+          await invoke('write_template', { path: `${override}${sep}${name}.md`, content: docTemplate(kind, lang) });
         }
-        status.textContent = t('templateSeeded');
+        void buildTemplateFolderOption(t('templateSeeded'));
       } catch {
-        status.textContent = t('templateSeedFailed');
+        void buildTemplateFolderOption(t('templateSeedFailed'));
       }
-      status.hidden = false;
       void buildTemplateChoices();
     });
 
@@ -1735,7 +1784,7 @@ function buildTemplateFolderOption(message?: string) {
     clear.textContent = t('templateFolderClear');
     clear.addEventListener('click', () => {
       localStorage.removeItem(TEMPLATE_FOLDER_KEY);
-      buildTemplateFolderOption();
+      void buildTemplateFolderOption();
       void buildTemplateChoices();
     });
 
@@ -2925,7 +2974,7 @@ function applyI18n() {
   buildOutlinePosOption();
   buildEditLayoutOption();
   buildLogoOption();
-  buildTemplateFolderOption();
+  void buildTemplateFolderOption();
   void buildTemplateChoices();
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
   // Keep the native menu in the same language.
@@ -2941,7 +2990,7 @@ function openSettings() {
   buildOutlinePosOption();
   buildEditLayoutOption();
   buildLogoOption();
-  buildTemplateFolderOption();
+  void buildTemplateFolderOption();
   selectSettingsTab('appearance');
   settingsOverlay.hidden = false;
 }

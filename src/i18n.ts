@@ -98,9 +98,10 @@ const DICT = {
     templatesNote:
       'フォルダに入れた .md が、そのまま新規作成のテンプレートになります。直すときはその .md を開いて編集してください。{{date}} と書いた箇所は作成日に置き換わります。フォルダが空のときは組み込みの2つを使います。',
     templatesRepoNote:
-      'リポジトリの中に置くのがおすすめです。clone しただけでチーム全員に配られ、AI エージェントも指示なしで読みます（雛形自体の変更履歴も残ります）。',
+      'リポジトリの中に置くのがおすすめです。clone しただけでチーム全員に配られ、AI エージェントも指示なしで読みます（雛形自体の変更履歴も残ります）。開いているフォルダに docs/_templates があれば自動で使うので、リポジトリを移れば雛形も一緒に切り替わります。下の設定は、別の場所を使いたいときの上書きです。',
     templateFolderLabel: 'テンプレートフォルダ',
     templateFolderNone: '未設定（組み込みの2つを使います）',
+    templateFolderAuto: '{dir}（開いているフォルダから自動）',
     templateFolderChoose: 'フォルダを選ぶ…',
     templateFolderChange: 'フォルダを変える…',
     templateFolderClear: '解除',
@@ -284,9 +285,10 @@ const DICT = {
     templatesNote:
       'Any .md file in this folder becomes a template for new documents. To change one, open that .md and edit it. Anywhere you write {{date}} is replaced with the date the document is created. An empty folder falls back to the two built-in templates.',
     templatesRepoNote:
-      'Keep them inside a repository. Then they arrive with the clone for everyone on the team, an AI agent reads them without being told, and changes to the templates themselves are reviewable.',
+      'Keep them inside a repository. Then they arrive with the clone for everyone on the team, an AI agent reads them without being told, and changes to the templates themselves are reviewable. A docs/_templates in the folder you have open is picked up automatically, so moving between repositories moves the templates with you. The setting below is an override for keeping them somewhere else.',
     templateFolderLabel: 'Template folder',
     templateFolderNone: 'Not set — using the two built-in templates',
+    templateFolderAuto: '{dir} (found in the open folder)',
     templateFolderChoose: 'Choose a folder…',
     templateFolderChange: 'Change folder…',
     templateFolderClear: 'Clear',
