@@ -72,6 +72,14 @@ fn print_document(window: tauri::WebviewWindow) -> Result<(), String> {
 /// fetch of `asset:` would be blocked in the real window even though it works in
 /// a plain browser. Guards the extension the way save_image does, so the command
 /// can't be turned into an arbitrary file read.
+///
+/// The size is checked before the file is opened. A logo is a few hundred
+/// kilobytes; anything far past that is a mistake, and letting it through costs
+/// more than a slow read — the bytes cross the IPC boundary as a JSON array of
+/// numbers, so a 17 MB pick becomes tens of millions of JSON elements and the
+/// window stops answering long before the picture is ever decoded.
+const IMAGE_READ_MAX_BYTES: u64 = 8 * 1024 * 1024;
+
 #[tauri::command]
 fn read_image(path: String) -> Result<Vec<u8>, String> {
     let ext = std::path::Path::new(&path)
@@ -81,6 +89,10 @@ fn read_image(path: String) -> Result<Vec<u8>, String> {
         .unwrap_or_default();
     if !["png", "jpg", "jpeg", "gif", "webp", "svg"].contains(&ext.as_str()) {
         return Err("Unsupported image type".to_string());
+    }
+    let len = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    if len > IMAGE_READ_MAX_BYTES {
+        return Err("Image too large".to_string());
     }
     std::fs::read(&path).map_err(|e| e.to_string())
 }
@@ -1114,6 +1126,12 @@ mod tests {
         std::fs::write(&key, "secret").unwrap();
         assert!(read_image(key.to_str().unwrap().to_string()).is_err());
         assert!(read_image(dir.join("notes.md").to_str().unwrap().to_string()).is_err());
+
+        // Refused on size before the read, so an outsized pick can't be turned
+        // into millions of JSON numbers crossing the IPC boundary.
+        let huge = dir.join("huge.png");
+        std::fs::write(&huge, vec![0u8; (IMAGE_READ_MAX_BYTES + 1) as usize]).unwrap();
+        assert!(read_image(huge.to_str().unwrap().to_string()).is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
     }

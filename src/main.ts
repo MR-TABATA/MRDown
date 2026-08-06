@@ -2385,9 +2385,13 @@ function buildLogoOption() {
       const bytes = await invoke<number[]>('read_image', { path: picked });
       localStorage.setItem(LOGO_KEY, await toStoredLogo(new Blob([new Uint8Array(bytes)], { type: mime }), mime));
     } catch (e) {
-      // A quota failure reads the same to the user as an oversized image: the
-      // picture is too big to keep, and a smaller one is the way out.
-      error.textContent = e instanceof Error && e.message === 'decode' ? t('logoBadImage') : t('logoTooLarge');
+      // Two things the user can act on: the picture is too big (pick a smaller
+      // one) or it isn't usable at all. A localStorage quota failure is the
+      // first kind, and Rust refuses an outsized file before reading it — an
+      // invoke rejection arrives as a plain string, not an Error.
+      const msg = e instanceof Error ? e.message : String(e);
+      const tooLarge = msg === 'too-large' || /too large/i.test(msg);
+      error.textContent = tooLarge ? t('logoTooLarge') : t('logoBadImage');
       error.hidden = false;
       return;
     }
