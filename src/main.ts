@@ -4483,6 +4483,91 @@ divider.addEventListener('mousedown', (e) => {
   document.addEventListener('mouseup', onUp);
 });
 
+// Draggable column edges: the line between the sidebar and the document, and the
+// one between the document and the right-hand outline. Widths are kept in pixels
+// rather than a ratio (unlike the editor/preview split above) because these are
+// fixed columns — a list of file names wants the width its names need, not a
+// share of the window that changes every time the window is resized.
+const sidebarResizer = document.getElementById('sidebar-resizer')!;
+const outlineResizer = document.getElementById('outline-resizer')!;
+const SIDEBAR_W_KEY = 'mrdown.sidebarWidth';
+const OUTLINE_W_KEY = 'mrdown.outlineWidth';
+
+function makePaneResizer(
+  handle: HTMLElement,
+  opts: {
+    cssVar: string;
+    storageKey: string;
+    min: number;
+    max: number;
+    // The width the pointer is asking for, from where the row starts and ends.
+    widthAt: (clientX: number, rect: DOMRect) => number;
+  },
+) {
+  // Half the row is the ceiling whatever `max` says: a side column that outgrows
+  // the document defeats the point of both. That cap is applied on the way to
+  // the screen, not to the stored number — shrink the window and the column
+  // gives way; widen it again and the width you chose comes back.
+  const fit = (width: number) => {
+    const room = bodyRow.getBoundingClientRect().width;
+    const max = room ? Math.min(opts.max, room / 2) : opts.max;
+    return Math.min(max, Math.max(opts.min, width));
+  };
+  const show = (width: number | null) => {
+    if (width === null) document.body.style.removeProperty(opts.cssVar);
+    else document.body.style.setProperty(opts.cssVar, `${fit(width)}px`);
+  };
+
+  const stored = Number(localStorage.getItem(opts.storageKey));
+  let chosen: number | null = stored > 0 ? stored : null;
+  show(chosen);
+  window.addEventListener('resize', () => show(chosen));
+
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    handle.classList.add('resizing');
+    document.body.classList.add('resizing-pane');
+    let dragged = false;
+    const onMove = (ev: MouseEvent) => {
+      dragged = true;
+      chosen = fit(opts.widthAt(ev.clientX, bodyRow.getBoundingClientRect()));
+      show(chosen);
+    };
+    const onUp = () => {
+      handle.classList.remove('resizing');
+      document.body.classList.remove('resizing-pane');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (dragged && chosen) localStorage.setItem(opts.storageKey, String(Math.round(chosen)));
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Double-click puts the column back to the width the stylesheet ships, which
+  // is also the way out of a drag that went somewhere unreadable.
+  handle.addEventListener('dblclick', () => {
+    chosen = null;
+    show(null);
+    localStorage.removeItem(opts.storageKey);
+  });
+}
+
+makePaneResizer(sidebarResizer, {
+  cssVar: '--sidebar-w',
+  storageKey: SIDEBAR_W_KEY,
+  min: 150,
+  max: 480,
+  widthAt: (clientX, rect) => clientX - rect.left,
+});
+makePaneResizer(outlineResizer, {
+  cssVar: '--outline-w',
+  storageKey: OUTLINE_W_KEY,
+  min: 140,
+  max: 420,
+  widthAt: (clientX, rect) => rect.right - clientX,
+});
+
 // Drag a Markdown file onto the window to open it.
 getCurrentWebview().onDragDropEvent((event) => {
   const p = event.payload;
@@ -4518,7 +4603,7 @@ setInterval(async () => {
   } catch {
     // File may have been moved/removed; leave the last render in place.
   }
-}, 1500);
+}, 700);
 
 // A document's persisted form (see saveSession).
 interface StoredDoc {

@@ -114,6 +114,8 @@
       <div class="sidebar-title" data-i18n="sidebarHeader">開いている文書</div>
       <ul id="doc-list" tabindex="0" role="listbox" aria-multiselectable="true"></ul>
     </aside>
+    <!-- Drag to resize the sidebar; double-click puts it back to its default. -->
+    <div class="pane-resizer" id="sidebar-resizer" role="separator" aria-orientation="vertical"></div>
     <div class="content-area">
       <div id="conflict-bar" hidden>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -174,6 +176,9 @@
       <div id="divider"></div>
       <div id="output"></div>
     </div>
+    <!-- Only in the right placement: in the sidebar the outline has no edge of
+         its own to drag (see #outline-resizer in styles.css). -->
+    <div class="pane-resizer" id="outline-resizer" role="separator" aria-orientation="vertical"></div>
     <!-- The outline sits here (its own column, right of the content) by default.
          Set it to "left" and main.ts moves this node into the sidebar, where it
          stacks under the open-documents list as it used to. -->
