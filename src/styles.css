@@ -182,13 +182,14 @@ button:disabled { opacity: 0.3; cursor: default; }
   min-height: 0;
 }
 
-/* Open-documents sidebar (BBEdit-style) */
+/* Open-documents sidebar (BBEdit-style). The width is a variable so the resizer
+   between it and the content can move it (see .pane-resizer below); the literal
+   here is the default it falls back to and the one double-click restores. */
 #sidebar {
-  width: 230px;
+  width: var(--sidebar-w, 230px);
   flex-shrink: 0;
   overflow-y: auto;
   background: var(--mrd-surface);
-  border-right: 1px solid var(--mrd-border);
   padding: 8px 0;
 }
 body.sidebar-hidden #sidebar { display: none; }
@@ -353,11 +354,10 @@ body.outline-hidden #outline { display: none; }
 /* Right: its own column. The surface it sits on is the one the sidebar uses, so
    hover and active have to step up a level to stay visible against it. */
 body.outline-right #outline {
-  width: 220px;
+  width: var(--outline-w, 220px);
   flex-shrink: 0;
   overflow-y: auto;
   background: var(--mrd-surface);
-  border-left: 1px solid var(--mrd-border);
   padding: 8px 0;
 }
 /* Collapsing is for the left placement, where the outline shares the sidebar
@@ -403,6 +403,40 @@ body.outline-right .outline-item.active { background: var(--mrd-surface-2); }
   overflow-y: auto;
   padding: 40px;
 }
+
+/* Column resizers — the line between the sidebar and the content, and the one
+   between the content and the right-hand outline. Each *is* the border those
+   columns used to draw themselves (a separate band next to a border would read
+   as two lines), with an invisible wider grab zone so it stays easy to catch.
+   Same shape as #divider, which resizes the editor/preview split. */
+.pane-resizer {
+  flex: 0 0 1px;
+  position: relative;
+  background: var(--mrd-border);
+  cursor: col-resize;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.pane-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
+}
+.pane-resizer:hover,
+.pane-resizer.resizing {
+  background: var(--mrd-accent);
+  box-shadow: -1px 0 0 var(--mrd-accent), 1px 0 0 var(--mrd-accent);
+}
+/* A hidden column has no edge to drag. The outline also loses its own edge when
+   it moves into the sidebar, where it stacks under the open-documents list. */
+body.sidebar-hidden #sidebar-resizer,
+body.outline-hidden #outline-resizer,
+body:not(.outline-right) #outline-resizer { display: none; }
+/* Keep the pointer as col-resize for the whole drag, even where it strays off
+   the 1px line, and don't let it select text on the way past. */
+body.resizing-pane { cursor: col-resize; user-select: none; }
 
 /* In-document find bar (⌘F) — floats at the top-right of the content area */
 #find-bar {
@@ -1580,6 +1614,7 @@ body.reading #statusbar,
 body.reading #find-bar,
 body.reading #format-bar,
 body.reading #divider,
+body.reading .pane-resizer,
 body.reading .editor-pane { display: none !important; }
 body.reading .content-area { padding: 0; }
 body.reading #output {
@@ -1596,7 +1631,7 @@ body.reading #output {
   }
 
   .titlebar, .toolbar, #sidebar, #find-bar, #format-bar,
-  #divider, .editor-pane, .empty-state, .overlay { display: none !important; }
+  #divider, .pane-resizer, .editor-pane, .empty-state, .overlay { display: none !important; }
 
   body { height: auto; overflow: visible; background: #fff; }
   .body-row { display: block; }
