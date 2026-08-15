@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MRDown — リリース全史</title>
+  <meta name="description" content="2026年6月21日の初リリースから v1.11.0 まで、MRDown の全46タグを日付と機能つきで時系列に。CRUD が揃うまで4日、1.0 まで20日。">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="MRDown — リリース全史">
+  <meta property="og:description" content="54日で46タグ。初リリースから有償版が出るまでの全記録。">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:url" content="https://mr-tabata.github.io/MRDown/releases.ja.html">
+  <meta property="og:image" content="https://mr-tabata.github.io/MRDown/media/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="canonical" href="https://mr-tabata.github.io/MRDown/releases.ja.html">
+  <link rel="alternate" hreflang="ja" href="https://mr-tabata.github.io/MRDown/releases.ja.html">
+  <link rel="alternate" hreflang="en" href="https://mr-tabata.github.io/MRDown/releases.en.html">
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='23' fill='%236d5efc'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='30,40 50,55 70,40'/%3E%3Cpolyline points='30,56 50,71 70,56'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="stylesheet" href="lp.css">
+</head>
+<body>
+  <!-- Inline logo template. Kept out of flow with width/height 0 rather than
+       display:none — a display:none subtree does not resolve the gradient
+       (paint server) the logo tile references. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="logoBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7d6ff7"/>
+        <stop offset="1" stop-color="#4f2fc9"/>
+      </linearGradient>
+      <radialGradient id="logoGloss" cx="50%" cy="0%" r="80%">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+        <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <symbol id="logo" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="23" fill="url(#logoBg)"/>
+      <rect width="100" height="100" rx="23" fill="url(#logoGloss)"/>
+      <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="30,40 50,55 70,40"/>
+        <polyline points="30,56 50,71 70,56"/>
+      </g>
+    </symbol>
+  </svg>
+
+  <nav>
+    <a class="brand" href="index.ja.html"><svg><use href="#logo"/></svg> MRDown</a>
+    <div class="nav-links">
+      <a href="index.ja.html#features">機能</a>
+      <a href="index.ja.html#shortcuts">ショートカット</a>
+      <a href="index.ja.html#install">インストール</a>
+      <a href="https://github.com/MR-TABATA/MRDown/releases" target="_blank" rel="noopener">ダウンロード</a>
+      <a class="lang-switch" href="releases.en.html" hreflang="en" lang="en">English</a>
+    </div>
+  </nav>
+
+  <!-- ===== Head ===== -->
+  <header class="rel-head">
+    <div class="wrap">
+      <div class="kicker">Release history</div>
+      <h1>54日で46タグ。</h1>
+      <p class="lead">
+        2026年6月21日の初リリースから、8月14日の v1.11.0 まで。Markdown ビューアとして出て、
+        CRUD が4日で揃い、diff を旗に立て、編集画面を作り直すまでの全記録です。
+      </p>
+
+      <div class="rel-stats">
+        <div class="rel-stat"><span class="n">46</span><span class="k">タグ</span></div>
+        <div class="rel-stat"><span class="n">42</span><span class="k">公開リリース</span></div>
+        <div class="rel-stat"><span class="n">54<small> 日</small></span><span class="k">期間</span></div>
+        <div class="rel-stat"><span class="n">5<small> 本</small></span><span class="k">最多の1日（7/18）</span></div>
+        <div class="rel-stat"><span class="n">20<small> 日</small></span><span class="k">1.0 到達</span></div>
+      </div>
+
+      <div class="rel-plot-wrap">
+        <div class="rel-plot-label">リリース密度 — 1本 = 1タグ</div>
+        <div class="rel-plot" role="img" aria-label="6月21日から8月14日までの日別リリース本数。7月18日の5本が最大。">
+          <i class="m" style="left:0%;height:14px"></i>
+          <i style="left:1.85%;height:14px"></i>
+          <i style="left:3.70%;height:42px"></i>
+          <i class="m" style="left:5.56%;height:42px"></i>
+          <i class="m" style="left:7.41%;height:56px"></i>
+          <i style="left:9.26%;height:42px"></i>
+          <i style="left:16.67%;height:14px"></i>
+          <i style="left:18.52%;height:14px"></i>
+          <i class="m" style="left:22.22%;height:14px"></i>
+          <i style="left:27.78%;height:14px"></i>
+          <i style="left:29.63%;height:14px"></i>
+          <i style="left:31.48%;height:14px"></i>
+          <i style="left:33.33%;height:14px"></i>
+          <i style="left:35.19%;height:14px"></i>
+          <i class="m" style="left:37.04%;height:42px"></i>
+          <i class="m" style="left:38.89%;height:14px"></i>
+          <i style="left:44.44%;height:14px"></i>
+          <i class="m" style="left:50.00%;height:70px"></i>
+          <i style="left:51.85%;height:14px"></i>
+          <i style="left:53.70%;height:14px"></i>
+          <i style="left:55.56%;height:14px"></i>
+          <i style="left:57.41%;height:14px"></i>
+          <i style="left:59.26%;height:28px"></i>
+          <i style="left:61.11%;height:14px"></i>
+          <i class="m" style="left:68.52%;height:14px"></i>
+          <i style="left:70.37%;height:14px"></i>
+          <i class="m" style="left:74.07%;height:14px"></i>
+          <i style="left:79.63%;height:14px"></i>
+          <i class="m" style="left:85.19%;height:14px"></i>
+          <i style="left:100%;height:14px"></i>
+        </div>
+        <div class="rel-axis">
+          <span style="left:0%">6/21</span>
+          <span style="left:18.52%">7/1</span>
+          <span style="left:37.04%">7/11</span>
+          <span style="left:55.56%">7/21</span>
+          <span style="left:74.07%">7/31</span>
+          <span style="left:92.59%">8/10</span>
+        </div>
+        <p class="rel-plot-note">
+          前半は<strong>1日に3〜4本</strong>出る密度。<strong>7/18 の5本</strong>が最大で、
+          ここを境に1本あたりが大きくなり、間隔が開いていきます。
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+
+    <!-- ===== 1 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>ビューアから CRUD へ</h2><span class="span">v0.1.0 – v0.11.0 · 6/21 – 6/26</span>
+        <p>読むだけのビューアとして出て、6日で作成・編集・削除まで揃う。当時の名前は <code>mdcrud</code>。</p>
+      </div>
+
+      <div class="rel-row m">
+        <span class="v">0.1.0</span><span class="d">6/21</span>
+        <span class="t"><strong>初リリース。</strong>Tauri + TypeScript の Markdown ビューア。ランディングページも同時公開</span>
+      </div>
+      <div class="rel-row g">
+        <span class="v">0.1.1</span><span class="d">6/22</span>
+        <span class="t">ダブルクリック／「このアプリケーションで開く」からファイルを開く<span class="note">タグのみ</span></span>
+      </div>
+      <div class="rel-row g">
+        <span class="v">0.2.0</span><span class="d">6/23</span>
+        <span class="t">リンク・アンカー・画像の扱いを修正。Windows インストーラに日本語を追加<span class="note">タグのみ</span></span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.2.1</span><span class="d">6/23</span>
+        <span class="t">macOS を ad-hoc 署名（「壊れているため開けません」の回避）</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.3.0</span><span class="d">6/23</span>
+        <span class="t">ドラッグ&amp;ドロップ、外部変更の自動リロード、最近使ったファイル</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.4.0</span><span class="d">6/24</span>
+        <span class="t">Mermaid 図の描画</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">0.5.0</span><span class="d">6/24</span>
+        <span class="t"><strong>編集機能（U）。</strong>左右分割のライブプレビュー。純粋ロジックをモジュールに切り出してテスト基盤を敷く</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.6.0</span><span class="d">6/24</span>
+        <span class="t">複数文書サイドバーとセッション復元</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.7.0</span><span class="d">6/25</span>
+        <span class="t">新規作成（C）</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.7.1</span><span class="d">6/25</span>
+        <span class="t">ウィンドウタイトルにファイル名、ツールバーに <code>~</code> 省略パス</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.9.0</span><span class="d">6/25</span>
+        <span class="t">書式ツールバーと設定パネル</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">0.9.2</span><span class="d">6/25</span>
+        <span class="t"><strong>ゴミ箱へ移動（D）— CRUD が揃う。</strong>初リリースから4日</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.10.0</span><span class="d">6/26</span>
+        <span class="t">日英の i18n と、ネイティブメニューのローカライズ</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.10.1</span><span class="d">6/26</span>
+        <span class="t">About パネルに著者とタグライン</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.11.0</span><span class="d">6/26</span>
+        <span class="t">コードブロックのシンタックスハイライト</span>
+      </div>
+    </section>
+
+    <!-- ===== 2 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>道具として立たせる</h2><span class="span">v0.12.0 – v0.18.1 · 6/30 – 7/11</span>
+        <p>改名し、履歴・検索・フォルダを入れ、書き出しと署名まで通して 1.0 の要件を埋める。diff への方針転換もこの期間。</p>
+      </div>
+
+      <div class="rel-row">
+        <span class="v">0.12.0</span><span class="d">6/30</span>
+        <span class="t">「Save As」（<code>⌘⇧S</code>）。<strong>mdcrud → MRDown に改名</strong></span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.12.1</span><span class="d">7/1</span>
+        <span class="t">プレビュー幅のスライダー</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">0.13.0</span><span class="d">7/3</span>
+        <span class="t"><strong>Local History。</strong>保存ごとにスナップショット、版の一覧、復元。同じ日に「時間軸ビューア」へ方針転換</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.14.0</span><span class="d">7/6</span>
+        <span class="t">文書内の検索・置換（正規表現／大小区別／単語単位）</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.15.0</span><span class="d">7/7</span>
+        <span class="t">下書き保護、<code>.md</code> リンクの遷移、YAML frontmatter</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.16.0</span><span class="d">7/8</span>
+        <span class="t">フォルダツリー（フォルダを開いて md を一式で見る）と、外観設定（アクセント／背景／文字色／フォント）</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.17.0</span><span class="d">7/9</span>
+        <span class="t">ロゴ刷新（シェブロン×インディゴ）。編集⇄プレビューのスクロール同期、画像の貼り付け保存、URL を選択に貼るとリンク化</span>
+      </div>
+      <div class="rel-row g">
+        <span class="v">0.18.0</span><span class="d">7/10</span>
+        <span class="t">HTML／PDF 書き出し、数式（KaTeX）、脚注、タスクチェックボックス、第三者ライセンス表記<span class="note">タグのみ</span></span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">0.18.1</span><span class="d">7/11</span>
+        <span class="t"><strong>Developer ID で署名して公証。</strong>「開発元が未確認」を出さずに配れるように</span>
+      </div>
+    </section>
+
+    <!-- ===== 3 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>1.0、そして時間軸 diff</h2><span class="span">v1.0.0 – v1.6.0 · 7/11 – 7/18</span>
+        <p>1.0 を出した翌日から差別化軸に着手。「何が変わったか」を見せる旗を、8日で立て切る。</p>
+      </div>
+
+      <div class="rel-row m">
+        <span class="v">1.0.0</span><span class="d">7/11</span>
+        <span class="t"><strong>1.0。</strong>macOS 専用化と、バンドルのローカライズ</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.1.0</span><span class="d">7/11</span>
+        <span class="t">アウトラインを独立した右ペインに（<code>⌘2</code>、左右は設定）。編集中は既定で畳む</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.2.0</span><span class="d">7/12</span>
+        <span class="t"><strong>時間軸 diff。</strong>履歴に「誰の版か」を持たせ、3-way で編集中に AI がファイルを書き換えても、どちらも失わない</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.3.0</span><span class="d">7/15</span>
+        <span class="t">任意の2ファイル比較（<code>⌘⇧D</code>）と、文書ごとの読書位置の記憶</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.4.0</span><span class="d">7/18</span>
+        <span class="t">任意の Git ref（branch／commit）と比較</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.4.1</span><span class="d">7/18</span>
+        <span class="t">diff の変更箇所ジャンプと、diff 内フィルタ</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.5.0</span><span class="d">7/18</span>
+        <span class="t">GitHub 風のプレビューテーマと、読書モード（<code>⌘⇧M</code>）</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.5.1</span><span class="d">7/18</span>
+        <span class="t">HEAD に無くても履歴に生きていれば ref 比較できるように</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.6.0</span><span class="d">7/18</span>
+        <span class="t"><strong>横断検索（<code>⌘⇧F</code>）。</strong>開いている文書をまたいで、行レベルの AND 検索</span>
+      </div>
+    </section>
+
+    <!-- ===== 4 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>サイドバーを磨く</h2><span class="span">v1.6.1 – v1.6.8 · 7/19 – 7/28</span>
+        <p>機能を足すより、毎日触る場所の摩擦を取る10日。</p>
+      </div>
+
+      <div class="rel-row">
+        <span class="v">1.6.1</span><span class="d">7/19</span>
+        <span class="t">競合バナーを、文書の切り替え時に再同期</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.2</span><span class="d">7/20</span>
+        <span class="t">プレビュー→編集の切り替えで、エディタが最下部に飛ぶのを修正</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.3</span><span class="d">7/21</span>
+        <span class="t">検索を🔍メニュー化（文書内／横断の2択）、設定を左サイドバー形式に</span>
+      </div>
+      <div class="rel-row g">
+        <span class="v">1.6.4</span><span class="d">7/22</span>
+        <span class="t">フルパスをツールバーから最下部のステータスバーへ移設<span class="note">未公開・欠番</span></span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.5</span><span class="d">7/23</span>
+        <span class="t">文書一覧を並べ替え可能に（ドラッグ＋<code>⌘↑↓</code>）</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.6</span><span class="d">7/23</span>
+        <span class="t">その並べ替えが実機で動かず再実装。WKWebView は HTML5 のドラッグ&amp;ドロップが使えないため</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.7</span><span class="d">7/24</span>
+        <span class="t">文書一覧の複数選択（<code>⌘</code>／<code>⇧</code> クリック）と、⌘なし矢印での文書切り替え</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.6.8</span><span class="d">7/28</span>
+        <span class="t"><strong>プレビュー⇄編集で、読んでいた位置を引き継ぐ。</strong>行数や割合ではなく、読んでいたブロックそのものを目印にする</span>
+      </div>
+    </section>
+
+    <!-- ===== 5 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>編集画面を作り直す</h2><span class="span">v1.7.0 – v1.11.0 · 7/29 – 8/14</span>
+        <p>1本あたりが大きくなる期間。エディタを CodeMirror 6 で作り直し、法人の文書に手を伸ばす。</p>
+      </div>
+
+      <div class="rel-row">
+        <span class="v">1.7.0</span><span class="d">7/29</span>
+        <span class="t">編集は<strong>同じ画面で切り替え</strong>（<code>⌘E</code>）。左右分割は設定で選択に。位置対応が9文字ずれていたのも修正</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.8.0</span><span class="d">7/31</span>
+        <span class="t"><strong>書きながら文書として読める編集画面（CodeMirror 6）。</strong>記号を隠すが、カーソル行だけは素の Markdown。保存してもファイルは1バイトも変わらない</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.9.0</span><span class="d">8/3</span>
+        <span class="t">表も編集中に罫線ごと描く。カーソルの規則は同じで、単位が「行」から「表」になる</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.10.0</span><span class="d">8/6</span>
+        <span class="t"><strong>文書ヘッダーとテンプレート。</strong>frontmatter に書いたタイトル・文書番号・版数・機密区分を描き、プレビューに出るものがそのまま PDF に出る</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.11.0</span><span class="d">8/14</span>
+        <span class="t">左右サイドの縦線をドラッグで動かせるように。ダブルクリックで既定幅に戻る</span>
+      </div>
+    </section>
+
+    <section class="rel-notes">
+      <h3>データについて</h3>
+      <ul>
+        <li><strong>タグ46本に対し、公開リリースは42本。</strong>差は <code>v0.1.1</code>、<code>v0.2.0</code>、<code>v0.18.0</code>（タグのみ）と、<code>v1.6.4</code>（未公開）です。</li>
+        <li><strong>欠番があります。</strong><code>v0.8.x</code> と <code>v0.9.1</code> は存在しません。</li>
+        <li>日付は<strong>タグのコミット日</strong>です。GitHub 上の公開日時は後から編集された分がずれているため使っていません。</li>
+        <li>v0.1.0 時点の名前は <code>mdcrud</code>。<code>MRDown</code> になるのは v0.12.0 からです。</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <div class="brand"><svg style="width:24px;height:24px;border-radius:6px;"><use href="#logo"/></svg> MRDown</div>
+      <p>Built with Tauri + TypeScript · MIT License</p>
+      <p style="margin-top:8px;">Created by <a href="https://github.com/MR-TABATA" target="_blank" rel="noopener">TABATA Hitoshi</a> · <a href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">GitHub</a> · <a href="releases.en.html" hreflang="en" lang="en">English</a></p>
+      <p style="margin-top:6px; color:#4a4a4a;">© 2026 TABATA Hitoshi</p>
+    </div>
+  </footer>
+</body>
+</html>

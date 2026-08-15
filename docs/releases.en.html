@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MRDown — Release history</title>
+  <meta name="description" content="Every one of MRDown's 46 tags, dated and described, from the first release on 21 June 2026 to v1.11.0. CRUD complete in four days; 1.0 in twenty.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="MRDown — Release history">
+  <meta property="og:description" content="46 tags in 54 days — from the first release to the paid build.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:url" content="https://mr-tabata.github.io/MRDown/releases.en.html">
+  <meta property="og:image" content="https://mr-tabata.github.io/MRDown/media/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="canonical" href="https://mr-tabata.github.io/MRDown/releases.en.html">
+  <link rel="alternate" hreflang="ja" href="https://mr-tabata.github.io/MRDown/releases.ja.html">
+  <link rel="alternate" hreflang="en" href="https://mr-tabata.github.io/MRDown/releases.en.html">
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='23' fill='%236d5efc'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='30,40 50,55 70,40'/%3E%3Cpolyline points='30,56 50,71 70,56'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="stylesheet" href="lp.css">
+</head>
+<body>
+  <!-- Inline logo template. Kept out of flow with width/height 0 rather than
+       display:none — a display:none subtree does not resolve the gradient
+       (paint server) the logo tile references. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="logoBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7d6ff7"/>
+        <stop offset="1" stop-color="#4f2fc9"/>
+      </linearGradient>
+      <radialGradient id="logoGloss" cx="50%" cy="0%" r="80%">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+        <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <symbol id="logo" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="23" fill="url(#logoBg)"/>
+      <rect width="100" height="100" rx="23" fill="url(#logoGloss)"/>
+      <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="30,40 50,55 70,40"/>
+        <polyline points="30,56 50,71 70,56"/>
+      </g>
+    </symbol>
+  </svg>
+
+  <nav>
+    <a class="brand" href="index.en.html"><svg><use href="#logo"/></svg> MRDown</a>
+    <div class="nav-links">
+      <a href="index.en.html#features">Features</a>
+      <a href="index.en.html#shortcuts">Shortcuts</a>
+      <a href="index.en.html#install">Install</a>
+      <a href="https://github.com/MR-TABATA/MRDown/releases" target="_blank" rel="noopener">Download</a>
+      <a class="lang-switch" href="releases.ja.html" hreflang="ja" lang="ja">日本語</a>
+    </div>
+  </nav>
+
+  <!-- ===== Head ===== -->
+  <header class="rel-head">
+    <div class="wrap">
+      <div class="kicker">Release history</div>
+      <h1>46 tags in 54 days.</h1>
+      <p class="lead">
+        From the first release on 21 June 2026 to v1.11.0 on 14 August. It shipped as a
+        Markdown viewer, had full CRUD four days later, planted its flag on diffs, and
+        then rebuilt its editor from scratch.
+      </p>
+
+      <div class="rel-stats">
+        <div class="rel-stat"><span class="n">46</span><span class="k">tags</span></div>
+        <div class="rel-stat"><span class="n">42</span><span class="k">published</span></div>
+        <div class="rel-stat"><span class="n">54<small> d</small></span><span class="k">elapsed</span></div>
+        <div class="rel-stat"><span class="n">5</span><span class="k">busiest day (18 Jul)</span></div>
+        <div class="rel-stat"><span class="n">20<small> d</small></span><span class="k">to 1.0</span></div>
+      </div>
+
+      <div class="rel-plot-wrap">
+        <div class="rel-plot-label">Release density — one bar per tag</div>
+        <div class="rel-plot" role="img" aria-label="Releases per day from 21 June to 14 August 2026. The peak is five on 18 July.">
+          <i class="m" style="left:0%;height:14px"></i>
+          <i style="left:1.85%;height:14px"></i>
+          <i style="left:3.70%;height:42px"></i>
+          <i class="m" style="left:5.56%;height:42px"></i>
+          <i class="m" style="left:7.41%;height:56px"></i>
+          <i style="left:9.26%;height:42px"></i>
+          <i style="left:16.67%;height:14px"></i>
+          <i style="left:18.52%;height:14px"></i>
+          <i class="m" style="left:22.22%;height:14px"></i>
+          <i style="left:27.78%;height:14px"></i>
+          <i style="left:29.63%;height:14px"></i>
+          <i style="left:31.48%;height:14px"></i>
+          <i style="left:33.33%;height:14px"></i>
+          <i style="left:35.19%;height:14px"></i>
+          <i class="m" style="left:37.04%;height:42px"></i>
+          <i class="m" style="left:38.89%;height:14px"></i>
+          <i style="left:44.44%;height:14px"></i>
+          <i class="m" style="left:50.00%;height:70px"></i>
+          <i style="left:51.85%;height:14px"></i>
+          <i style="left:53.70%;height:14px"></i>
+          <i style="left:55.56%;height:14px"></i>
+          <i style="left:57.41%;height:14px"></i>
+          <i style="left:59.26%;height:28px"></i>
+          <i style="left:61.11%;height:14px"></i>
+          <i class="m" style="left:68.52%;height:14px"></i>
+          <i style="left:70.37%;height:14px"></i>
+          <i class="m" style="left:74.07%;height:14px"></i>
+          <i style="left:79.63%;height:14px"></i>
+          <i class="m" style="left:85.19%;height:14px"></i>
+          <i style="left:100%;height:14px"></i>
+        </div>
+        <div class="rel-axis">
+          <span style="left:0%">21 Jun</span>
+          <span style="left:18.52%">1 Jul</span>
+          <span style="left:37.04%">11 Jul</span>
+          <span style="left:55.56%">21 Jul</span>
+          <span style="left:74.07%">31 Jul</span>
+          <span style="left:92.59%">10 Aug</span>
+        </div>
+        <p class="rel-plot-note">
+          The early weeks run at <strong>three or four releases a day</strong>. The peak is
+          <strong>five on 18 July</strong>; after that each release gets larger and the gaps get longer.
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+
+    <!-- ===== 1 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>From viewer to CRUD</h2><span class="span">v0.1.0 – v0.11.0 · 21 – 26 Jun</span>
+        <p>It shipped as a read-only viewer and had create, edit and delete six days later. Back then it was called <code>mdcrud</code>.</p>
+      </div>
+
+      <div class="rel-row m">
+        <span class="v">0.1.0</span><span class="d">21 Jun</span>
+        <span class="t"><strong>First release.</strong> A Markdown viewer built with Tauri + TypeScript, with a landing page from day one</span>
+      </div>
+      <div class="rel-row g">
+        <span class="v">0.1.1</span><span class="d">22 Jun</span>
+        <span class="t">Open files by double-click and via "Open With"<span class="note">tag only</span></span>
+      </div>
+      <div class="rel-row g">
+        <span class="v">0.2.0</span><span class="d">23 Jun</span>
+        <span class="t">Fixed link, anchor and image handling; added Japanese to the Windows installer<span class="note">tag only</span></span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.2.1</span><span class="d">23 Jun</span>
+        <span class="t">Ad-hoc signing for macOS, so the build stops reporting itself as damaged</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.3.0</span><span class="d">23 Jun</span>
+        <span class="t">Drag &amp; drop, auto-reload on external change, recent files</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.4.0</span><span class="d">24 Jun</span>
+        <span class="t">Mermaid diagrams</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">0.5.0</span><span class="d">24 Jun</span>
+        <span class="t"><strong>Editing (the U).</strong> Split live preview, plus the pure logic pulled into modules to lay a test foundation</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.6.0</span><span class="d">24 Jun</span>
+        <span class="t">Multi-document sidebar with session restore</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.7.0</span><span class="d">25 Jun</span>
+        <span class="t">New document (the C)</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.7.1</span><span class="d">25 Jun</span>
+        <span class="t">File name in the window title, <code>~</code>-abbreviated path in the toolbar</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.9.0</span><span class="d">25 Jun</span>
+        <span class="t">Formatting toolbar and Settings panel</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">0.9.2</span><span class="d">25 Jun</span>
+        <span class="t"><strong>Move to trash (the D) — CRUD complete,</strong> four days after the first release</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.10.0</span><span class="d">26 Jun</span>
+        <span class="t">Japanese / English i18n and a localized native menu</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.10.1</span><span class="d">26 Jun</span>
+        <span class="t">Author and tagline in the About panel</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.11.0</span><span class="d">26 Jun</span>
+        <span class="t">Code-block syntax highlighting</span>
+      </div>
+    </section>
+
+    <!-- ===== 2 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>Making it a tool</h2><span class="span">v0.12.0 – v0.18.1 · 30 Jun – 11 Jul</span>
+        <p>A rename, then history, search and folders, then export and signing — everything 1.0 needed. The pivot to diffs happens here too.</p>
+      </div>
+
+      <div class="rel-row">
+        <span class="v">0.12.0</span><span class="d">30 Jun</span>
+        <span class="t">"Save As" (<code>⌘⇧S</code>), and the <strong>rename from mdcrud to MRDown</strong></span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.12.1</span><span class="d">1 Jul</span>
+        <span class="t">Adjustable preview width</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">0.13.0</span><span class="d">3 Jul</span>
+        <span class="t"><strong>Local History</strong> — a snapshot on every save, a list of versions, and restore. The same day, the project pivoted to being a time-machine viewer</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.14.0</span><span class="d">6 Jul</span>
+        <span class="t">In-document find &amp; replace, with regex, case and whole-word options</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.15.0</span><span class="d">7 Jul</span>
+        <span class="t">Draft protection, <code>.md</code> link navigation, YAML frontmatter</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.16.0</span><span class="d">8 Jul</span>
+        <span class="t">Folder tree — open a folder and read its Markdown as a set — plus appearance settings (accent, background, text colour, font)</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">0.17.0</span><span class="d">9 Jul</span>
+        <span class="t">New logo (chevrons in indigo). Editor ⇄ preview scroll sync, paste an image to save and insert it, paste a URL onto a selection to link it</span>
+      </div>
+      <div class="rel-row g">
+        <span class="v">0.18.0</span><span class="d">10 Jul</span>
+        <span class="t">HTML and PDF export, math (KaTeX), footnotes, task checkboxes, third-party licence notices<span class="note">tag only</span></span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">0.18.1</span><span class="d">11 Jul</span>
+        <span class="t"><strong>Signed with a Developer ID and notarized,</strong> so it installs without an unidentified-developer warning</span>
+      </div>
+    </section>
+
+    <!-- ===== 3 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>1.0, then the time machine</h2><span class="span">v1.0.0 – v1.6.0 · 11 – 18 Jul</span>
+        <p>Work on the differentiator started the day after 1.0 shipped. The whole "what changed?" flag went up in eight days.</p>
+      </div>
+
+      <div class="rel-row m">
+        <span class="v">1.0.0</span><span class="d">11 Jul</span>
+        <span class="t"><strong>1.0.</strong> macOS only, with a localized bundle</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.1.0</span><span class="d">11 Jul</span>
+        <span class="t">The outline moves to its own pane (<code>⌘2</code>; either side, your choice), collapsed by default while editing</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.2.0</span><span class="d">12 Jul</span>
+        <span class="t"><strong>The time-machine diff.</strong> Every version knows who wrote it, and a three-way view means an AI rewriting the file mid-edit costs you neither copy</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.3.0</span><span class="d">15 Jul</span>
+        <span class="t">Compare any two files (<code>⌘⇧D</code>), and remember the reading position per document</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.4.0</span><span class="d">18 Jul</span>
+        <span class="t">Compare against any Git ref — a branch or a commit</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.4.1</span><span class="d">18 Jul</span>
+        <span class="t">Jump between changes, and filter within a diff</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.5.0</span><span class="d">18 Jul</span>
+        <span class="t">GitHub-style preview themes and reading mode (<code>⌘⇧M</code>)</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.5.1</span><span class="d">18 Jul</span>
+        <span class="t">Ref comparison for files that aren't in <code>HEAD</code> but are alive in history</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.6.0</span><span class="d">18 Jul</span>
+        <span class="t"><strong>Cross-document search (<code>⌘⇧F</code>)</strong> — line-level AND across every open document</span>
+      </div>
+    </section>
+
+    <!-- ===== 4 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>Polishing the sidebar</h2><span class="span">v1.6.1 – v1.6.8 · 19 – 28 Jul</span>
+        <p>Ten days spent taking friction out of the places you touch every day, rather than adding features.</p>
+      </div>
+
+      <div class="rel-row">
+        <span class="v">1.6.1</span><span class="d">19 Jul</span>
+        <span class="t">The conflict banner re-syncs when you switch documents</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.2</span><span class="d">20 Jul</span>
+        <span class="t">Fixed the editor jumping to the bottom when you switch from the preview</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.3</span><span class="d">21 Jul</span>
+        <span class="t">Search gets a 🔍 menu (in-document or cross-document), and Settings becomes a left sidebar</span>
+      </div>
+      <div class="rel-row g">
+        <span class="v">1.6.4</span><span class="d">22 Jul</span>
+        <span class="t">Moved the full path off the toolbar into a bottom status bar<span class="note">never published</span></span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.5</span><span class="d">23 Jul</span>
+        <span class="t">Reorder the open documents, by drag or with <code>⌘↑↓</code></span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.6</span><span class="d">23 Jul</span>
+        <span class="t">That drag didn't work in the real app and was rebuilt — WKWebView doesn't support HTML5 drag and drop</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.6.7</span><span class="d">24 Jul</span>
+        <span class="t">Select several documents (<code>⌘</code> / <code>⇧</code> click), and walk the list with plain arrow keys</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.6.8</span><span class="d">28 Jul</span>
+        <span class="t"><strong>Your place carries across preview ⇄ edit.</strong> It anchors on the block you were reading, not on a line count or a ratio</span>
+      </div>
+    </section>
+
+    <!-- ===== 5 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>Rebuilding the editor</h2><span class="span">v1.7.0 – v1.11.0 · 29 Jul – 14 Aug</span>
+        <p>Fewer, larger releases: the editor is rebuilt on CodeMirror 6, and the app reaches for the documents people write at work.</p>
+      </div>
+
+      <div class="rel-row">
+        <span class="v">1.7.0</span><span class="d">29 Jul</span>
+        <span class="t">Editing <strong>swaps in place</strong> (<code>⌘E</code>); side-by-side becomes a setting. Also fixed a nine-character drift in the position mapping</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.8.0</span><span class="d">31 Jul</span>
+        <span class="t"><strong>The editor reads as the document (CodeMirror 6).</strong> Markup is hidden — except on the caret's own line — and saving still never rewrites a byte of the file</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.9.0</span><span class="d">3 Aug</span>
+        <span class="t">Tables are drawn with real borders while you edit. Same caret rule, but its unit is the table rather than the line</span>
+      </div>
+      <div class="rel-row m">
+        <span class="v">1.10.0</span><span class="d">6 Aug</span>
+        <span class="t"><strong>Document headers and templates.</strong> Title, document number, version and classification come from the frontmatter, and what the preview shows is what the PDF gets</span>
+      </div>
+      <div class="rel-row">
+        <span class="v">1.11.0</span><span class="d">14 Aug</span>
+        <span class="t">Drag the line between the columns to resize the side panes; double-click restores the default</span>
+      </div>
+    </section>
+
+    <section class="rel-notes">
+      <h3>About this data</h3>
+      <ul>
+        <li><strong>46 tags, 42 published releases.</strong> The difference is <code>v0.1.1</code>, <code>v0.2.0</code> and <code>v0.18.0</code> (tagged only) plus <code>v1.6.4</code> (never published).</li>
+        <li><strong>Some numbers were skipped.</strong> There is no <code>v0.8.x</code> and no <code>v0.9.1</code>.</li>
+        <li>Dates are <strong>the tag's commit date</strong>. GitHub's published timestamps are not used — editing a release later moves them out of order.</li>
+        <li>At v0.1.0 the app was called <code>mdcrud</code>; it became <code>MRDown</code> at v0.12.0.</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <div class="brand"><svg style="width:24px;height:24px;border-radius:6px;"><use href="#logo"/></svg> MRDown</div>
+      <p>Built with Tauri + TypeScript · MIT License</p>
+      <p style="margin-top:8px;">Created by <a href="https://github.com/MR-TABATA" target="_blank" rel="noopener">TABATA Hitoshi</a> · <a href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">GitHub</a> · <a href="releases.ja.html" hreflang="ja" lang="ja">日本語</a></p>
+      <p style="margin-top:6px; color:#4a4a4a;">© 2026 TABATA Hitoshi</p>
+    </div>
+  </footer>
+</body>
+</html>

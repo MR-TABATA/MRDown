@@ -42,6 +42,8 @@ nav {
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #fff; }
 .brand svg { width: 30px; height: 30px; border-radius: 7px; }
+/* On sub-pages the brand is the way home, so it is an <a> there. */
+a.brand:hover { text-decoration: none; opacity: 0.85; }
 .nav-links { display: flex; align-items: center; gap: 22px; font-size: 14px; }
 .nav-links a { color: var(--text-dim); }
 .nav-links a:hover { color: #fff; text-decoration: none; }
@@ -184,6 +186,112 @@ pre .c { color: #6a9955; }
 pre .p { color: var(--text-dim); }
 pre .cmd { color: var(--code); }
 
+/* ===== Releases page (releases.ja.html / releases.en.html) =====
+   A sub-page, so its header is deliberately quieter than the landing hero.
+   Add a new release to BOTH translations, or they drift — the same rule the
+   rest of this file exists to enforce. */
+.rel-head { padding: 54px 0 10px; text-align: center; }
+.rel-head .kicker {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent);
+}
+.rel-head h1 { font-size: 42px; line-height: 1.2; color: #fff; letter-spacing: -1px; margin: 12px 0 16px; }
+.rel-head .lead { font-size: 16.5px; color: var(--text-dim); max-width: 640px; margin: 0 auto; }
+
+.rel-stats {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 14px; margin: 40px auto 0; max-width: 720px;
+}
+.rel-stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 11px; padding: 16px 12px; text-align: center;
+}
+.rel-stat .n {
+  display: block; color: #fff; font-size: 27px; line-height: 1.15;
+  font-family: 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums;
+}
+.rel-stat .n small { font-size: 13px; color: var(--text-dim); }
+.rel-stat .k { display: block; font-size: 11.5px; color: var(--text-dim); margin-top: 5px; }
+
+/* Release density. One bar per day, height by how many tags shipped that day. */
+.rel-plot-wrap { max-width: 820px; margin: 56px auto 0; }
+.rel-plot-label {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 11.5px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: #5f5f5f;
+  border-bottom: 1px solid var(--border); padding-bottom: 8px;
+}
+.rel-plot { position: relative; height: 84px; border-bottom: 1px solid var(--border); }
+.rel-plot i {
+  position: absolute; bottom: 0; width: 5px; margin-left: -2.5px;
+  background: #6b5fd0; border-radius: 1px 1px 0 0;
+}
+.rel-plot i.m { background: var(--accent); box-shadow: 0 0 12px rgba(109,94,252,0.55); }
+.rel-axis { position: relative; height: 20px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #5f5f5f; }
+.rel-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.rel-plot-note { color: var(--text-dim); font-size: 13.5px; margin-top: 12px; }
+.rel-plot-note strong { color: var(--text); font-weight: 600; }
+
+/* ===== Eras ===== */
+.rel-era { padding: 52px 0 0; }
+.rel-era-head { border-bottom: 2px solid #3d3d3d; padding-bottom: 12px; }
+.rel-era-head h2 { font-size: 25px; color: #fff; letter-spacing: -0.4px; display: inline; }
+.rel-era-head .span {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 12.5px;
+  color: var(--text-dim); margin-left: 14px; white-space: nowrap;
+}
+.rel-era-head p { color: var(--text-dim); font-size: 14px; margin-top: 10px; }
+
+.rel-row {
+  display: grid; grid-template-columns: 92px 62px 1fr;
+  gap: 0 16px; align-items: baseline;
+  padding: 13px 10px 13px 0; border-bottom: 1px solid #2a2a2a;
+}
+.rel-row:hover { background: rgba(109,94,252,0.07); }
+
+.rel-row .v {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 13.5px; font-weight: 600;
+  font-variant-numeric: tabular-nums; color: #a79fff;
+  position: relative; padding-left: 16px;
+}
+.rel-row .v::before {
+  content: ""; position: absolute; left: 0; top: 7px;
+  width: 6px; height: 6px; border-radius: 50%;
+  border: 1.5px solid #a79fff;
+}
+.rel-row.m .v { color: #fff; }
+.rel-row.m .v::before { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 9px rgba(109,94,252,0.8); }
+.rel-row.g .v { color: #5f5f5f; font-weight: 400; }
+.rel-row.g .v::before { border-color: #5f5f5f; border-style: dotted; }
+
+.rel-row .d {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 12.5px;
+  font-variant-numeric: tabular-nums; color: #5f5f5f;
+}
+.rel-row .t { color: var(--text-dim); font-size: 14.5px; line-height: 1.65; }
+.rel-row .t strong { color: var(--text); font-weight: 600; }
+.rel-row.m .t strong { color: #fff; }
+.rel-row .t code { color: var(--code); font-size: 0.9em; }
+.rel-row .t .note {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px;
+  color: #5f5f5f; border: 1px solid var(--border); border-radius: 4px;
+  padding: 1px 6px; margin-left: 7px; white-space: nowrap;
+}
+
+/* Caveats about the data itself — kept visually apart from the timeline. */
+.rel-notes {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 26px 30px; margin: 56px 0 72px;
+}
+.rel-notes h3 {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase; color: #5f5f5f; margin-bottom: 14px;
+}
+.rel-notes ul { margin: 0; padding-left: 20px; }
+.rel-notes li { color: var(--text-dim); font-size: 14px; margin-bottom: 7px; }
+.rel-notes li strong { color: var(--text); font-weight: 600; }
+.rel-notes li code { color: var(--code); font-size: 0.9em; }
+
 /* ===== Footer ===== */
 footer { border-top: 1px solid var(--border); padding: 36px 0; text-align: center; color: #5f5f5f; font-size: 13px; }
 footer .brand { justify-content: center; margin-bottom: 12px; }
@@ -193,4 +301,14 @@ footer a { color: var(--text-dim); }
   .hero h1 { font-size: 38px; }
   .features, .features.primary, .secondary { grid-template-columns: 1fr; }
   .nav-links a:not(.lang-switch) { display: none; }
+
+  .rel-head h1 { font-size: 31px; }
+  .rel-stats { grid-template-columns: repeat(2, 1fr); }
+  /* Five cards over two columns leaves one alone — let it take the row. */
+  .rel-stat:last-child { grid-column: 1 / -1; }
+  .rel-era-head .span { display: block; margin-left: 0; margin-top: 6px; }
+  /* Date drops under the description so the version keeps its own column. */
+  .rel-row { grid-template-columns: 88px 1fr; }
+  .rel-row .d { grid-column: 2; order: 3; margin-top: 3px; }
+  .rel-row .t { grid-column: 2; }
 }
