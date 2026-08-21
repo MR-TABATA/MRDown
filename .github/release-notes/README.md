@@ -4,6 +4,10 @@
 
 One file per tag, named exactly after it. `.github/workflows/release.yml` reads it when the tag is pushed and uses it as the release body.
 
+`docs/` ではなくここに置くのは、**`docs/` が GitHub Pages の公開ルート**だからです。あちらに置くと、この手順書まで LP のサイトに 1 ページとして出てしまいます。
+
+These live here rather than in `docs/` because **`docs/` is the GitHub Pages root** — putting them there would publish this how-to as a page on the site.
+
 ## 機能を作った PR の中で書く
 
 タグを打ってから web の編集画面で書くと、いちばん覚えていない時に書くことになります。**変更を入れる PR の中で、この下にファイルを足してください。**レビューできて、git に残って、あとから直せます。

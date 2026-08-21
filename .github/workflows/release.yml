@@ -25,7 +25,7 @@ jobs:
             // 記憶から書くのをやめるため — 機能を作った PR の中で、その機能を
             // いちばん覚えているときに書ける。無ければ既定の一行で、リリース
             // 自体は止めない（どのみち draft で止まるので、そこで気づく）。
-            const notes = `docs/release-notes/${tag}.md`;
+            const notes = `.github/release-notes/${tag}.md`;
             const body = fs.existsSync(notes)
               ? fs.readFileSync(notes, 'utf8')
               : 'See the assets below to download and install this version.';
@@ -198,7 +198,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
-          notes="docs/release-notes/${tag}.md"
+          notes=".github/release-notes/${tag}.md"
           if [ -f "$notes" ]; then
             cp "$notes" body.md
           else
