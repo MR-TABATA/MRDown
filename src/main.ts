@@ -3,6 +3,7 @@ import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getName } from '@tauri-apps/api/app';
 import { homeDir, resolveResource } from '@tauri-apps/api/path';
 import { open, save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -155,6 +156,23 @@ const docSearchSummary = document.getElementById('docsearch-summary')!;
 const docSearchResults = document.getElementById('docsearch-results')!;
 const appWindow = getCurrentWindow();
 
+
+// The product's name, from the build's own config rather than a literal here.
+// The paid build is a fork that ships under a different name, and a name typed
+// into the source is a name that fork has to keep re-editing — in files it
+// otherwise takes from us unchanged. Resolved once at startup; until it lands,
+// `titleFor` falls back to the window's current title, which the Rust side
+// already set from the same config.
+let productName = '';
+getName().then((n) => {
+  productName = n;
+  updateStatus();
+}).catch(() => {});
+
+/// The window title: the open document's name, or the product's when none is.
+function titleFor(docName: string | null): string {
+  return docName ?? productName;
+}
 // Home directory, used to abbreviate paths to ~ (resolved once on startup).
 let home = '';
 homeDir()
@@ -711,7 +729,7 @@ function showEmpty() {
   findBar.hidden = true;
   statusPath.textContent = '';
   statusbar.hidden = true;
-  appWindow.setTitle('MRDown').catch(() => {});
+  if (productName) appWindow.setTitle(productName).catch(() => {});
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
 }
 
@@ -735,7 +753,8 @@ function updateStatus() {
   docStatsEl.textContent = active ? formatDocStats(active.workingText) : '';
   statusbar.hidden = !active;
   // Window title shows the file name; the status bar shows the full (~) path.
-  appWindow.setTitle(active ? active.name : 'MRDown').catch(() => {});
+  const title = titleFor(active ? active.name : null);
+  if (title) appWindow.setTitle(title).catch(() => {});
   if (!active) return;
   if (dirty) {
     const dot = document.createElement('span');

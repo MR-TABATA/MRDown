@@ -837,7 +837,12 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 let window = app.get_webview_window("main").unwrap();
-                window.set_title("MRDown").unwrap();
+                // From the config, not a literal: the paid build is a fork that
+                // ships under a different name, and this file is one it takes
+                // from us unchanged.
+                if let Some(name) = app.config().product_name.as_deref() {
+                    let _ = window.set_title(name);
+                }
 
                 // Initial menu, in the OS language and with no document open.
                 // The frontend re-applies it in its resolved language (which may
