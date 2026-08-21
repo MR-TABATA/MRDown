@@ -19,12 +19,22 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
+            const tag = context.ref.replace('refs/tags/', '');
+            // 本文はリポジトリの中から取る。タグを打ったあとに web の編集画面で
+            // 記憶から書くのをやめるため — 機能を作った PR の中で、その機能を
+            // いちばん覚えているときに書ける。無ければ既定の一行で、リリース
+            // 自体は止めない（どのみち draft で止まるので、そこで気づく）。
+            const notes = `docs/release-notes/${tag}.md`;
+            const body = fs.existsSync(notes)
+              ? fs.readFileSync(notes, 'utf8')
+              : 'See the assets below to download and install this version.';
             const { data } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag_name: context.ref.replace('refs/tags/', ''),
-              name: `MRDown ${context.ref.replace('refs/tags/', '')}`,
-              body: 'See the assets below to download and install this version.',
+              tag_name: tag,
+              name: `MRDown ${tag}`,
+              body,
               draft: true,
               prerelease: false,
             })
@@ -172,5 +182,54 @@ jobs:
     runs-on: ubuntu-latest
     needs: [create-release, build]
     steps:
+      # ひとつ前のタグを知るために全履歴が要る。
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 手で書くのは本文だけにする。ここから下は毎回まったく同じ形で、しかも
+      # 手で書くと版番号とファイル名を打ち間違えるところ。
+      #
+      # 本文を release から読まずに毎回組み直すのは、再実行しても footer が
+      # 二重に付かないようにするため。
+      - name: Append the download footer to the draft
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          notes="docs/release-notes/${tag}.md"
+          if [ -f "$notes" ]; then
+            cp "$notes" body.md
+          else
+            echo 'See the assets below to download and install this version.' > body.md
+            echo "::warning::${notes} が無い。本文が既定の一行のままになっている。"
+          fi
+
+          # 資産は「実際に上がったもの」を読む。テンプレートに版番号を差し込む
+          # 形にすると、配るアーキテクチャが変わった版で嘘の行が出る。
+          dmgs=$(gh release view "$tag" --json assets -q '.assets[].name' | grep '\.dmg$' | sort || true)
+          if [ -n "$dmgs" ]; then
+            printf '\n---\n\n**Download**\n\n' >> body.md
+            while IFS= read -r dmg; do
+              case "$dmg" in
+                *aarch64*) printf -- '- Apple Silicon: `%s`\n' "$dmg" ;;
+                *x64*|*x86_64*) printf -- '- Intel: `%s`\n' "$dmg" ;;
+                *) printf -- '- `%s`\n' "$dmg" ;;
+              esac >> body.md
+            done <<< "$dmgs"
+          else
+            echo "::warning::DMG が1つも上がっていない。"
+          fi
+
+          # 最初のタグのときは比べる先が無いので、その行は出さない。
+          prev=$(git tag --sort=-v:refname | awk -v cur="$tag" 'f { print; exit } $0 == cur { f = 1 }')
+          if [ -n "$prev" ]; then
+            printf '\nFull changelog: %s/%s/compare/%s...%s\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$prev" "$tag" >> body.md
+          fi
+
+          gh release edit "$tag" --notes-file body.md
+
       - name: Keep release as draft for manual review
-        run: echo "All assets uploaded to draft release ${{ needs.create-release.outputs.release_id }}. Review and publish manually."
+        run: echo "All assets uploaded to draft release ${{ needs.create-release.outputs.release_id }}. Review and publish manually.
