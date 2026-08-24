@@ -505,6 +505,20 @@ export class EditorSurface {
 
   // --- what the textarea could not do ---
 
+  /**
+   * The source offset showing at the top of the pane — the reverse of
+   * `scrollToOffset`, and what the outline's scroll-spy reads in the swap
+   * layout, where the preview it normally measures is off screen. `margin`
+   * matches the spy's own dead zone, so a heading counts as reached once it
+   * is a little way in from the edge.
+   */
+  topOffset(margin = 24): number {
+    const r = this.view.scrollDOM.getBoundingClientRect();
+    // `false` = never return null: outside the text (the padding above the
+    // first line, a short document's empty tail) it gives the nearest position.
+    return this.view.posAtCoords({ x: r.left + 1, y: r.top + margin }, false);
+  }
+
   /** Put `pos` at the top of the pane (the mode flip's landing). */
   scrollToOffset(pos: number) {
     const at = Math.min(Math.max(pos, 0), this.view.state.doc.length);

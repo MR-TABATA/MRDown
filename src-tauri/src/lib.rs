@@ -381,8 +381,14 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
         ],
     )?;
 
-    let window_menu = Submenu::with_items(
+    // The id is load-bearing, not decoration: Tauri looks for exactly this one to
+    // hand the submenu to AppKit as the application's Windows menu. Without it
+    // AppKit picks its own by title and then owns the tail of the menu bar —
+    // every submenu placed after this one is dropped from the bar with no error
+    // anywhere (the Help menu below built fine, reported fine, and never drew).
+    let window_menu = Submenu::with_id_and_items(
         app,
+        tauri::menu::WINDOW_SUBMENU_ID,
         pick("ウインドウ", "Window"),
         true,
         &[
@@ -391,7 +397,29 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
         ],
     )?;
 
-    Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
+    // The shortcuts the app owns are spread across these menus, and the ones the
+    // editor context owns (⌘B, ⌥↑/↓, ⌘↑/↓ …) appear in no menu at all. Help is
+    // where a reader looks for the whole list, so put it there — and give it an
+    // accelerator of its own, since the point is to be findable. Its id is the
+    // matching reserved one, so AppKit knows this is the Help menu.
+    let help_menu = Submenu::with_id_and_items(
+        app,
+        tauri::menu::HELP_SUBMENU_ID,
+        pick("ヘルプ", "Help"),
+        true,
+        &[&MenuItem::with_id(
+            app,
+            "shortcuts",
+            pick("キーボードショートカット", "Keyboard Shortcuts"),
+            true,
+            Some("CmdOrCtrl+/"),
+        )?],
+    )?;
+
+    Menu::with_items(
+        app,
+        &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, &help_menu],
+    )
 }
 
 /// Rebuild and apply the menu in the requested language (called by the frontend

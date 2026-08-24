@@ -196,6 +196,21 @@
     <span id="doc-stats"></span>
   </div>
 
+  <!-- Keyboard shortcuts (Help ▸ Keyboard Shortcuts, ⌘/). The rows are built in
+       main.ts rather than written here: half of them are editor-context keys the
+       menu never shows, and all of them need the ja/en labels from i18n. -->
+  <div id="shortcuts-overlay" class="overlay" hidden>
+    <div class="shortcuts-panel" role="dialog" aria-labelledby="shortcuts-title">
+      <div class="settings-head">
+        <h2 id="shortcuts-title" data-i18n="scTitle">キーボードショートカット</h2>
+        <button id="shortcuts-close" data-i18n-title="close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="shortcuts-body" class="shortcuts-body"></div>
+    </div>
+  </div>
+
   <div id="settings-overlay" class="overlay" hidden>
     <div class="settings-panel" role="dialog" aria-labelledby="settings-title">
       <div class="settings-head">
@@ -207,7 +222,7 @@
       <div class="settings-body">
         <nav class="settings-nav" role="tablist" aria-label="設定">
           <button class="settings-nav-item active" data-tab="appearance" role="tab" data-i18n="navAppearance">外観</button>
-          <button class="settings-nav-item" data-tab="width" role="tab" data-i18n="navWidth">プレビュー幅</button>
+          <button class="settings-nav-item" data-tab="width" role="tab" data-i18n="navWidth">本文の幅</button>
           <button class="settings-nav-item" data-tab="toolbar" role="tab" data-i18n="navToolbar">ツールバー</button>
           <button class="settings-nav-item" data-tab="docheader" role="tab" data-i18n="navDocHeader">文書ヘッダー</button>
           <button class="settings-nav-item" data-tab="templates" role="tab" data-i18n="navTemplates">テンプレート</button>
@@ -235,7 +250,7 @@
             <div id="outline-pos-option"></div>
           </section>
           <section class="settings-pane" data-pane="width" role="tabpanel">
-            <div class="settings-section-title" data-i18n="widthSection">プレビューの幅</div>
+            <div class="settings-section-title" data-i18n="widthSection">本文の幅</div>
             <div id="width-option"></div>
           </section>
           <section class="settings-pane" data-pane="toolbar" role="tabpanel">
