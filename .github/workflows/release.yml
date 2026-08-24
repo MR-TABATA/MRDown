@@ -232,4 +232,4 @@ jobs:
           gh release edit "$tag" --notes-file body.md
 
       - name: Keep release as draft for manual review
-        run: echo "All assets uploaded to draft release ${{ needs.create-release.outputs.release_id }}. Review and publish manually.
+        run: echo "All assets uploaded to draft release ${{ needs.create-release.outputs.release_id }}. Review and publish manually."
