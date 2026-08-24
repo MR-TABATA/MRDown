@@ -104,6 +104,8 @@ const textOption = document.getElementById('text-option')!;
 const fontOption = document.getElementById('font-option')!;
 const fontsizeOption = document.getElementById('fontsize-option')!;
 const outlinePosOption = document.getElementById('outline-pos-option')!;
+const shortcutsOverlay = document.getElementById('shortcuts-overlay')!;
+const shortcutsBody = document.getElementById('shortcuts-body')!;
 const editLayoutOption = document.getElementById('edit-layout-option')!;
 const previewThemeOption = document.getElementById('preview-theme-option')!;
 const logoOption = document.getElementById('logo-option')!;
@@ -376,6 +378,8 @@ function applyEditLayout(reposition = false) {
   scrollEditorToTop(editor.selectionStart);
   // Split: the preview just reappeared beside the editor, on the caret's block.
   if (!isSwap()) scrollPreviewToTarget(target);
+  // The two layouts scroll different panes, so the spy has to move with them.
+  bindOutlineSpy();
 }
 
 // Visibility is remembered per mode, because the two modes have very different
@@ -429,6 +433,20 @@ function updateOutlineActive() {
   if (Date.now() - outlineClickLock < 600) return;
   const root = outlineScrollEl;
   if (!root || outlineHeads.length === 0) return;
+  // Swap editing: the preview is off screen, so there are no heading rects to
+  // measure. The source is the only thing on screen, so spy on it instead —
+  // which heading's own offset the top of the pane has passed.
+  if (isEditing && isSwap()) {
+    const ed = editor.scroller;
+    // At the very bottom the trailing headings can never reach the top line, so
+    // clamp to the last one — the same reason the preview branch below does.
+    const id =
+      ed.scrollTop + ed.clientHeight >= ed.scrollHeight - 4
+        ? outlineHeads[outlineHeads.length - 1].id
+        : headingIdAt(editor.topOffset());
+    markOutlineActive(id);
+    return;
+  }
   const rootTop = root.getBoundingClientRect().top;
   let id = outlineHeads[0].id;
   for (const h of outlineHeads) {
@@ -454,7 +472,10 @@ function bindOutlineSpy() {
     outlineScrollEl = null;
     return;
   }
-  outlineScrollEl = isEditing ? output : contentArea;
+  // Swap editing scrolls the editor; split editing scrolls #output; preview
+  // scrolls the content area. (In the swap layout #output is display:none and
+  // never emits a scroll at all — bound there, the outline sat still.)
+  outlineScrollEl = isEditing ? (isSwap() ? editor.scroller : output) : contentArea;
   outlineScrollEl.addEventListener('scroll', onOutlineScroll, { passive: true });
   updateOutlineActive();
 }
@@ -466,6 +487,21 @@ function applyOutlineCollapsed() {
   const collapsed = outlinePos === 'left' && outlineCollapsed;
   outlineHead.classList.toggle('collapsed', collapsed);
   outlineList.hidden = collapsed || outlineHeads.length === 0;
+}
+
+// Which outline entry a source offset sits under: the last heading starting at
+// or before it. Counted off the same block walk as `jumpEditorToHeading`, so the
+// spy and the jump agree on what "this heading" means. A source with fewer
+// headings than the preview (one nested in a list renders as a heading but is
+// not a heading block here) just clamps to the last entry.
+function headingIdAt(pos: number): string {
+  let hIdx = -1;
+  for (const b of sourceBlocks(editor.value)) {
+    if (b.at > pos) break;
+    if (b.heading) hIdx++;
+  }
+  const at = Math.min(Math.max(hIdx, 0), outlineHeads.length - 1);
+  return outlineHeads[at].id;
 }
 
 // An outline click normally scrolls the preview to the heading. In the swap
@@ -3054,6 +3090,126 @@ function closeSettings() {
   settingsOverlay.hidden = true;
 }
 
+// --- Keyboard shortcuts (⌘/) ----------------------------------------------
+
+// Every shortcut the app answers to, in the order a reader would look for them.
+// The keys are the same in both languages, so only the description is a lookup.
+// Kept here rather than derived from the menu because the menu is only half the
+// list: ⌘B, ⌘F, ⌥↑/↓, ⌘↑/↓ and ⌘⌫ are editor-context keys with no menu item.
+const SHORTCUT_GROUPS: Array<{
+  titleKey: Key;
+  noteKey?: Key;
+  rows: Array<[keys: string, labelKey: Key]>;
+}> = [
+  {
+    titleKey: 'scDocs',
+    rows: [
+      ['⌘N', 'scNew'],
+      ['⌘O', 'scOpen'],
+      ['⌘S', 'scSave'],
+      ['⌘⇧S', 'scSaveAs'],
+      ['⌘R', 'scReload'],
+      ['⌘W', 'scClose'],
+      ['⌘⌫', 'scTrash'],
+    ],
+  },
+  {
+    titleKey: 'scViewGroup',
+    rows: [
+      ['⌘1', 'scSidebar'],
+      ['⌘2', 'scOutline'],
+      ['⌘E', 'scEditToggle'],
+      ['⌘⇧M', 'scReading'],
+      ['⌘,', 'scSettings'],
+      ['⌘/', 'scShortcuts'],
+    ],
+  },
+  {
+    titleKey: 'scSearchGroup',
+    rows: [
+      ['⌘F', 'scFind'],
+      ['⌘⇧F', 'scFindCross'],
+    ],
+  },
+  {
+    titleKey: 'scDiffGroup',
+    rows: [
+      ['⌘⇧D', 'scCompare'],
+      ['⌥↑', 'scPrevChange'],
+      ['⌥↓', 'scNextChange'],
+    ],
+  },
+  {
+    titleKey: 'scEditGroup',
+    rows: [
+      ['⌘B', 'scBold'],
+      ['⌘I', 'scItalic'],
+      ['⌘Z', 'scUndo'],
+      ['⌘⇧Z', 'scRedo'],
+      ['Tab / ⇧Tab', 'scIndent'],
+    ],
+  },
+  {
+    titleKey: 'scExportGroup',
+    rows: [
+      ['⌘⇧E', 'scExportHtml'],
+      ['⌘P', 'scExportPdf'],
+    ],
+  },
+  {
+    titleKey: 'scListGroup',
+    noteKey: 'scListNote',
+    rows: [
+      ['↑ / ↓', 'scStep'],
+      ['⌘↑ / ⌘↓', 'scMove'],
+    ],
+  },
+  {
+    titleKey: 'scEscGroup',
+    rows: [['Esc', 'scEscape']],
+  },
+];
+
+function buildShortcuts() {
+  shortcutsBody.innerHTML = '';
+  for (const g of SHORTCUT_GROUPS) {
+    const group = document.createElement('section');
+    group.className = 'sc-group';
+    const title = document.createElement('div');
+    title.className = 'sc-group-title';
+    title.textContent = t(g.titleKey);
+    group.appendChild(title);
+    if (g.noteKey) {
+      const note = document.createElement('div');
+      note.className = 'sc-note';
+      note.textContent = t(g.noteKey);
+      group.appendChild(note);
+    }
+    for (const [keys, labelKey] of g.rows) {
+      const row = document.createElement('div');
+      row.className = 'sc-row';
+      const label = document.createElement('span');
+      label.textContent = t(labelKey);
+      const kbd = document.createElement('kbd');
+      kbd.className = 'sc-keys';
+      kbd.textContent = keys;
+      row.append(label, kbd);
+      group.appendChild(row);
+    }
+    shortcutsBody.appendChild(group);
+  }
+}
+
+function openShortcuts() {
+  // Rebuilt on open, so a language change is picked up without a reload.
+  buildShortcuts();
+  shortcutsOverlay.hidden = false;
+}
+
+function closeShortcuts() {
+  shortcutsOverlay.hidden = true;
+}
+
 // The bundled notices are Markdown, so show them in the viewer itself.
 const licensesBtn = document.getElementById('licenses-btn') as HTMLButtonElement;
 licensesBtn.addEventListener('click', async () => {
@@ -3081,6 +3237,11 @@ settingsBtn.addEventListener('click', openSettings);
 settingsClose.addEventListener('click', closeSettings);
 settingsOverlay.addEventListener('click', (e) => {
   if (e.target === settingsOverlay) closeSettings();
+});
+
+document.getElementById('shortcuts-close')!.addEventListener('click', closeShortcuts);
+shortcutsOverlay.addEventListener('click', (e) => {
+  if (e.target === shortcutsOverlay) closeShortcuts();
 });
 
 // --- Local History (saved versions, restore) ---
@@ -4388,6 +4549,10 @@ document.addEventListener('keydown', (e) => {
     closeSettings();
     return;
   }
+  if (e.key === 'Escape' && !shortcutsOverlay.hidden) {
+    closeShortcuts();
+    return;
+  }
   if (e.key === 'Escape' && !findBar.hidden) {
     closeFind();
     return;
@@ -4751,6 +4916,7 @@ listen<string>('menu', (e) => {
     case 'edit': if (active) setEditing(!isEditing); break;
     case 'reading': if (active) toggleReading(); break;
     case 'settings': openSettings(); break;
+    case 'shortcuts': openShortcuts(); break;
   }
 });
 
