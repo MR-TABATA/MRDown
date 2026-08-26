@@ -60,6 +60,10 @@ import {
   listIndent,
   autoPair,
   linkFromPaste,
+  slashContext,
+  clearSlash,
+  listToTable,
+  tableToGantt,
   type Sel,
 } from './editor-ops';
 import {
@@ -2190,6 +2194,8 @@ function onEditorInput() {
   }
   // Checkpoint the draft so unsaved edits survive a quit/crash.
   scheduleSessionSave();
+  // `/` at the start of an empty line opens the insert menu; typing filters it.
+  updateSlashMenu();
   // Keep the find count live as the source changes, without moving the caret.
   if (!findBar.hidden && isEditing && findInput.value) refreshSourceMatches();
   clearTimeout(previewTimer);
@@ -2216,6 +2222,7 @@ function flushPreview(): Promise<void> | null {
 // replaceEditorText keeps the change on the native undo stack and fires `input`.
 function onEditorKeydown(e: KeyboardEvent): boolean {
   if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return false; // leave IME & shortcuts alone
+  if (slashKeydown(e)) return true;
   const s: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
   let r: Sel | null = null;
   if (e.key === 'Enter' && !e.shiftKey) r = listContinue(s);
@@ -2269,7 +2276,8 @@ function onEditorPaste(e: ClipboardEvent): boolean {
 
 const editor = new EditorSurface(editorArea, {
   onInput: onEditorInput,
-  onScroll: () => {},
+  // The menu is placed against the caret, so a scroll would leave it behind.
+  onScroll: () => closeSlashMenu(),
   onKeydown: onEditorKeydown,
   onPaste: onEditorPaste,
 });
@@ -2386,10 +2394,11 @@ interface FmtAction {
   id: string;
   titleKey: 'fmtBold' | 'fmtItalic' | 'fmtStrike' | 'fmtCode' | 'fmtLink' | 'fmtImage'
     | 'fmtHeading' | 'fmtList' | 'fmtOrdered' | 'fmtChecklist' | 'fmtQuote'
-    | 'fmtCodeblock' | 'fmtTable' | 'fmtHr';
-  group: 'inline' | 'block';
+    | 'fmtCodeblock' | 'fmtTable' | 'fmtHr' | 'fmtListToTable' | 'fmtTableToGantt';
+  group: 'inline' | 'block' | 'convert';
   svg: string;
-  run: (s: Sel) => Sel;
+  /** null when the action doesn't apply here — a conversion off its own block. */
+  run: (s: Sel) => Sel | null;
 }
 
 const ICON =
@@ -2439,10 +2448,19 @@ const FMT_ACTIONS: FmtAction[] = [
   { id: 'hr', titleKey: 'fmtHr', group: 'block',
     svg: ICON('<line x1="3" y1="12" x2="21" y2="12"/>'),
     run: (s) => insertHr(s) },
+  // Conversions (notes/spec-slash-insert.md §3): they read the block the caret
+  // is in, so there is nothing to select first.
+  { id: 'list-to-table', titleKey: 'fmtListToTable', group: 'convert',
+    svg: ICON('<line x1="3" y1="6" x2="8" y2="6"/><line x1="3" y1="12" x2="8" y2="12"/><line x1="3" y1="18" x2="8" y2="18"/><rect x="12" y="5" width="9" height="14" rx="1"/><line x1="12" y1="12" x2="21" y2="12"/><line x1="16.5" y1="5" x2="16.5" y2="19"/>'),
+    run: (s) => listToTable(s) },
+  { id: 'table-to-gantt', titleKey: 'fmtTableToGantt', group: 'convert',
+    svg: ICON('<line x1="3" y1="4" x2="3" y2="20"/><rect x="6" y="5" width="9" height="3.5" rx="1"/><rect x="9" y="10.25" width="8" height="3.5" rx="1"/><rect x="6" y="15.5" width="12" height="3.5" rx="1"/>'),
+    run: (s) => tableToGantt(s) },
 ];
 const FMT_BY_ID = new Map(FMT_ACTIONS.map((a) => [a.id, a]));
 const FMT_DEFAULT = ['heading', 'bold', 'italic', 'code', 'list', 'quote', 'link'];
-const groupLabel = (g: FmtAction['group']) => t(g === 'inline' ? 'groupInline' : 'groupBlock');
+const groupLabel = (g: FmtAction['group']) =>
+  t(g === 'inline' ? 'groupInline' : g === 'convert' ? 'groupConvert' : 'groupBlock');
 
 // Which buttons the user has chosen to show, persisted across sessions and
 // always kept in registry order.
@@ -2483,13 +2501,15 @@ function renderFormatBar() {
 
 // Apply a Markdown formatting action to the editor's current selection, then
 // re-sync the model and preview as if the text had been typed.
-function applyFmt(id: string) {
+function applyFmt(id: string, prepare?: (s: Sel) => Sel) {
   if (!active) return;
   const action = FMT_BY_ID.get(id);
   if (!action) return;
   if (!isEditing) setEditing(true);
-  const before: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
+  const raw: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
+  const before = prepare ? prepare(raw) : raw;
   const after = action.run(before);
+  if (!after) return; // a conversion that doesn't apply here leaves the text alone
   replaceEditorText(after.text, after.start, after.end);
   active.workingText = editor.value;
   updateStatus();
@@ -2505,6 +2525,169 @@ formatBar.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest('button');
   const kind = btn?.dataset.fmt;
   if (kind) applyFmt(kind);
+});
+
+// --- The `/` insert menu ----------------------------------------------------
+// notes/spec-slash-insert.md §1. A second door onto the actions above rather
+// than a feature of its own: `/` is the fast way, not the only way, and every
+// transform still lives in editor-ops.ts as a pure Sel → Sel.
+
+const slashMenu = document.getElementById('slash-menu') as HTMLElement;
+
+/** What `/` offers, in order. The words are what typing filters against — both
+ *  languages, plus the `/xx` shown on the right as the shortest way in. */
+const SLASH_ITEMS: { id: string; alias: string[] }[] = [
+  { id: 'table', alias: ['表', 'table'] },
+  { id: 'checklist', alias: ['todo', 'task', 'チェック', 'やること'] },
+  { id: 'codeblock', alias: ['code', 'コード', 'fence'] },
+  { id: 'hr', alias: ['hr', '区切り', 'line'] },
+  { id: 'list-to-table', alias: ['表に', 'totable', '変換'] },
+  { id: 'table-to-gantt', alias: ['gantt', 'ガント'] },
+];
+const SLASH_BY_ID = new Map(SLASH_ITEMS.map((i) => [i.id, i]));
+
+// Offset of the `/` being edited, or -1 when the menu is closed.
+let slashFrom = -1;
+let slashIndex = 0;
+let slashMatches: FmtAction[] = [];
+
+function closeSlashMenu() {
+  if (slashFrom < 0) return;
+  slashFrom = -1;
+  slashMenu.hidden = true;
+}
+
+/**
+ * Items whose id, alias or shown label contains what has been typed — and that
+ * would actually do something here. The transforms are pure, so the menu can
+ * simply run each one against the line it is about to leave behind and drop the
+ * ones that decline: `箇条書きを表に` is offered under a list, and nowhere else.
+ * An item that is listed and then does nothing on Enter reads as a broken app.
+ */
+function matchSlash(query: string, probe: Sel): FmtAction[] {
+  const q = query.toLowerCase();
+  return SLASH_ITEMS.filter((item) => {
+    if (!q) return true;
+    const action = FMT_BY_ID.get(item.id);
+    const words = [item.id, ...item.alias, action ? t(action.titleKey) : ''];
+    return words.some((w) => w.toLowerCase().includes(q));
+  })
+    .map((item) => FMT_BY_ID.get(item.id))
+    .filter((a): a is FmtAction => a !== undefined && a.run(probe) !== null);
+}
+
+function renderSlashMenu() {
+  slashMenu.innerHTML = '';
+  if (slashMatches.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'slash-empty';
+    empty.textContent = t('slashNone');
+    slashMenu.appendChild(empty);
+    return;
+  }
+  slashMatches.forEach((a, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'popup-item slash-item';
+    btn.setAttribute('role', 'menuitem');
+    btn.setAttribute('aria-selected', String(i === slashIndex));
+    btn.dataset.slash = a.id;
+    const label = document.createElement('span');
+    label.textContent = t(a.titleKey);
+    const hint = document.createElement('kbd');
+    hint.textContent = `/${SLASH_BY_ID.get(a.id)?.alias[0] ?? a.id}`;
+    btn.append(label, hint);
+    slashMenu.appendChild(btn);
+  });
+}
+
+/** Hang the menu off the caret, flipping above it when there is no room below. */
+function placeSlashMenu() {
+  const c = editor.caretCoords();
+  if (!c) {
+    closeSlashMenu();
+    return;
+  }
+  slashMenu.hidden = false;
+  const below = c.bottom + 4;
+  const top = below + slashMenu.offsetHeight > window.innerHeight - 8
+    ? Math.max(8, c.top - slashMenu.offsetHeight - 4)
+    : below;
+  slashMenu.style.left = `${Math.max(8, Math.min(c.left, window.innerWidth - slashMenu.offsetWidth - 8))}px`;
+  slashMenu.style.top = `${top}px`;
+}
+
+function updateSlashMenu() {
+  if (!isEditing) {
+    closeSlashMenu();
+    return;
+  }
+  const ctx = slashContext({
+    text: editor.value,
+    start: editor.selectionStart,
+    end: editor.selectionEnd,
+  });
+  if (!ctx) {
+    closeSlashMenu();
+    return;
+  }
+  // A different `/` means a different menu; the highlight starts at the top again.
+  if (ctx.from !== slashFrom) slashIndex = 0;
+  slashFrom = ctx.from;
+  // What the line will look like once the typed `/query` is gone — the state
+  // every item is offered (and run) against.
+  slashMatches = matchSlash(ctx.query, clearSlash({
+    text: editor.value,
+    start: editor.selectionStart,
+    end: editor.selectionEnd,
+  }, ctx.from));
+  slashIndex = Math.min(slashIndex, Math.max(0, slashMatches.length - 1));
+  renderSlashMenu();
+  placeSlashMenu();
+}
+
+/** Keys the open menu owns. Returns false to let the editor have them. */
+function slashKeydown(e: KeyboardEvent): boolean {
+  if (slashFrom < 0) return false;
+  if (e.key === 'Escape') {
+    closeSlashMenu();
+    return true;
+  }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && slashMatches.length > 0) {
+    const step = e.key === 'ArrowDown' ? 1 : slashMatches.length - 1;
+    slashIndex = (slashIndex + step) % slashMatches.length;
+    renderSlashMenu();
+    return true;
+  }
+  if ((e.key === 'Enter' || e.key === 'Tab') && slashMatches.length > 0) {
+    confirmSlash(slashMatches[slashIndex].id);
+    return true;
+  }
+  // Any other caret move takes the caret away from the `/` — close, but let the
+  // key through so the cursor still goes where it was told.
+  if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End' || e.key === 'PageUp' || e.key === 'PageDown') {
+    closeSlashMenu();
+  }
+  return false;
+}
+
+/** Drop the typed `/query`, then run the chosen action on the clean line. */
+function confirmSlash(id: string) {
+  const ctx = slashContext({
+    text: editor.value,
+    start: editor.selectionStart,
+    end: editor.selectionEnd,
+  });
+  closeSlashMenu();
+  if (!ctx) return; // the caret moved out from under the menu
+  applyFmt(id, (s) => clearSlash(s, ctx.from));
+}
+
+slashMenu.addEventListener('mousedown', (e) => {
+  const btn = (e.target as HTMLElement).closest('button');
+  const id = btn?.dataset.slash;
+  if (!id) return;
+  e.preventDefault(); // clicking must not take the caret out of the editor
+  confirmSlash(id);
 });
 
 // --- Settings (⌘,): customise which formatting buttons show ---

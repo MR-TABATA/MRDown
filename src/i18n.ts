@@ -217,6 +217,7 @@ const DICT = {
     langSystem: 'システムに従う',
     groupInline: 'インライン',
     groupBlock: 'ブロック',
+    groupConvert: '変換',
     // format actions
     fmtBold: '太字',
     fmtItalic: '斜体',
@@ -232,6 +233,10 @@ const DICT = {
     fmtCodeblock: 'コードブロック',
     fmtTable: '表',
     fmtHr: '水平線',
+    fmtListToTable: '箇条書きを表に',
+    fmtTableToGantt: '表をガントに',
+    // `/` insert menu
+    slashNone: '一致する部品はありません',
     // dialogs / messages
     openFailed: '開けませんでした: {e}',
     saveFailed: '保存できませんでした: {e}',
@@ -441,6 +446,7 @@ const DICT = {
     langSystem: 'Use system language',
     groupInline: 'Inline',
     groupBlock: 'Block',
+    groupConvert: 'Convert',
     fmtBold: 'Bold',
     fmtItalic: 'Italic',
     fmtStrike: 'Strikethrough',
@@ -455,6 +461,10 @@ const DICT = {
     fmtCodeblock: 'Code block',
     fmtTable: 'Table',
     fmtHr: 'Horizontal rule',
+    fmtListToTable: 'Bullets to table',
+    fmtTableToGantt: 'Table to Gantt',
+    // `/` insert menu
+    slashNone: 'No matching block',
     openFailed: "Couldn't open: {e}",
     saveFailed: "Couldn't save: {e}",
     deleteFailed: "Couldn't delete: {e}",

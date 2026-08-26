@@ -11,6 +11,10 @@ import {
   listIndent,
   autoPair,
   linkFromPaste,
+  slashContext,
+  clearSlash,
+  listToTable,
+  tableToGantt,
   type Sel,
 } from './editor-ops';
 
@@ -65,6 +69,12 @@ describe('toggleLinePrefix', () => {
     const r = toggleLinePrefix(sel('a\n\nb', 0, 4), '> ', /^> /);
     expect(r.text).toBe('> a\n\n> b');
     expect(r.text.slice(r.start, r.end)).toBe('> a\n\n> b');
+  });
+  it('prefixes the caret line when the block is a single blank line', () => {
+    // Where `/todo` and the checklist button land on an empty line: skipping
+    // blank lines is right inside a block, but here there is nothing else.
+    const r = toggleLinePrefix(at('a\n|'), '- [ ] ', /^[-*+] \[[ xX]\] /);
+    expect(r.text).toBe('a\n- [ ] ');
   });
 });
 
@@ -195,5 +205,144 @@ describe('linkFromPaste', () => {
   it('returns null when the paste is not a single URL', () => {
     expect(linkFromPaste(at('|a|'), 'not a url')).toBeNull();
     expect(linkFromPaste(at('|a|'), 'https://e.com and more')).toBeNull();
+  });
+});
+
+describe('slashContext', () => {
+  it('fires on a `/` at the start of an empty line', () => {
+    expect(slashContext(at('a\n/|'))).toEqual({ from: 2, query: '' });
+  });
+  it('carries what has been typed after it as the filter', () => {
+    expect(slashContext(at('/gan|'))).toEqual({ from: 0, query: 'gan' });
+  });
+  it('leaves a `/` inside a line alone — that is a path', () => {
+    expect(slashContext(at('see src/|'))).toBe(null);
+    expect(slashContext(at('- /usr/|'))).toBe(null);
+  });
+  it('does not fire with text after the caret', () => {
+    expect(slashContext(at('/|tail'))).toBe(null);
+  });
+  it('does not fire with a selection', () => {
+    expect(slashContext(at('/|ga|'))).toBe(null);
+  });
+  it('clearSlash removes the typed query and leaves the caret there', () => {
+    const r = clearSlash(at('x\n/gan|'), 2);
+    expect(r.text).toBe('x\n');
+    expect(r.start).toBe(2);
+  });
+});
+
+describe('listToTable', () => {
+  it('splits `name — description` into two columns', () => {
+    const r = listToTable(at('- **A** — first\n- **B**| — second'))!;
+    expect(r.text).toBe(
+      '| 項目 | 内容 |\n| --- | --- |\n| **A** | first |\n| **B** | second |'
+    );
+  });
+  it('splits on a colon too', () => {
+    const r = listToTable(at('|- 開始: 9時\n- 場所: 会議室|'))!;
+    expect(r.text.split('\n')[2]).toBe('| 開始 | 9時 |');
+  });
+  it('gives a task list a 状態 column', () => {
+    const r = listToTable(at('- [x] 済んだ|\n- [ ] まだ'))!;
+    expect(r.text).toBe(
+      '| 状態 | 項目 |\n| --- | --- |\n| 済 | 済んだ |\n|  | まだ |'
+    );
+  });
+  it('pads rows that have fewer cells than the widest', () => {
+    const r = listToTable(at('- A — 1 — x\n- B|'))!;
+    expect(r.text.split('\n')[3]).toBe('| B |  |  |');
+  });
+  it('escapes a pipe inside an item', () => {
+    // `at()` would read the pipes as caret markers, so build the Sel directly.
+    const r = listToTable(sel('- a|b', 5, 5))!;
+    expect(r.text.split('\n')[2]).toBe('| a\\|b |');
+  });
+  it('takes the list around the caret without a selection', () => {
+    const r = listToTable(at('見出し\n\n- A — 1\n- B| — 2\n\n後ろ'))!;
+    expect(r.text).toBe('見出し\n\n| 項目 | 内容 |\n| --- | --- |\n| A | 1 |\n| B | 2 |\n\n後ろ');
+  });
+  it('takes the list above when run from the blank line under it', () => {
+    // Where `/` leaves the caret, and where you stand after Enter on a list.
+    const r = listToTable(at('- A — 1\n- B — 2\n\n|'))!;
+    expect(r.text).toBe('| 項目 | 内容 |\n| --- | --- |\n| A | 1 |\n| B | 2 |\n\n');
+  });
+  it('leaves a block that is not a list alone', () => {
+    expect(listToTable(at('ただの段落|'))).toBe(null);
+    expect(listToTable(at('- a\nただの行|'))).toBe(null);
+  });
+});
+
+const TABLE = [
+  '| タスク | 開始 | 期間 | 状態 |',
+  '| --- | --- | --- | --- |',
+  '| 設計 | 2026-08-01 | 3日 | 完了 |',
+  '| 実装 | 2026/8/4 | 2週 | 進行中 |',
+].join('\n');
+
+describe('tableToGantt', () => {
+  it('reads the columns by their headers', () => {
+    const r = tableToGantt(sel(TABLE, 0, 0))!;
+    expect(r.text.slice(r.start, r.end)).toBe(
+      [
+        '```mermaid',
+        'gantt',
+        '    dateFormat YYYY-MM-DD',
+        '    設計 :done, 2026-08-01, 3d',
+        '    実装 :active, 2026-08-04, 2w',
+        '```',
+      ].join('\n')
+    );
+  });
+  it('keeps the table and writes the chart after it', () => {
+    const r = tableToGantt(sel(TABLE, 0, 0))!;
+    expect(r.text.startsWith(TABLE + '\n\n```mermaid')).toBe(true);
+  });
+  it('re-running replaces the chart instead of stacking another', () => {
+    const once = tableToGantt(sel(TABLE, 0, 0))!;
+    const twice = tableToGantt({ text: once.text, start: 0, end: 0 })!;
+    expect(twice.text).toBe(once.text);
+    expect(twice.text.match(/```mermaid/g)!.length).toBe(1);
+  });
+  it('takes an end date over a duration', () => {
+    const t = '| タスク | 開始 | 期限 |\n| --- | --- | --- |\n| A | 2026-08-01 | 2026-08-09 |';
+    expect(tableToGantt(sel(t, 0, 0))!.text).toContain('    A :2026-08-01, 2026-08-09');
+  });
+  it('defaults to a day when there is neither', () => {
+    const t = '| タスク | 開始 |\n| --- | --- |\n| A | 2026-08-01 |';
+    expect(tableToGantt(sel(t, 0, 0))!.text).toContain('    A :2026-08-01, 1d');
+  });
+  it('groups rows under a section column', () => {
+    const t = [
+      '| フェーズ | タスク | 開始 |',
+      '| --- | --- | --- |',
+      '| 準備 | A | 2026-08-01 |',
+      '| 準備 | B | 2026-08-02 |',
+      '| 本番 | C | 2026-08-03 |',
+    ].join('\n');
+    const lines = tableToGantt(sel(t, 0, 0))!.text.split('\n');
+    expect(lines.filter((l) => l.trim().startsWith('section'))).toEqual([
+      '    section 準備',
+      '    section 本番',
+    ]);
+  });
+  it('finds the dates even when no header says 開始', () => {
+    const t = '| やること | いつ |\n| --- | --- |\n| A | 2026-08-01 |';
+    expect(tableToGantt(sel(t, 0, 0))!.text).toContain('    A :2026-08-01, 1d');
+  });
+  it('escapes a colon in a task name — it would end the name', () => {
+    const t = '| タスク | 開始 |\n| --- | --- |\n| a:b | 2026-08-01 |';
+    expect(tableToGantt(sel(t, 0, 0))!.text).toContain('    a：b :2026-08-01');
+  });
+  it('takes the table above when run from the blank line under it', () => {
+    const r = tableToGantt(sel(`${TABLE}\n\n`, TABLE.length + 2, TABLE.length + 2))!;
+    expect(r.text.startsWith(TABLE + '\n\n```mermaid')).toBe(true);
+  });
+  it('leaves a table with no dates alone', () => {
+    const t = '| a | b |\n| --- | --- |\n| 1 | 2 |';
+    expect(tableToGantt(sel(t, 0, 0))).toBe(null);
+  });
+  it('returns null outside a table', () => {
+    expect(tableToGantt(at('ただの段落|'))).toBe(null);
   });
 });
