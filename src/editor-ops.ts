@@ -3,6 +3,8 @@
 // and returns a `Sel` (the textarea value plus selection range) so the caller
 // only has to push the result back into the element.
 
+import { findTables } from './table';
+
 export interface Sel {
   text: string;
   start: number;
@@ -59,10 +61,14 @@ export function toggleLinePrefix(s: Sel, prefix: string, detect: RegExp): Sel {
   const lines = text.slice(lineStart, lineEnd).split('\n');
   const nonBlank = lines.filter((l) => l.trim() !== '');
   const allPrefixed = nonBlank.length > 0 && nonBlank.every((l) => detect.test(l));
+  // Blank lines inside a block are left alone — but a caret sitting on a blank
+  // line *is* the block, and there the prefix is exactly what was asked for
+  // (the checklist button, and `/todo`, on an empty line).
+  const blankOnly = nonBlank.length === 0;
 
   const block = lines
     .map((l) => {
-      if (l.trim() === '') return l;
+      if (l.trim() === '' && !blankOnly) return l;
       return allPrefixed ? l.replace(detect, '') : prefix + l;
     })
     .join('\n');
@@ -252,5 +258,250 @@ export function linkFromPaste(s: Sel, pasted: string): Sel | null {
     text: s.text.slice(0, s.start) + `[${label}](${url})` + s.text.slice(s.end),
     start: caret,
     end: caret,
+  };
+}
+
+
+// --- `/` insert and conversions ---------------------------------------------
+// notes/spec-slash-insert.md. The menu is a thin popover over these: everything
+// stays `Sel → Sel` like the toolbar ops above, so what gets inserted (and what
+// a conversion produces) is testable as text, with no editor in the way.
+
+/**
+ * Where a `/` menu belongs, given the caret — or null to type a plain `/`.
+ * It fires only on a `/` at the start of an otherwise empty line: mid-line a `/`
+ * is a path, which is by far the more common thing to type in a document about
+ * code. Returns the offset of the `/` and whatever has been typed after it,
+ * which is the menu's filter.
+ */
+export function slashContext(s: Sel): { from: number; query: string } | null {
+  if (s.start !== s.end) return null;
+  const { text, start } = s;
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  let lineEnd = text.indexOf('\n', start);
+  if (lineEnd === -1) lineEnd = text.length;
+  // Nothing but the typed `/query` on the line, and the caret at its end.
+  if (text.slice(start, lineEnd).trim() !== '') return null;
+  const m = /^\/(\S*)$/.exec(text.slice(lineStart, start));
+  return m ? { from: lineStart, query: m[1] } : null;
+}
+
+/**
+ * Drop the typed `/query` so the chosen action runs on a clean line — the menu
+ * confirms by composing this with an existing op (`clearSlash` then `insertTable`).
+ */
+export function clearSlash(s: Sel, from: number): Sel {
+  return { text: s.text.slice(0, from) + s.text.slice(s.end), start: from, end: from };
+}
+
+/** The full lines the selection touches, as source offsets. */
+function lineSpan(s: Sel): [number, number] {
+  const from = s.text.lastIndexOf('\n', s.start - 1) + 1;
+  let to = s.text.indexOf('\n', s.end);
+  if (to === -1) to = s.text.length;
+  return [from, to];
+}
+
+/**
+ * What a conversion should work on: the selection when there is one, otherwise
+ * the run of non-blank lines around the caret. Converting is normally something
+ * you do *to the block you are looking at*, and selecting it first is a step
+ * that buys nothing.
+ *
+ * From a blank line it takes the block just above. That is where you are
+ * standing after typing a list and pressing Enter — and it is where the `/`
+ * menu leaves the caret, which is the only place its conversions can be run from.
+ */
+function blockSpan(s: Sel): [number, number] {
+  let [from, to] = lineSpan(s);
+  if (s.start !== s.end) return [from, to];
+  const { text } = s;
+  if (text.slice(from, to).trim() === '') {
+    // Walk back over the blank lines to the end of the previous block.
+    let end = from - 1;
+    while (end > 0 && text.slice(text.lastIndexOf('\n', end - 1) + 1, end).trim() === '') {
+      end = text.lastIndexOf('\n', end - 1);
+    }
+    if (end <= 0) return [from, to]; // nothing above
+    from = to = end;
+  }
+  while (from > 0) {
+    const prev = text.lastIndexOf('\n', from - 2) + 1;
+    if (text.slice(prev, from - 1).trim() === '') break;
+    from = prev;
+  }
+  while (to < text.length) {
+    let next = text.indexOf('\n', to + 1);
+    if (next === -1) next = text.length;
+    if (text.slice(to + 1, next).trim() === '') break;
+    to = next;
+  }
+  return [from, to];
+}
+
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/;
+const TASK_MARK = /^\[([ xX])\]\s+/;
+/** What splits one item into cells: an em/en dash, or a colon. */
+const CELL_SPLIT = /\s+[—–]\s+|[:：]\s+/;
+const HEADINGS = ['項目', '内容', '備考'];
+
+const escapeCell = (text: string) => text.replace(/\|/g, '\\|');
+
+/**
+ * A bullet or task list becomes a table — the "I jotted it down, now I need
+ * columns" move that otherwise sends people to a spreadsheet.
+ *
+ * Each item is one row, split into cells on ` — ` or `: ` (so `**名前** — 説明`,
+ * the shape these notes are already written in, arrives as two columns). A task
+ * list gets a 状態 column carrying the checkbox. Nesting is flattened: the depth
+ * is dropped rather than guessed at — `- [ ]` → WBS keeps the hierarchy, and
+ * that is a different conversion (spec §3).
+ *
+ * Returns null when the block isn't a list, so the caller can leave the text alone.
+ */
+export function listToTable(s: Sel): Sel | null {
+  const [from, to] = blockSpan(s);
+  const lines = s.text.slice(from, to).split('\n');
+  const items = lines.map((l) => LIST_ITEM.exec(l));
+  if (items.length === 0 || items.some((m) => m === null)) return null;
+
+  const bodies = items.map((m) => m![1]);
+  const tasks = bodies.map((b) => TASK_MARK.exec(b));
+  const hasTasks = tasks.some((t) => t !== null);
+
+  const rows = bodies.map((body, i) => {
+    const t = tasks[i];
+    const rest = t ? body.slice(t[0].length) : body;
+    const cells = rest.split(CELL_SPLIT).map((c) => escapeCell(c.trim()));
+    return hasTasks ? [t && t[1].toLowerCase() === 'x' ? '済' : '', ...cells] : cells;
+  });
+
+  const width = Math.max(...rows.map((r) => r.length));
+  const header = Array.from({ length: width }, (_, i) => {
+    if (hasTasks && i === 0) return '状態';
+    const n = hasTasks ? i - 1 : i;
+    return HEADINGS[n] ?? `列${n + 1}`;
+  });
+
+  const line = (cells: string[]) =>
+    `| ${Array.from({ length: width }, (_, i) => cells[i] ?? '').join(' | ')} |`;
+  const table = [line(header), `| ${Array(width).fill('---').join(' | ')} |`, ...rows.map(line)].join(
+    '\n'
+  );
+
+  return { text: s.text.slice(0, from) + table + s.text.slice(to), start: from, end: from + table.length };
+}
+
+// Which column is which, by what the header says. Both languages, because these
+// documents are written in both.
+const COL = {
+  start: /開始|着手|start|from/i,
+  end: /終了|完了予定|期限|締切|end|due|finish/i,
+  duration: /期間|日数|duration|length/i,
+  section: /セクション|section|分類|フェーズ|phase|区分|カテゴリ/i,
+  status: /状態|ステータス|status|進捗/i,
+};
+const DATE = /(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/;
+const DURATION = /^(\d+)\s*(d|day|days|日|w|week|weeks|週|週間|h|hour|hours|時間)?$/i;
+
+function isoDate(cell: string): string | null {
+  const m = DATE.exec(cell);
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
+}
+
+/** `3` / `3日` / `2週` → what mermaid's gantt understands (`3d`, `2w`). */
+function duration(cell: string): string | null {
+  const m = DURATION.exec(cell.trim());
+  if (!m) return null;
+  const unit = (m[2] ?? 'd').toLowerCase();
+  if (/^(w|week|weeks|週|週間)$/.test(unit)) return `${m[1]}w`;
+  if (/^(h|hour|hours|時間)$/.test(unit)) return `${m[1]}h`;
+  return `${m[1]}d`;
+}
+
+function findCol(header: string[], re: RegExp): number {
+  return header.findIndex((h) => re.test(h));
+}
+
+/** 完了 → `done`, 進行中 → `active`. Anything else carries no tag. */
+function ganttTag(cell: string): string {
+  if (/完了|済|done|closed/i.test(cell)) return 'done';
+  if (/進行|着手|作業中|doing|wip|active|in progress/i.test(cell)) return 'active';
+  return '';
+}
+
+/**
+ * A table becomes a mermaid gantt block. Columns are found by what the header
+ * says (開始 / 期限 / 期間 / 状態 / セクション, and the English equivalents), so
+ * the table can stay the shape a person wants to read.
+ *
+ * **The table is kept.** The gantt is written *after* it, and re-running the
+ * conversion replaces that block rather than adding another — the table stays
+ * the thing you edit, and the chart is a rendering of it (spec §4: no round-trip
+ * write-back, so the diff stays readable).
+ *
+ * Returns null when the caret isn't in a table, or the table has no dates to
+ * put on an axis.
+ */
+export function tableToGantt(s: Sel): Sel | null {
+  const [from, to] = blockSpan(s);
+  const table = findTables(s.text).find((t) => t.from <= to && t.to >= from);
+  if (!table) return null;
+
+  const header = table.header.map((c) => c.text);
+  const cols = {
+    start: findCol(header, COL.start),
+    end: findCol(header, COL.end),
+    duration: findCol(header, COL.duration),
+    section: findCol(header, COL.section),
+    status: findCol(header, COL.status),
+  };
+  const taken = new Set(Object.values(cols).filter((i) => i >= 0));
+
+  // No 開始 column named as such: take the first column whose cells hold dates.
+  if (cols.start === -1) {
+    cols.start = header.findIndex(
+      (_, i) => !taken.has(i) && table.rows.some((r) => r[i] && isoDate(r[i].text))
+    );
+    if (cols.start >= 0) taken.add(cols.start);
+  }
+  if (cols.start === -1) return null; // nothing to put on a time axis
+
+  const nameCol = header.findIndex((_, i) => !taken.has(i));
+  if (nameCol === -1) return null;
+
+  const body: string[] = [];
+  let section: string | null = null;
+  for (const row of table.rows) {
+    const cell = (i: number) => (i >= 0 ? (row[i]?.text ?? '') : '');
+    const start = isoDate(cell(cols.start));
+    if (!start) continue; // a row without a date has nothing to draw
+
+    if (cols.section >= 0 && cell(cols.section) !== section) {
+      section = cell(cols.section);
+      body.push(`    section ${section}`);
+    }
+    // `:` separates a gantt task's name from its fields, so it can't stay in one.
+    const name = cell(nameCol).replace(/:/g, '：').trim() || '(無題)';
+    const span = isoDate(cell(cols.end)) ?? duration(cell(cols.duration)) ?? '1d';
+    const tag = ganttTag(cell(cols.status));
+    body.push(`    ${name} :${tag ? `${tag}, ` : ''}${start}, ${span}`);
+  }
+  if (body.length === 0) return null;
+
+  const block = ['```mermaid', 'gantt', '    dateFormat YYYY-MM-DD', ...body, '```'].join('\n');
+
+  // Re-running the conversion overwrites the gantt this table already has,
+  // instead of stacking a second one under it.
+  const after = s.text.slice(table.to);
+  const existing = /^\n(\s*\n)*```mermaid\n\s*gantt\b[\s\S]*?\n```/.exec(after);
+  const gap = existing ? existing[0].slice(0, existing[0].indexOf('```')) : '\n\n';
+  const at = table.to + gap.length;
+  const until = existing ? table.to + existing[0].length : table.to;
+
+  return {
+    text: s.text.slice(0, table.to) + gap + block + s.text.slice(until),
+    start: at,
+    end: at + block.length,
   };
 }

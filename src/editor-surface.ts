@@ -538,6 +538,16 @@ export class EditorSurface {
     });
   }
 
+  /**
+   * Where the caret sits on screen, in viewport coordinates — what a popover
+   * hung off the caret (the `/` menu) needs to place itself. Null when that
+   * position isn't currently drawn, e.g. scrolled out of view.
+   */
+  caretCoords(pos = this.selectionStart): { left: number; top: number; bottom: number } | null {
+    const c = this.view.coordsAtPos(pos);
+    return c ? { left: c.left, top: c.top, bottom: c.bottom } : null;
+  }
+
   /** Highlight find matches; `current` is the index to mark as the active one. */
   setHighlights(hits: Hit[], current: number) {
     this.view.dispatch({ effects: setHits.of({ hits, current }) });

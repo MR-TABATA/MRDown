@@ -165,6 +165,10 @@
         <!-- CodeMirror mounts here (see src/editor-surface.ts). -->
         <div class="editor-area">
         </div>
+        <!-- The `/` insert menu. Empty until it opens: the items are built from
+             the same registry the format bar uses (slashMenu in src/main.ts),
+             and it is placed against the caret, not this element's parent. -->
+        <div id="slash-menu" class="popup-menu slash-menu" role="menu" hidden></div>
         <!-- Offered over an untitled document that is still empty, and gone the
              moment anything is typed — so ⌘N stays instant for a blank page
              while the templates are still impossible to miss. -->

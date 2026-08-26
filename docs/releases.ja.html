@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MRDown — リリース全史</title>
-  <meta name="description" content="2026年6月21日の初リリースから v1.12.0 まで、MRDown の全47タグを日付と機能つきで時系列に。CRUD が揃うまで4日、1.0 まで20日。">
+  <meta name="description" content="2026年6月21日の初リリースから v1.13.0 まで、MRDown の全48タグを日付と機能つきで時系列に。CRUD が揃うまで4日、1.0 まで20日。">
 
   <!-- Open Graph -->
   <meta property="og:title" content="MRDown — リリース全史">
@@ -64,16 +64,16 @@
   <header class="rel-head">
     <div class="wrap">
       <div class="kicker">Release history</div>
-      <h1>64日で47タグ。</h1>
+      <h1>66日で48タグ。</h1>
       <p class="lead">
-        2026年6月21日の初リリースから、8月24日の v1.12.0 まで。Markdown ビューアとして出て、
+        2026年6月21日の初リリースから、8月26日の v1.13.0 まで。Markdown ビューアとして出て、
         CRUD が4日で揃い、diff を旗に立て、編集画面を作り直すまでの全記録です。
       </p>
 
       <div class="rel-stats">
-        <div class="rel-stat"><span class="n">47</span><span class="k">タグ</span></div>
-        <div class="rel-stat"><span class="n">43</span><span class="k">公開リリース</span></div>
-        <div class="rel-stat"><span class="n">64<small> 日</small></span><span class="k">期間</span></div>
+        <div class="rel-stat"><span class="n">48</span><span class="k">タグ</span></div>
+        <div class="rel-stat"><span class="n">44</span><span class="k">公開リリース</span></div>
+        <div class="rel-stat"><span class="n">66<small> 日</small></span><span class="k">期間</span></div>
         <div class="rel-stat"><span class="n">5<small> 本</small></span><span class="k">最多の1日（7/18）</span></div>
         <div class="rel-stat"><span class="n">20<small> 日</small></span><span class="k">1.0 到達</span></div>
       </div>
@@ -372,10 +372,23 @@
       </div>
     </section>
 
+    <!-- ===== 7 ===== -->
+    <section class="rel-era">
+      <div class="rel-era-head">
+        <h2>書きながら、構造を作る</h2><span class="span">v1.13.0 · 8/26</span>
+        <p>読む道具から、構造のある文書を書く道具へ。Excel に逃げる理由をひとつ消す番。</p>
+      </div>
+
+      <div class="rel-row">
+        <span class="v">1.13.0</span><span class="d">8/26</span>
+        <span class="t"><strong>空行の行頭の <code>/</code> で部品を挿す。</strong>表・チェックリスト・コードブロック・水平線。リストの下では<strong>箇条書きを表に</strong>、表の下では<strong>表を mermaid ガントに</strong>変換（表は消さず、図を下に足す。再実行で差し替え）</span>
+      </div>
+    </section>
+
     <section class="rel-notes">
       <h3>データについて</h3>
       <ul>
-        <li><strong>タグ47本に対し、公開リリースは43本。</strong>差は <code>v0.1.1</code>、<code>v0.2.0</code>、<code>v0.18.0</code>（タグのみ）と、<code>v1.6.4</code>（未公開）です。</li>
+        <li><strong>タグ48本に対し、公開リリースは44本。</strong>差は <code>v0.1.1</code>、<code>v0.2.0</code>、<code>v0.18.0</code>（タグのみ）と、<code>v1.6.4</code>（未公開）です。</li>
         <li><strong>欠番があります。</strong><code>v0.8.x</code> と <code>v0.9.1</code> は存在しません。</li>
         <li>日付は<strong>タグのコミット日</strong>です。GitHub 上の公開日時は後から編集された分がずれているため使っていません。</li>
         <li>v0.1.0 時点の名前は <code>mdcrud</code>。<code>MRDown</code> になるのは v0.12.0 からです。</li>
