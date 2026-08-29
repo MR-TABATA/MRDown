@@ -4,9 +4,11 @@
 
 **A Markdown viewer at heart — it edits, saves, and creates too, and the diff is the showpiece.**
 
-It began with the `.md` files Claude Code generates. Opening a heavy editor and right-clicking to preview was a chore — so I asked Claude Code for help and had a **viewer-only 0.1 in two hours**. These days it's not only Claude Code: I read the `.md` I write in VSCode here too — **I write in an editor, and I read in MRDown**. From there, one "it'd be nice if it also…" after another, it grew — until it did something no other Markdown app does: **read the diff of what your AI just rewrote**.
+It began with the `.md` files Claude Code generates. Opening a heavy editor and right-clicking to preview was a chore — so I asked Claude Code for help and had a **viewer-only 0.1 in two hours**. At first it was a split — **write in an editor, read in MRDown**. That split is gone: **I no longer open VSCode for `.md` at all**, I read and write here. From there, one "it'd be nice if it also…" after another, it grew — until it did something no other Markdown app does: **read the diff of what your AI just rewrote**.
 
-Built with Tauri + TypeScript. macOS native.
+Built with Tauri + TypeScript. Only macOS builds are published, but **it is not macOS-only** —
+being Tauri, it should build and run on Windows. **I have never built or launched it there
+myself**, and there is no Windows code-signing certificate, so no Windows binary is distributed.
 
 ## Features
 
