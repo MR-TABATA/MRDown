@@ -4035,7 +4035,13 @@ function renderThreeWay() {
 async function openCompare() {
   const picked = await open({
     multiple: true,
-    filters: [{ name: 'Markdown', extensions: SUPPORTED }],
+    // 版どうしの差分は、ここが入口。**受け取った docx の 2 版を突き合わせる**のは
+    // Word の校閲以外にまともな手段が無く、変換が決定的（同じファイルは何度
+    // 変換しても 1 バイトも変わらない）なのでノイズにならない。
+    filters: [
+      { name: 'Markdown', extensions: SUPPORTED },
+      { name: t('importLabel'), extensions: IMPORTABLE }
+    ],
   });
   const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
   if (paths.length === 0) return; // cancelled
@@ -4051,10 +4057,9 @@ async function openCompare() {
     return;
   }
 
-  const [textA, textB] = await Promise.all([
-    invoke<string>('read_file', { path: a }).catch(() => null),
-    invoke<string>('read_file', { path: b }).catch(() => null),
-  ]);
+  const readOrConvert = (path: string) =>
+    invoke<string>(isImportable(path) ? 'convert_file' : 'read_file', { path }).catch(() => null);
+  const [textA, textB] = await Promise.all([readOrConvert(a), readOrConvert(b)]);
   if (textA === null || textB === null) {
     await confirmDialog(t('historyReadFailed'), { title: t('compareTitle'), kind: 'warning' });
     return;
@@ -4973,7 +4978,9 @@ getCurrentWebview().onDragDropEvent((event) => {
     // reorder — otherwise the dragged file gets re-opened ("specified twice").
     // A real Finder → window drop never coincides with an in-app row drag.
     if (dragState?.moved || Date.now() - lastReorderAt < 400) return;
-    for (const file of p.paths.filter(isSupported)) openFile(file);
+    // ドロップも「開く」ダイアログと同じものを受ける。片方だけ通ると、
+    // 選んでいるのではなく壊れていると読まれる（Open With と同じ理由）。
+    for (const file of p.paths.filter((f) => isSupported(f) || isImportable(f))) openFile(file);
   } else {
     contentArea.classList.remove('drag-over');
   }
