@@ -13,7 +13,7 @@ import markedFootnote from 'marked-footnote';
 import markedKatex from 'marked-katex-extension';
 import 'katex/dist/katex.min.css';
 import DOMPurify from 'dompurify';
-import { SUPPORTED, isSupported, basename, dirname, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
+import { SUPPORTED, IMPORTABLE, isSupported, isImportable, basename, dirname, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
 import {
   slugify,
   firstHeadingTitle,
@@ -1565,16 +1565,30 @@ async function openFile(path: string, opts: { recent?: boolean } = {}) {
     await setActive(existing);
     return;
   }
+  // 変換して開く文書は、**untitled として開く**。path を持たせないので
+  // `save()` は必ず保存先を尋ね、元のファイルへは書き戻らない
+  // （「保存してもファイルが 1 バイトも変わらない」を仕組みで守る）。
+  const imported = isImportable(path);
   let content: string;
   try {
-    content = await invoke<string>('read_file', { path });
+    content = imported
+      ? await invoke<string>('convert_file', { path })
+      : await invoke<string>('read_file', { path });
   } catch (e) {
     statusbar.hidden = false;
-    statusPath.textContent = t('openFailed', { e: String(e) });
+    // 変換は成功したのに中身が空、を「開けませんでした」と混ぜない。
+    // 白紙を黙って見せるのが最悪なので、理由の方を出す。
+    const reason = String(e);
+    // 変換は通ったのに中身が空、を「開けませんでした」と混ぜない。
+    statusPath.textContent = reason.includes('empty-conversion')
+      ? t('importEmpty')
+      : t('openFailed', { e: reason });
     return;
   }
-  const mtime = await invoke<number>('file_mtime', { path }).catch(() => 0);
-  const doc: Doc = { path, name: basename(path), savedSource: content, workingText: content, mtime };
+  const mtime = imported ? 0 : await invoke<number>('file_mtime', { path }).catch(() => 0);
+  const doc: Doc = imported
+    ? { path: null, name: basename(path), savedSource: '', workingText: content, mtime: 0 }
+    : { path, name: basename(path), savedSource: content, workingText: content, mtime };
   // A newly opened document starts at the top, but the one we're leaving keeps
   // its place — it's still open, and you'll be back.
   if (active) rememberScroll(active);
@@ -1585,6 +1599,14 @@ async function openFile(path: string, opts: { recent?: boolean } = {}) {
   await renderSource(content, path);
   showDocUI();
   updateStatus();
+  if (imported) {
+    // 変換物であることと、保存すると .md になることを最初に言う。
+    // **画像が落ちることもここで言う。** Markdown 自体は画像を持てるので、
+    // 「取り出して隣に置いてくれる」と期待する人がいる。落ちたと気づくのは
+    // 開いた後なので、断りは開く前ではなくここに置く。
+    statusbar.hidden = false;
+    statusPath.textContent = t('importedTitle', { name: basename(path) });
+  }
   renderSidebar();
   renderTree();
   saveSession();
@@ -2168,7 +2190,12 @@ function renderRecent(list: string[]) {
 openBtn.addEventListener('click', async () => {
   const selected = await open({
     multiple: false,
-    filters: [{ name: 'Markdown', extensions: SUPPORTED }]
+    // 文書は別の枠にする。**PDF の断りはここに出す** ── 開く前に読めるので、
+    // 空で返ってきたときに「壊れている」ではなく「そう書いてあった」になる。
+    filters: [
+      { name: 'Markdown', extensions: SUPPORTED },
+      { name: t('importLabel'), extensions: IMPORTABLE }
+    ]
   });
   if (selected) await openFile(selected as string);
 });

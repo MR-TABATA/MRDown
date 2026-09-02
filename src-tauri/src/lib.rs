@@ -6,6 +6,32 @@ use tauri::{Emitter, Manager};
 
 const ALLOWED_EXTENSIONS: [&str; 3] = ["md", "markdown", "txt"];
 
+/// Formats we can *read* by converting them to Markdown first. Deliberately not
+/// in `ALLOWED_EXTENSIONS`: a converted document is never written back, so the
+/// promise that saving leaves the original byte-identical still holds — there is
+/// no path through `save_file` that points at one of these.
+///
+/// **Word only, and that is a deliberate narrowing (2026-09-02).** anydoc also
+/// converts xlsx, pptx and PDF, and all of them *open* — but opening is not the
+/// bar, reading is:
+///
+/// - **xlsx**: the header row comes out empty and the real header drops into the
+///   body; separate tables are concatenated into one broken table.
+/// - **PDF**: there is no structure to map, so headings are inferred from type
+///   size — a heading that wrapped becomes two headings, and page furniture
+///   lands in the body.
+///
+/// Only `.docx` carries paragraphs, headings, lists and tables as structure, so
+/// only `.docx` converts without guessing. Listing a format that opens into
+/// something you would not read costs more trust than it earns.
+const IMPORTABLE_EXTENSIONS: [&str; 1] = ["docx"];
+
+/// A conversion that reported success but produced nothing. Belt and braces —
+/// anydoc reports a real error for the cases we have seen (below), but an empty
+/// document would otherwise open as a blank page with no explanation.
+const EMPTY_CONVERSION: &str = "empty-conversion";
+
+
 /// Path of a file the app was asked to open (via double-click / "Open With"),
 /// held until the frontend is ready to pick it up on startup.
 #[derive(Default)]
@@ -23,6 +49,28 @@ fn is_supported(path: &str) -> bool {
         .and_then(|e| e.to_str())
         .map(|e| ALLOWED_EXTENSIONS.contains(&e.to_lowercase().as_str()))
         .unwrap_or(false)
+}
+
+fn is_importable(path: &str) -> bool {
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| IMPORTABLE_EXTENSIONS.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+/// Convert a document to Markdown for reading. The caller opens the result as an
+/// *untitled* document, so it can be saved as `.md` but never over the original.
+#[tauri::command]
+fn convert_file(path: String) -> Result<String, String> {
+    if !is_importable(&path) {
+        return Err("Unsupported file type".to_string());
+    }
+    let markdown = anydoc::to_markdown(&path).map_err(|e| e.to_string())?;
+    if markdown.trim().is_empty() {
+        return Err(EMPTY_CONVERSION.to_string());
+    }
+    Ok(markdown)
 }
 
 #[tauri::command]
@@ -258,7 +306,10 @@ fn get_pending_file(state: tauri::State<PendingFile>) -> Option<String> {
 
 /// Remember an opened file and notify a running frontend.
 fn handle_opened_file(app: &tauri::AppHandle, path: String) {
-    if !is_supported(&path) {
+    // "Open With" has to accept everything the Open dialog accepts. Filtering on
+    // is_supported alone would make a .docx openable from inside the app but not
+    // from Finder, which reads as the app being broken rather than selective.
+    if !is_supported(&path) && !is_importable(&path) {
         return;
     }
     if let Some(state) = app.try_state::<PendingFile>() {
@@ -833,7 +884,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(PendingFile::default())
         .manage(DocOpen::default())
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(tauri::generate_handler![convert_file,
+            
             read_file,
             save_file,
             save_image,
@@ -881,7 +933,9 @@ pub fn run() {
 
                 // Windows / Linux pass the file path as a launch argument.
                 #[cfg(not(target_os = "macos"))]
-                if let Some(path) = std::env::args().skip(1).find(|a| is_supported(a)) {
+                if let Some(path) =
+                    std::env::args().skip(1).find(|a| is_supported(a) || is_importable(a))
+                {
                     if let Some(state) = app.try_state::<PendingFile>() {
                         *state.0.lock().unwrap() = Some(path);
                     }
@@ -909,6 +963,36 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 変換して開く形式は、**書き込みの許可リストに入っていてはいけない。**
+    /// ここが破れると `save_file` が .docx を上書きでき、「保存しても元のファイルが
+    /// 1 バイトも変わらない」という約束が崩れる。
+    #[test]
+    fn importable_is_never_writable() {
+        for ext in IMPORTABLE_EXTENSIONS {
+            assert!(is_importable(&format!("a.{ext}")), "{ext} を変換対象と見なせていない");
+            assert!(!is_supported(&format!("a.{ext}")), "{ext} が書き込み可能になっている");
+        }
+    }
+
+    #[test]
+    fn importable_matches_extension_case_insensitively() {
+        assert!(is_importable("SPEC.DOCX"));
+        assert!(is_importable("/tmp/a.docx"));
+        // anydoc は開けるが、**読める形にならない**ので名乗らない（定数のコメント）。
+        assert!(!is_importable("a.xlsx"));
+        assert!(!is_importable("a.pptx"));
+        assert!(!is_importable("a.pdf"));
+        assert!(!is_importable("a.md"));
+        assert!(!is_importable("Makefile"));
+    }
+
+    /// 変換できない形式を渡したら、変換を試みずに断る。
+    #[test]
+    fn convert_file_rejects_unsupported() {
+        assert!(convert_file("a.md".to_string()).is_err());
+    }
+
     use std::sync::atomic::AtomicUsize;
 
     /// Unique per call, not per millisecond: the tests run in parallel and

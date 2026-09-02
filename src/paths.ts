@@ -2,9 +2,29 @@
 
 export const SUPPORTED = ['md', 'markdown', 'txt'];
 
+/**
+ * Formats we open by converting them to Markdown first. Kept out of `SUPPORTED`
+ * on purpose: a converted document opens untitled and is never written back, so
+ * "saving leaves the original byte-identical" stays true by construction.
+ *
+ * Word only. anydoc also converts xlsx, pptx and PDF, and they all *open* — but
+ * only `.docx` holds headings, lists and tables as structure, so only `.docx`
+ * converts without guessing (see the Rust side for what the others look like).
+ */
+export const IMPORTABLE = ['docx'];
+
+function ext(path: string): string {
+  return (path.split('.').pop() || '').toLowerCase();
+}
+
 /** Whether a path looks like a Markdown file we can open. */
 export function isSupported(path: string): boolean {
-  return SUPPORTED.includes((path.split('.').pop() || '').toLowerCase());
+  return SUPPORTED.includes(ext(path));
+}
+
+/** Whether a path is a document we can convert to Markdown for reading. */
+export function isImportable(path: string): boolean {
+  return IMPORTABLE.includes(ext(path));
 }
 
 /** Final path component, handling both POSIX and Windows separators. */

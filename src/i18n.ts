@@ -239,6 +239,11 @@ const DICT = {
     slashNone: '一致する部品はありません',
     // dialogs / messages
     openFailed: '開けませんでした: {e}',
+    // 変換して開ける文書。**断りは事前に出す** — 落として初めて分かると
+    // 「壊れている」と読まれるが、先に書いてあれば「既知の限界」になる。
+    importLabel: 'Word 文書（.docx）',
+    importEmpty: 'テキストが入っていませんでした',
+    importedTitle: '{name} を変換しました（画像を除く・読み取り専用・保存すると .md になります）',
     saveFailed: '保存できませんでした: {e}',
     deleteFailed: '削除できませんでした: {e}',
     deleteConfirm: '「{name}」をゴミ箱に移動します。',
@@ -466,6 +471,9 @@ const DICT = {
     // `/` insert menu
     slashNone: 'No matching block',
     openFailed: "Couldn't open: {e}",
+    importLabel: 'Word documents (.docx)',
+    importEmpty: 'The document held no text',
+    importedTitle: 'Converted {name} — text only, read-only; saving writes a .md',
     saveFailed: "Couldn't save: {e}",
     deleteFailed: "Couldn't delete: {e}",
     deleteConfirm: 'Move “{name}” to the Trash.',

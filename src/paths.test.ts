@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSupported, basename, dirname, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
+import { SUPPORTED, IMPORTABLE, isSupported, isImportable, basename, dirname, tildify, resolveImagePath, resolveDocLink, sanitizeFilename } from './paths';
 
 describe('isSupported', () => {
   it('accepts markdown extensions case-insensitively', () => {
@@ -11,6 +11,32 @@ describe('isSupported', () => {
     expect(isSupported('image.png')).toBe(false);
     expect(isSupported('Makefile')).toBe(false);
     expect(isSupported('')).toBe(false);
+  });
+});
+
+describe('isImportable', () => {
+  it('accepts .docx, case-insensitively', () => {
+    expect(isImportable('spec.docx')).toBe(true);
+    expect(isImportable('SPEC.DOCX')).toBe(true);
+  });
+  it('rejects the formats that open but do not read', () => {
+    // anydoc converts all three; none of them survive the trip as something
+    // you would read. Opening is not the bar — reading is.
+    expect(isImportable('sheet.xlsx')).toBe(false);
+    expect(isImportable('deck.pptx')).toBe(false);
+    expect(isImportable('contract.pdf')).toBe(false);
+  });
+  it('rejects markdown and unknown formats', () => {
+    // Markdown is read directly; it must not take the conversion path.
+    expect(isImportable('a.md')).toBe(false);
+    expect(isImportable('notes.txt')).toBe(false);
+    expect(isImportable('')).toBe(false);
+  });
+  it('never overlaps SUPPORTED', () => {
+    // The invariant behind "saving leaves the original byte-identical": a
+    // converted document can never reach save_file, because that guard only
+    // admits SUPPORTED. If these two lists ever intersect, that promise breaks.
+    expect(IMPORTABLE.filter((e) => SUPPORTED.includes(e))).toEqual([]);
   });
 });
 
