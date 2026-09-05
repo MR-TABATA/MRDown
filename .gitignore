@@ -37,3 +37,6 @@ demo/out/
 
 # Claude Code local settings & memory — machine-local, not for the repo.
 /.claude/
+
+# Claude Code へのローカル指示（各自の手元のもの。共有しない）
+CLAUDE.md
