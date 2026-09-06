@@ -154,6 +154,11 @@
           <h3>Word の文書も落とせる</h3>
           <p><code>.docx</code> を落とすと Markdown に直して開きます。<strong>変換は手元で完結し、どこにも送りません</strong>——変換サイトへアップロードも、pandoc の導入も要りません。開いたものは<strong>無題の文書</strong>になるので、保存すると <code>.md</code> として別に書き出され、元の <code>.docx</code> には一切書き戻りません。2 つの <code>.docx</code> を比較にかければ、<strong>版どうしの差分</strong>もそのまま見られます。画像は入りません（本文・見出し・箇条書き・表だけ）。</p>
         </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="14" y1="18" x2="20" y2="18"/><line x1="4" y1="6" x2="4" y2="18"/><line x1="9" y1="12" x2="9" y2="18"/></svg></div>
+          <h3>雑な箇条書きを WBS に</h3>
+          <p>タスクリストを 1 回押すと <code>1</code> <code>1.1</code> <code>1.2</code> と番号が振られ、<strong>入れ子はそのまま残ります</strong>。項目を消して押し直せば穴が詰まります ── <code>1.2.3</code> を手で振り直すのは人間がやることではありません。表はカーソルのある列を足す・消す・寄せる（押すたび 左 → 中央 → 右 → 無し と回る）。選択範囲に効く小さな変換も 9 つ: 大文字小文字、並べ替え（数値順は「10・2・33」を 2 → 10 → 33 に）、結合・分割、折り返し、字下げ戻し、<code>&amp;amp;</code> のデコード。</p>
+        </div>
       </div>
 
       <div class="section-title" style="margin-top: 72px;">
