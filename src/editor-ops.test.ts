@@ -15,6 +15,19 @@ import {
   clearSlash,
   listToTable,
   tableToGantt,
+  taskListToWbs,
+  addTableColumn,
+  deleteTableColumn,
+  cycleTableAlign,
+  insertWbs,
+  WBS_DEFAULTS,
+  cycleCase,
+  sortLines,
+  joinLines,
+  splitLines,
+  wrapLines,
+  dedentLines,
+  decodeText,
   type Sel,
 } from './editor-ops';
 
@@ -344,5 +357,206 @@ describe('tableToGantt', () => {
   });
   it('returns null outside a table', () => {
     expect(tableToGantt(at('ただの段落|'))).toBe(null);
+  });
+});
+
+describe('taskListToWbs', () => {
+  it('numbers a flat list 1, 2, 3', () => {
+    const r = taskListToWbs(at('- [ ] 設計|\n- [ ] 実装\n- [ ] 検証'))!;
+    expect(r.text).toBe('- [ ] 1 設計\n- [ ] 2 実装\n- [ ] 3 検証');
+  });
+  it('keeps the hierarchy, unlike listToTable', () => {
+    const r = taskListToWbs(at('- 設計|\n  - 調査\n  - 方式\n- 実装'))!;
+    expect(r.text).toBe('- 1 設計\n  - 1.1 調査\n  - 1.2 方式\n- 2 実装');
+  });
+  it('carries the checkbox through unchanged', () => {
+    const r = taskListToWbs(at('- [x] 済み|\n  - [ ] 子'))!;
+    expect(r.text).toBe('- [x] 1 済み\n  - [ ] 1.1 子');
+  });
+  it('renumbers instead of stacking when run again', () => {
+    const once = taskListToWbs(at('- a|\n  - b\n- c'))!;
+    const twice = taskListToWbs({ ...once, start: 0, end: 0 })!;
+    expect(twice.text).toBe(once.text);
+  });
+  it('closes the gap after an item is deleted', () => {
+    const r = taskListToWbs(at('- 1 a|\n- 3 c'))!;
+    expect(r.text).toBe('- 1 a\n- 2 c');
+  });
+  it('outdents back to the level it belongs to', () => {
+    const r = taskListToWbs(at('- a|\n  - b\n    - c\n  - d\n- e'))!;
+    expect(r.text).toBe('- 1 a\n  - 1.1 b\n    - 1.1.1 c\n  - 1.2 d\n- 2 e');
+  });
+  it('normalises the bullet so the numbers do not compete', () => {
+    const r = taskListToWbs(at('* a|\n* b'))!;
+    expect(r.text).toBe('- 1 a\n- 2 b');
+  });
+  it('leaves a block that is not a list alone', () => {
+    expect(taskListToWbs(at('ただの段落|'))).toBeNull();
+  });
+});
+
+// `at()` marks the caret with `|`, which a table is made of — so these place the
+// caret by offset instead, with `on()` pointing at the first cell holding `find`.
+const T = '| A | B |\n| --- | --- |\n| 1 | 2 |';
+const on = (text: string, find: string): Sel => {
+  const i = text.indexOf(find);
+  return { text, start: i, end: i };
+};
+/** The whole string selected — what the text transforms are normally handed. */
+const whole = (text: string): Sel => ({ text, start: 0, end: text.length });
+
+describe('table columns', () => {
+  it('adds an empty column to the right of the caret', () => {
+    expect(addTableColumn(on(T, 'A'))!.text).toBe('| A |  | B |\n| --- | --- | --- |\n| 1 |  | 2 |');
+  });
+  it('adds at the far right when the caret is in the last column', () => {
+    expect(addTableColumn(on(T, 'B'))!.text).toBe('| A | B |  |\n| --- | --- | --- |\n| 1 | 2 |  |');
+  });
+  it('deletes the caret column', () => {
+    expect(deleteTableColumn(on(T, 'A'))!.text).toBe('| B |\n| --- |\n| 2 |');
+  });
+  it('refuses to delete the only column', () => {
+    expect(deleteTableColumn(on('| A |\n| --- |\n| 1 |', 'A'))).toBeNull();
+  });
+  it('works from a body row too', () => {
+    expect(deleteTableColumn(on(T, '2'))!.text).toBe('| A |\n| --- |\n| 1 |');
+  });
+  it('cycles alignment left, centre, right, none', () => {
+    let cur: Sel = on(T, 'A');
+    const seen: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      cur = cycleTableAlign(cur)!;
+      seen.push(cur.text.split('\n')[1]);
+    }
+    expect(seen).toEqual(['| :--- | --- |', '| :---: | --- |', '| ---: | --- |', '| --- | --- |']);
+  });
+  it('answers on the delimiter row, where there is no cell to be inside of', () => {
+    const pos = T.indexOf('---', T.indexOf('---') + 1);
+    expect(cycleTableAlign({ text: T, start: pos, end: pos })!.text.split('\n')[1])
+      .toBe('| --- | :--- |');
+  });
+  it('leaves the caret in the same column, so it can be pressed again', () => {
+    const once = cycleTableAlign(on(T, 'B'))!;
+    expect(cycleTableAlign(once)!.text.split('\n')[1]).toBe('| --- | :---: |');
+  });
+  it('returns null outside a table', () => {
+    expect(addTableColumn(at('just a paragraph|'))).toBeNull();
+    expect(deleteTableColumn(at('just a paragraph|'))).toBeNull();
+    expect(cycleTableAlign(at('just a paragraph|'))).toBeNull();
+  });
+  it('pads rows that are missing cells', () => {
+    const ragged = '| A | B |\n| --- | --- |\n| 1 |';
+    expect(addTableColumn(on(ragged, 'A'))!.text)
+      .toBe('| A |  | B |\n| --- | --- | --- |\n| 1 |  |  |');
+  });
+});
+
+describe('insertWbs', () => {
+  it('makes a two-deep skeleton with ids by default', () => {
+    expect(insertWbs(whole(''), WBS_DEFAULTS).text)
+      .toBe('- [ ] 1 \n  - [ ] 1.1 \n  - [ ] 1.2 \n- [ ] 2 \n  - [ ] 2.1 \n  - [ ] 2.2 ');
+  });
+  it('leaves the caret at the end of the first item, ready to type', () => {
+    const r = insertWbs(whole(''), WBS_DEFAULTS);
+    expect(r.text.slice(0, r.start)).toBe('- [ ] 1 ');
+    expect(r.start).toBe(r.end);
+  });
+  it('drops the numbers when ids are off', () => {
+    expect(insertWbs(whole(''), { ...WBS_DEFAULTS, depth: 1, ids: false }).text)
+      .toBe('- [ ] \n- [ ] ');
+  });
+  it('adds a table whose columns tableToGantt can read', () => {
+    const r = insertWbs(whole(''), { ...WBS_DEFAULTS, depth: 1, start: '2026-09-06', table: true });
+    expect(r.text).toContain('| ID | タスク | 担当 | 開始 | 終了 |');
+    expect(r.text).toContain('2026-09-06');
+  });
+  it('clamps the depth to 1..3', () => {
+    const deep = insertWbs(whole(''), { ...WBS_DEFAULTS, depth: 9 }).text.split('\n');
+    expect(Math.max(...deep.map((l) => l.split('.').length))).toBe(3);
+  });
+});
+
+describe('cycleCase', () => {
+  it('walks camel, snake, kebab, constant, title and back', () => {
+    let cur: Sel = whole('fooBarBaz');
+    const seen: string[] = [];
+    for (let i = 0; i < 5; i++) { cur = cycleCase(cur)!; seen.push(cur.text); }
+    expect(seen).toEqual(['foo_bar_baz', 'foo-bar-baz', 'FOO_BAR_BAZ', 'Foo Bar Baz', 'fooBarBaz']);
+  });
+  it('starts at camelCase for a shape it does not recognise', () => {
+    expect(cycleCase(whole('foo bar'))!.text).toBe('fooBar');
+  });
+  it('returns null across lines, where there is no single name to convert', () => {
+    expect(cycleCase(whole('a\nb'))).toBeNull();
+  });
+});
+
+describe('sortLines', () => {
+  it('sorts alphabetically, ignoring the list marker', () => {
+    expect(sortLines(whole('- banana\n- apple\n- cherry'), 'text')!.text)
+      .toBe('- apple\n- banana\n- cherry');
+  });
+  it('sorts by value, not by the digits as text', () => {
+    expect(sortLines(whole('- 10 件\n- 2 件\n- 33 件'), 'number')!.text)
+      .toBe('- 2 件\n- 10 件\n- 33 件');
+  });
+  it('puts lines with no number last', () => {
+    expect(sortLines(whole('- z\n- 5'), 'number')!.text).toBe('- 5\n- z');
+  });
+  it('sorts by length', () => {
+    expect(sortLines(whole('- ccc\n- a\n- bb'), 'length')!.text).toBe('- a\n- bb\n- ccc');
+  });
+  it('returns null with nothing to reorder', () => {
+    expect(sortLines(whole('only one'), 'text')).toBeNull();
+  });
+});
+
+describe('joinLines / splitLines', () => {
+  it('joins list items into one line', () => {
+    expect(joinLines(whole('- りんご\n- みかん\n- ぶどう'))!.text).toBe('りんご、みかん、ぶどう');
+  });
+  it('splits back on the comma', () => {
+    expect(splitLines(whole('りんご、みかん、ぶどう'))!.text).toBe('- りんご\n- みかん\n- ぶどう');
+  });
+  it('falls back to whitespace when there is no comma', () => {
+    expect(splitLines(whole('a b c'))!.text).toBe('- a\n- b\n- c');
+  });
+  it('returns null when there is nothing to join or split', () => {
+    expect(joinLines(whole('- one'))).toBeNull();
+    expect(splitLines(whole('single'))).toBeNull();
+  });
+});
+
+describe('wrapLines / dedentLines', () => {
+  it('wraps at the width, keeping the indent', () => {
+    expect(wrapLines(whole('  the quick brown fox jumps'), 20)!.text)
+      .toBe('  the quick brown\n  fox jumps');
+  });
+  it('leaves a line that already fits', () => {
+    expect(wrapLines(whole('short'), 20)!.text).toBe('short');
+  });
+  it('strips the shared indent and keeps the relative depth', () => {
+    expect(dedentLines(whole('    a\n      b\n    c'))!.text).toBe('a\n  b\nc');
+  });
+  it('returns null when nothing is indented', () => {
+    expect(dedentLines(whole('a\nb'))).toBeNull();
+  });
+});
+
+describe('decodeText', () => {
+  it('turns named entities back', () => {
+    expect(decodeText(whole('a &amp; b &lt;c&gt;'))!.text).toBe('a & b <c>');
+  });
+  it('turns numeric references back, including astral ones', () => {
+    expect(decodeText(whole('&#x1F600; &#65;'))!.text).toBe('😀 A');
+  });
+  it('percent-decodes a run at a time', () => {
+    expect(decodeText(whole('%E6%97%A5%E6%9C%AC end'))!.text).toBe('日本 end');
+  });
+  it('leaves a broken percent sequence alone rather than losing the rest', () => {
+    expect(decodeText(whole('100%25 %ZZ'))!.text).toBe('100% %ZZ');
+  });
+  it('returns null when there is nothing encoded', () => {
+    expect(decodeText(whole('plain text'))).toBeNull();
   });
 });

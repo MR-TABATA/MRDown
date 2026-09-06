@@ -64,6 +64,20 @@ import {
   clearSlash,
   listToTable,
   tableToGantt,
+  taskListToWbs,
+  addTableColumn,
+  deleteTableColumn,
+  cycleTableAlign,
+  insertWbs,
+  WBS_DEFAULTS,
+  cycleCase,
+  sortLines,
+  joinLines,
+  splitLines,
+  wrapLines,
+  dedentLines,
+  decodeText,
+  type WbsOptions,
   type Sel,
 } from './editor-ops';
 import {
@@ -2421,8 +2435,11 @@ interface FmtAction {
   id: string;
   titleKey: 'fmtBold' | 'fmtItalic' | 'fmtStrike' | 'fmtCode' | 'fmtLink' | 'fmtImage'
     | 'fmtHeading' | 'fmtList' | 'fmtOrdered' | 'fmtChecklist' | 'fmtQuote'
-    | 'fmtCodeblock' | 'fmtTable' | 'fmtHr' | 'fmtListToTable' | 'fmtTableToGantt';
-  group: 'inline' | 'block' | 'convert';
+    | 'fmtCodeblock' | 'fmtTable' | 'fmtHr' | 'fmtListToTable' | 'fmtTableToGantt'
+    | 'fmtTaskListToWbs' | 'fmtAddColumn' | 'fmtDeleteColumn' | 'fmtCycleAlign'
+    | 'fmtWbs' | 'fmtCase' | 'fmtSortText' | 'fmtSortNumber' | 'fmtSortLength'
+    | 'fmtJoin' | 'fmtSplit' | 'fmtWrap' | 'fmtDedent' | 'fmtDecode';
+  group: 'inline' | 'block' | 'convert' | 'text';
   svg: string;
   /** null when the action doesn't apply here — a conversion off its own block. */
   run: (s: Sel) => Sel | null;
@@ -2483,11 +2500,56 @@ const FMT_ACTIONS: FmtAction[] = [
   { id: 'table-to-gantt', titleKey: 'fmtTableToGantt', group: 'convert',
     svg: ICON('<line x1="3" y1="4" x2="3" y2="20"/><rect x="6" y="5" width="9" height="3.5" rx="1"/><rect x="9" y="10.25" width="8" height="3.5" rx="1"/><rect x="6" y="15.5" width="12" height="3.5" rx="1"/>'),
     run: (s) => tableToGantt(s) },
+  { id: 'tasklist-to-wbs', titleKey: 'fmtTaskListToWbs', group: 'convert',
+    svg: ICON('<line x1="4" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="14" y1="18" x2="20" y2="18"/><line x1="4" y1="6" x2="4" y2="18"/><line x1="9" y1="12" x2="9" y2="18"/>'),
+    run: (s) => taskListToWbs(s) },
+  { id: 'add-column', titleKey: 'fmtAddColumn', group: 'convert',
+    svg: ICON('<rect x="3" y="5" width="8" height="14" rx="1"/><line x1="3" y1="10" x2="11" y2="10"/><line x1="17" y1="8" x2="17" y2="16"/><line x1="13" y1="12" x2="21" y2="12"/>'),
+    run: (s) => addTableColumn(s) },
+  { id: 'delete-column', titleKey: 'fmtDeleteColumn', group: 'convert',
+    svg: ICON('<rect x="3" y="5" width="8" height="14" rx="1"/><line x1="3" y1="10" x2="11" y2="10"/><line x1="13" y1="12" x2="21" y2="12"/>'),
+    run: (s) => deleteTableColumn(s) },
+  { id: 'cycle-align', titleKey: 'fmtCycleAlign', group: 'convert',
+    svg: ICON('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/>'),
+    run: (s) => cycleTableAlign(s) },
+  // 引数のある部品。ここは既定値で走る定義で、`/` から選んだときだけフォームが挟まる。
+  { id: 'wbs', titleKey: 'fmtWbs', group: 'block',
+    svg: ICON('<line x1="4" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><line x1="4" y1="6" x2="4" y2="18"/><line x1="4" y1="12" x2="9" y2="12"/><line x1="4" y1="18" x2="9" y2="18"/>'),
+    run: (s) => insertWbs(s, wbsOptions()) },
+  // 選択範囲に効く小さな変換。選択が無ければ行に効く。
+  { id: 'case', titleKey: 'fmtCase', group: 'text',
+    svg: ICON('<text x="2" y="17" font-size="13" font-family="serif">Aa</text><path d="M14 15l3-8 3 8"/><line x1="15" y1="12.5" x2="19" y2="12.5"/>'),
+    run: (s) => cycleCase(s) },
+  { id: 'sort-text', titleKey: 'fmtSortText', group: 'text',
+    svg: ICON('<line x1="4" y1="6" x2="12" y2="6"/><line x1="4" y1="12" x2="15" y2="12"/><line x1="4" y1="18" x2="18" y2="18"/><polyline points="19 5 19 19 17 17"/>'),
+    run: (s) => sortLines(s, 'text') },
+  { id: 'sort-number', titleKey: 'fmtSortNumber', group: 'text',
+    svg: ICON('<text x="2" y="10" font-size="8" font-family="monospace">1</text><text x="2" y="20" font-size="8" font-family="monospace">9</text><line x1="10" y1="7" x2="20" y2="7"/><line x1="10" y1="17" x2="20" y2="17"/>'),
+    run: (s) => sortLines(s, 'number') },
+  { id: 'sort-length', titleKey: 'fmtSortLength', group: 'text',
+    svg: ICON('<line x1="4" y1="6" x2="9" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>'),
+    run: (s) => sortLines(s, 'length') },
+  { id: 'join', titleKey: 'fmtJoin', group: 'text',
+    svg: ICON('<line x1="4" y1="12" x2="20" y2="12"/><polyline points="9 7 4 12 9 17"/><polyline points="15 7 20 12 15 17"/>'),
+    run: (s) => joinLines(s) },
+  { id: 'split', titleKey: 'fmtSplit', group: 'text',
+    svg: ICON('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/><polyline points="9 10 4 12 9 14"/><polyline points="15 10 20 12 15 14"/>'),
+    run: (s) => splitLines(s) },
+  { id: 'wrap', titleKey: 'fmtWrap', group: 'text',
+    svg: ICON('<line x1="4" y1="6" x2="20" y2="6"/><path d="M4 12h12a3 3 0 0 1 0 6h-5"/><polyline points="13 15 11 18 13 21"/>'),
+    run: (s) => wrapLines(s) },
+  { id: 'dedent', titleKey: 'fmtDedent', group: 'text',
+    svg: ICON('<line x1="10" y1="6" x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/><polyline points="7 9 4 12 7 15"/>'),
+    run: (s) => dedentLines(s) },
+  { id: 'decode', titleKey: 'fmtDecode', group: 'text',
+    svg: ICON('<text x="1" y="16" font-size="9" font-family="monospace">%</text><polyline points="12 9 15 12 12 15"/><text x="16" y="16" font-size="9" font-family="serif">A</text>'),
+    run: (s) => decodeText(s) },
 ];
 const FMT_BY_ID = new Map(FMT_ACTIONS.map((a) => [a.id, a]));
 const FMT_DEFAULT = ['heading', 'bold', 'italic', 'code', 'list', 'quote', 'link'];
 const groupLabel = (g: FmtAction['group']) =>
-  t(g === 'inline' ? 'groupInline' : g === 'convert' ? 'groupConvert' : 'groupBlock');
+  t(g === 'inline' ? 'groupInline' : g === 'convert' ? 'groupConvert'
+    : g === 'text' ? 'groupText' : 'groupBlock');
 
 // Which buttons the user has chosen to show, persisted across sessions and
 // always kept in registry order.
@@ -2570,6 +2632,20 @@ const SLASH_ITEMS: { id: string; alias: string[] }[] = [
   { id: 'hr', alias: ['hr', '区切り', 'line'] },
   { id: 'list-to-table', alias: ['表に', 'totable', '変換'] },
   { id: 'table-to-gantt', alias: ['gantt', 'ガント'] },
+  { id: 'tasklist-to-wbs', alias: ['wbs', '番号', '振り直し', 'number'] },
+  { id: 'add-column', alias: ['列', 'column', '追加', 'addcol'] },
+  { id: 'delete-column', alias: ['列削除', 'delcol', '削除'] },
+  { id: 'cycle-align', alias: ['整列', 'align', '寄せ'] },
+  { id: 'wbs', alias: ['wbs', '構成', 'ブレークダウン'] },
+  { id: 'case', alias: ['case', '大文字', '小文字', 'キャメル'] },
+  { id: 'sort-text', alias: ['sort', '並べ替え', '辞書順'] },
+  { id: 'sort-number', alias: ['数値順', 'sortnum'] },
+  { id: 'sort-length', alias: ['長さ順', 'sortlen'] },
+  { id: 'join', alias: ['join', '結合', '1行に'] },
+  { id: 'split', alias: ['split', '分割', '行に'] },
+  { id: 'wrap', alias: ['wrap', '折り返し'] },
+  { id: 'dedent', alias: ['dedent', '字下げ', 'インデント'] },
+  { id: 'decode', alias: ['decode', 'デコード', 'エンティティ', 'url'] },
 ];
 const SLASH_BY_ID = new Map(SLASH_ITEMS.map((i) => [i.id, i]));
 
@@ -2628,19 +2704,27 @@ function renderSlashMenu() {
 }
 
 /** Hang the menu off the caret, flipping above it when there is no room below. */
-function placeSlashMenu() {
+/**
+ * Put a floating panel just under the caret, flipping above it when there is no
+ * room below. The `/` menu and the forms that open from it share this — they
+ * are anchored to the same place, so they must be placed the same way.
+ * Returns false when there is no caret to anchor to.
+ */
+function placeAtCaret(el: HTMLElement): boolean {
   const c = editor.caretCoords();
-  if (!c) {
-    closeSlashMenu();
-    return;
-  }
-  slashMenu.hidden = false;
+  if (!c) return false;
+  el.hidden = false;
   const below = c.bottom + 4;
-  const top = below + slashMenu.offsetHeight > window.innerHeight - 8
-    ? Math.max(8, c.top - slashMenu.offsetHeight - 4)
+  const top = below + el.offsetHeight > window.innerHeight - 8
+    ? Math.max(8, c.top - el.offsetHeight - 4)
     : below;
-  slashMenu.style.left = `${Math.max(8, Math.min(c.left, window.innerWidth - slashMenu.offsetWidth - 8))}px`;
-  slashMenu.style.top = `${top}px`;
+  el.style.left = `${Math.max(8, Math.min(c.left, window.innerWidth - el.offsetWidth - 8))}px`;
+  el.style.top = `${top}px`;
+  return true;
+}
+
+function placeSlashMenu() {
+  if (!placeAtCaret(slashMenu)) closeSlashMenu();
 }
 
 function updateSlashMenu() {
@@ -2706,8 +2790,66 @@ function confirmSlash(id: string) {
   });
   closeSlashMenu();
   if (!ctx) return; // the caret moved out from under the menu
+  // Parts that take arguments open a form instead of inserting (spec §2). The
+  // typed `/query` goes now, so what is on screen is what will be inserted into.
+  if (FORM_PARTS.has(id)) {
+    const cleared = clearSlash(
+      { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd },
+      ctx.from
+    );
+    replaceEditorText(cleared.text, cleared.start, cleared.end);
+    openWbsForm();
+    return;
+  }
   applyFmt(id, (s) => clearSlash(s, ctx.from));
 }
+
+/** Parts whose `/` entry opens a form rather than inserting straight away. */
+const FORM_PARTS = new Set(['wbs']);
+
+// --- `/wbs` form (spec §2) ---
+
+const wbsForm = document.getElementById('wbs-form') as HTMLDivElement;
+const wbsDepth = document.getElementById('wbs-depth') as HTMLSelectElement;
+const wbsIds = document.getElementById('wbs-ids') as HTMLInputElement;
+const wbsStart = document.getElementById('wbs-start') as HTMLInputElement;
+const wbsTable = document.getElementById('wbs-table') as HTMLInputElement;
+const wbsGantt = document.getElementById('wbs-gantt') as HTMLInputElement;
+const wbsInsert = document.getElementById('wbs-insert') as HTMLButtonElement;
+
+function wbsOptions(): WbsOptions {
+  if (!wbsForm) return WBS_DEFAULTS;
+  return {
+    depth: Number(wbsDepth.value) || WBS_DEFAULTS.depth,
+    ids: wbsIds.checked,
+    start: wbsStart.value || null,
+    table: wbsTable.checked,
+    gantt: wbsGantt.checked,
+  };
+}
+
+function openWbsForm() {
+  wbsStart.value = new Date().toLocaleDateString('sv');   // YYYY-MM-DD, local
+  if (!placeAtCaret(wbsForm)) return;
+  wbsDepth.focus();
+}
+
+function closeWbsForm(refocus = true) {
+  if (wbsForm.hidden) return;
+  wbsForm.hidden = true;
+  if (refocus) editor.focus();
+}
+
+/** Enter inserts from anywhere in the form; Escape leaves the text alone. */
+wbsForm.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeWbsForm(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); closeWbsForm(); applyFmt('wbs'); }
+});
+wbsInsert.addEventListener('click', () => { closeWbsForm(); applyFmt('wbs'); });
+wbsForm.addEventListener('focusout', () => {
+  // Leaving the form entirely (not moving between its own controls) closes it.
+  setTimeout(() => { if (!wbsForm.contains(document.activeElement)) closeWbsForm(false); }, 0);
+});
 
 slashMenu.addEventListener('mousedown', (e) => {
   const btn = (e.target as HTMLElement).closest('button');

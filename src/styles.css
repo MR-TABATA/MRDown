@@ -186,6 +186,21 @@ button:disabled { opacity: 0.3; cursor: default; }
   overflow-y: auto;
 }
 .slash-item[aria-selected='true'] { background: var(--mrd-surface-3); }
+/* `/wbs` などのフォーム。メニューと同じ器に乗せ、行を縦に積むだけ。 */
+.wbs-form {
+  position: fixed;
+  top: auto;
+  right: auto;
+  min-width: 240px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.wbs-form label { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.wbs-form label:has(input[type='checkbox']) { justify-content: flex-start; }
+.wbs-form button { align-self: flex-end; margin-top: 2px; }
 .slash-empty {
   padding: 7px 10px;
   color: var(--mrd-faint);
