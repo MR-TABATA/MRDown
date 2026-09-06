@@ -169,6 +169,16 @@
              the same registry the format bar uses (slashMenu in src/main.ts),
              and it is placed against the caret, not this element's parent. -->
         <div id="slash-menu" class="popup-menu slash-menu" role="menu" hidden></div>
+        <!-- 引数のある部品だけが開く小さなフォーム（spec §2）。ダイアログにしない
+             ── Enter だけで抜けられ、既定値のまま使えることが条件。 -->
+        <div id="wbs-form" class="popup-menu wbs-form" hidden>
+          <label>階層の深さ <select id="wbs-depth"><option>1</option><option selected>2</option><option>3</option></select></label>
+          <label><input type="checkbox" id="wbs-ids" checked> ID を振る</label>
+          <label>開始日 <input type="date" id="wbs-start"></label>
+          <label><input type="checkbox" id="wbs-table"> 辞書（表）も作る</label>
+          <label><input type="checkbox" id="wbs-gantt"> gantt も作る</label>
+          <button id="wbs-insert" type="button">挿入</button>
+        </div>
         <!-- Offered over an untitled document that is still empty, and gone the
              moment anything is typed — so ⌘N stays instant for a blank page
              while the templates are still impossible to miss. -->

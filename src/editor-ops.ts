@@ -3,7 +3,7 @@
 // and returns a `Sel` (the textarea value plus selection range) so the caller
 // only has to push the result back into the element.
 
-import { findTables } from './table';
+import { findTables, type Align, type TableBlock } from './table';
 
 export interface Sel {
   text: string;
@@ -390,6 +390,422 @@ export function listToTable(s: Sel): Sel | null {
   );
 
   return { text: s.text.slice(0, from) + table + s.text.slice(to), start: from, end: from + table.length };
+}
+
+// ── 選択範囲に効く小さな変換 ────────────────────────────────────────
+//
+// どれも「その場で・手動で・ローカルに」効く。選択が無いときは行に効く ──
+// 何も選ばずに押しても無反応、が一番いらつくため。
+
+/** The span these work on: the selection, or the caret's own line when there is none. */
+function scope(s: Sel): [number, number] {
+  return s.start !== s.end ? [s.start, s.end] : lineSpan(s);
+}
+
+/** Replace `[from,to)` and keep the result selected, so the next press stacks on it. */
+function put(s: Sel, from: number, to: number, body: string): Sel {
+  return { text: s.text.slice(0, from) + body + s.text.slice(to), start: from, end: from + body.length };
+}
+
+/** Break an identifier into its words, whatever style it is written in. */
+function words(text: string): string[] {
+  return text
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((w) => w.toLowerCase());
+}
+
+type CaseName = 'camel' | 'snake' | 'kebab' | 'constant' | 'title';
+const CASE_CYCLE: CaseName[] = ['camel', 'snake', 'kebab', 'constant', 'title'];
+
+const CASE_WRITE: Record<CaseName, (w: string[]) => string> = {
+  camel: (w) => w.map((x, i) => (i === 0 ? x : x[0].toUpperCase() + x.slice(1))).join(''),
+  snake: (w) => w.join('_'),
+  kebab: (w) => w.join('-'),
+  constant: (w) => w.join('_').toUpperCase(),
+  title: (w) => w.map((x) => x[0].toUpperCase() + x.slice(1)).join(' '),
+};
+
+function caseOf(text: string): CaseName | null {
+  if (/^[A-Z0-9]+(_[A-Z0-9]+)*$/.test(text)) return 'constant';
+  if (/^[a-z0-9]+(_[a-z0-9]+)+$/.test(text)) return 'snake';
+  if (/^[a-z0-9]+(-[a-z0-9]+)+$/.test(text)) return 'kebab';
+  if (/^[a-z][a-zA-Z0-9]*$/.test(text) && /[A-Z]/.test(text)) return 'camel';
+  if (/^[A-Z][a-z0-9]*( [A-Z][a-z0-9]*)+$/.test(text)) return 'title';
+  return null;
+}
+
+/**
+ * Cycle the selection's naming style: camel → snake → kebab → CONSTANT → Title.
+ * Nothing is asked, because every stop is one more press away — a menu of five
+ * costs more than pressing again. An unrecognised shape starts at camelCase.
+ */
+export function cycleCase(s: Sel): Sel | null {
+  const [from, to] = scope(s);
+  const text = s.text.slice(from, to).trim();
+  if (!text || /\s{2,}|\n/.test(text)) return null;   // 語ひとつ（か短い句）にだけ効かせる
+  const w = words(text);
+  if (w.length === 0) return null;
+  const now = caseOf(text);
+  const next = CASE_CYCLE[(now === null ? -1 : CASE_CYCLE.indexOf(now)) + 1] ?? CASE_CYCLE[0];
+  return put(s, from, to, CASE_WRITE[next](w));
+}
+
+export type SortMode = 'text' | 'number' | 'length';
+
+/**
+ * Sort the selected lines. Three orders rather than one that cycles: a sort
+ * throws the previous order away, so pressing again cannot walk back.
+ * List markers (`- `, `1. `) stay put; what is compared is the text after them.
+ */
+export function sortLines(s: Sel, mode: SortMode): Sel | null {
+  const [from, to] = scope(s);
+  const lines = s.text.slice(from, to).split('\n');
+  if (lines.length < 2) return null;
+  const key = (l: string) => l.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '');
+  const num = (l: string) => {
+    const m = /-?\d+(?:\.\d+)?/.exec(key(l));
+    return m ? Number(m[0]) : Number.POSITIVE_INFINITY;   // 数の無い行は末尾へ
+  };
+  const cmp = {
+    text: (a: string, b: string) => key(a).localeCompare(key(b), 'ja'),
+    number: (a: string, b: string) => num(a) - num(b),
+    length: (a: string, b: string) => key(a).length - key(b).length,
+  }[mode];
+  return put(s, from, to, [...lines].sort(cmp).join('\n'));
+}
+
+/** Join the selected lines into one. List markers are dropped; cells are kept. */
+export function joinLines(s: Sel, sep = '、'): Sel | null {
+  const [from, to] = scope(s);
+  const lines = s.text.slice(from, to).split('\n').map((l) => l.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '').trim());
+  const kept = lines.filter(Boolean);
+  if (kept.length < 2) return null;
+  return put(s, from, to, kept.join(sep));
+}
+
+/**
+ * The reverse: one line back into several. Splits on commas (either width) when
+ * there are any, and on whitespace otherwise — the two ways a list gets flattened.
+ */
+export function splitLines(s: Sel, marker = '- '): Sel | null {
+  const [from, to] = scope(s);
+  const text = s.text.slice(from, to).trim();
+  if (!text || text.includes('\n')) return null;
+  const parts = /[,、，]/.test(text) ? text.split(/\s*[,、，]\s*/) : text.split(/\s+/);
+  const kept = parts.filter(Boolean);
+  if (kept.length < 2) return null;
+  return put(s, from, to, kept.map((p) => marker + p).join('\n'));
+}
+
+/** Wrap at `width` columns, keeping each paragraph's own indent. */
+export function wrapLines(s: Sel, width = 80): Sel | null {
+  const [from, to] = scope(s);
+  const src = s.text.slice(from, to);
+  if (!src.trim()) return null;
+  const out = src.split('\n').flatMap((line) => {
+    const indent = /^\s*/.exec(line)![0];
+    const body = line.slice(indent.length);
+    if (indent.length + body.length <= width || !body) return [line];
+    const parts: string[] = [];
+    let cur = '';
+    for (const w of body.split(/\s+/)) {
+      if (cur && indent.length + cur.length + 1 + w.length > width) { parts.push(indent + cur); cur = w; }
+      else cur = cur ? `${cur} ${w}` : w;
+    }
+    if (cur) parts.push(indent + cur);
+    return parts;
+  });
+  return put(s, from, to, out.join('\n'));
+}
+
+/** Strip the indent every selected line shares, so a pasted block starts at column 1. */
+export function dedentLines(s: Sel): Sel | null {
+  const [from, to] = scope(s);
+  const lines = s.text.slice(from, to).split('\n');
+  const indents = lines.filter((l) => l.trim()).map((l) => /^[ \t]*/.exec(l)![0].replace(/\t/g, '    ').length);
+  if (indents.length === 0) return null;
+  const common = Math.min(...indents);
+  if (common === 0) return null;
+  const out = lines.map((l) => {
+    const lead = /^[ \t]*/.exec(l)![0].replace(/\t/g, '    ');
+    return lead.slice(common) + l.slice(/^[ \t]*/.exec(l)![0].length);
+  });
+  return put(s, from, to, out.join('\n'));
+}
+
+const ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', hellip: '…', mdash: '—', ndash: '–',
+};
+
+/**
+ * Turn `&amp;` and `%20` back into what they stand for — the two ways text
+ * arrives mangled from a browser. Percent-decoding is attempted per run, so one
+ * bad sequence does not throw the rest away.
+ */
+export function decodeText(s: Sel): Sel | null {
+  const [from, to] = scope(s);
+  const src = s.text.slice(from, to);
+  if (!src) return null;
+  let out = src.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, body: string) => {
+    if (body[0] === '#') {
+      const n = body[1] === 'x' || body[1] === 'X' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : m;
+    }
+    return ENTITIES[body.toLowerCase()] ?? m;
+  });
+  out = out.replace(/(?:%[0-9a-fA-F]{2})+/g, (m) => {
+    try { return decodeURIComponent(m); } catch { return m; }
+  });
+  return out === src ? null : put(s, from, to, out);
+}
+
+// ── `/wbs`（spec §2 フォームのある部品）───────────────────────────────
+//
+// **既定値だけで使い物になること**が条件。フォームは Enter だけで抜けられ、
+// 何も触らなければ「深さ 2・ID あり・今日から」の骨組みが出る。
+// 骨組みであって雛形ではない ── 中身の散文は書かない（テンプレートと同じ線）。
+
+export interface WbsOptions {
+  /** 階層の深さ 1〜3。各段に 2 項目ずつ置く。 */
+  depth: number;
+  /** `1` / `1.1` を振るか。切ると素の箇条書きになる。 */
+  ids: boolean;
+  /** 開始日（`YYYY-MM-DD`）。表と gantt の起点。null なら日付を入れない。 */
+  start: string | null;
+  /** 辞書（表）も一緒に作る。列は `tableToGantt` が読める名前で出す。 */
+  table: boolean;
+  /** mermaid gantt の骨組みも一緒に作る。 */
+  gantt: boolean;
+}
+
+export const WBS_DEFAULTS: WbsOptions = {
+  depth: 2, ids: true, start: null, table: false, gantt: false,
+};
+
+/** `1`, `1.1`, `1.2`, `2`, … を深さぶん。各段 2 項目。 */
+function wbsIds(depth: number): { id: string; level: number }[] {
+  const out: { id: string; level: number }[] = [];
+  const walk = (prefix: number[], level: number) => {
+    for (let i = 1; i <= 2; i++) {
+      const path = [...prefix, i];
+      out.push({ id: path.join('.'), level });
+      if (level < depth) walk(path, level + 1);
+    }
+  };
+  walk([], 1);
+  return out;
+}
+
+/**
+ * Insert a WBS skeleton at the caret, with the companions the form asked for.
+ * The caret lands at the end of the first item, so typing starts the work.
+ */
+export function insertWbs(s: Sel, o: WbsOptions): Sel {
+  const nodes = wbsIds(Math.max(1, Math.min(3, o.depth)));
+  const list = nodes.map(
+    (n) => `${'  '.repeat(n.level - 1)}- [ ] ${o.ids ? `${n.id} ` : ''}`
+  );
+
+  const blocks = [list.join('\n')];
+
+  if (o.table) {
+    const head = o.ids ? ['ID', 'タスク', '担当', '開始', '終了'] : ['タスク', '担当', '開始', '終了'];
+    const row = (n: { id: string }, first: boolean) => {
+      const cells = o.ids ? [n.id, '', '', first ? (o.start ?? '') : '', ''] : ['', '', first ? (o.start ?? '') : '', ''];
+      return `| ${cells.join(' | ')} |`;
+    };
+    blocks.push(
+      [`| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`,
+       ...nodes.map((n, i) => row(n, i === 0))].join('\n')
+    );
+  }
+
+  if (o.gantt) {
+    const tops = nodes.filter((n) => n.level === 1);
+    blocks.push(
+      ['```mermaid', 'gantt', '    dateFormat YYYY-MM-DD',
+       ...tops.flatMap((n) => [
+         `    section ${o.ids ? n.id : 'section'}`,
+         `    task :${o.start ?? '2026-01-01'}, 3d`,
+       ]),
+       '```'].join('\n')
+    );
+  }
+
+  const body = blocks.join('\n\n');
+  const [from, to] = lineSpan(s);
+  const blank = s.text.slice(from, to).trim() === '';
+  const head = s.text.slice(0, blank ? from : to);
+  const lead = blank ? '' : '\n';
+  const text = head + lead + body + s.text.slice(blank ? to : to);
+  // End of the first item — where the typing starts.
+  const caret = head.length + lead.length + list[0].length;
+  return { text, start: caret, end: caret };
+}
+
+// ── 表の列を編集する（spec §3「列の追加/削除・整列」）───────────────────
+//
+// 三つとも引数を取らない。**どの列かはカーソルが決める**ので、ポップオーバーが
+// 要らない（引数が要る部品だけポップオーバー、という線を跨がない）。整列は開くたび
+// 選ばせるのではなく押すたび回す ── 押し直せるものは、訊くより回すほうが速い。
+
+/** The delimiter cell for an alignment, as GFM writes it. */
+const DELIM: Record<string, string> = {
+  null: '---',
+  left: ':---',
+  center: ':---:',
+  right: '---:',
+};
+
+/** Rebuild a table block from its parts. Widths are not padded: the preview does that. */
+function renderTable(header: string[], align: Align[], rows: string[][]): string {
+  const n = header.length;
+  const line = (cells: string[]) =>
+    `| ${Array.from({ length: n }, (_, i) => cells[i] ?? '').join(' | ')} |`;
+  const delim = `| ${Array.from({ length: n }, (_, i) => DELIM[String(align[i] ?? null)]).join(' | ')} |`;
+  return [line(header), delim, ...rows.map(line)].join('\n');
+}
+
+/**
+ * Which column the caret is in, by counting the pipes to its left on its own
+ * line. Counting beats looking the cell up: it also answers on the `---` row and
+ * in the padding between cells, where there is no cell to be inside of.
+ */
+function caretColumn(text: string, pos: number): number {
+  const lineStart = text.lastIndexOf('\n', Math.max(0, pos - 1)) + 1;
+  const lead = /^\s*\|/.test(text.slice(lineStart)) ? 1 : 0;
+  const pipes = (text.slice(lineStart, pos).match(/(?<!\\)\|/g) ?? []).length;
+  return Math.max(0, pipes - lead);
+}
+
+/** The table the caret sits in, plus that column — or null when it sits in none. */
+function tableAt(s: Sel): { table: TableBlock; col: number } | null {
+  const [from, to] = blockSpan(s);
+  const table = findTables(s.text).find((t) => t.from <= to && t.to >= from);
+  if (!table) return null;
+  const n = table.header.length;
+  return { table, col: Math.min(caretColumn(s.text, s.start), n - 1) };
+}
+
+/** Replace the table block and leave the caret in the same column's header cell. */
+function putTable(s: Sel, table: TableBlock, text: string, col: number): Sel {
+  const head = text.split('\n')[0];
+  let seen = 0;
+  let caret = table.from;
+  for (let i = 0; i < head.length; i++) {
+    if (head[i] !== '|') continue;
+    seen += 1;
+    if (seen === col + 1) { caret = table.from + i + 2; break; }
+  }
+  return { text: s.text.slice(0, table.from) + text + s.text.slice(table.to), start: caret, end: caret };
+}
+
+/** Add an empty column after the caret's own. */
+export function addTableColumn(s: Sel): Sel | null {
+  const found = tableAt(s);
+  if (!found) return null;
+  const { table, col } = found;
+  const at = col + 1;
+  const ins = <T,>(arr: T[], v: T) => [...arr.slice(0, at), v, ...arr.slice(at)];
+  const text = renderTable(
+    ins(table.header.map((c) => c.text), ''),
+    ins(table.align, null),
+    table.rows.map((r) => ins(r.map((c) => c.text), ''))
+  );
+  return putTable(s, table, text, at);
+}
+
+/**
+ * Delete the caret's column. Refuses on a one-column table — a table with no
+ * columns is not a table, and there is no undo inside a pure transform.
+ */
+export function deleteTableColumn(s: Sel): Sel | null {
+  const found = tableAt(s);
+  if (!found) return null;
+  const { table, col } = found;
+  if (table.header.length <= 1) return null;
+  const del = <T,>(arr: T[]) => arr.filter((_, i) => i !== col);
+  const text = renderTable(
+    del(table.header.map((c) => c.text)),
+    del(table.align),
+    table.rows.map((r) => del(r.map((c) => c.text)))
+  );
+  return putTable(s, table, text, Math.min(col, table.header.length - 2));
+}
+
+const ALIGN_CYCLE: Align[] = [null, 'left', 'center', 'right'];
+
+/** Cycle the caret column's alignment: none → left → center → right → none. */
+export function cycleTableAlign(s: Sel): Sel | null {
+  const found = tableAt(s);
+  if (!found) return null;
+  const { table, col } = found;
+  const align = [...table.align];
+  const now = ALIGN_CYCLE.indexOf(align[col] ?? null);
+  align[col] = ALIGN_CYCLE[(now + 1) % ALIGN_CYCLE.length];
+  const text = renderTable(
+    table.header.map((c) => c.text),
+    align,
+    table.rows.map((r) => r.map((c) => c.text))
+  );
+  return putTable(s, table, text, col);
+}
+
+/**
+ * An ID already sitting at the head of an item (`1.`, `1.2`, `2.3.1)`). Stripped
+ * before renumbering, so running the conversion twice renumbers instead of
+ * stacking `1. 1. 1.` — that is what "ID の振り直し" means (spec §3).
+ */
+const WBS_ID = /^\d+(?:\.\d+)*[.)]?\s+/;
+
+/**
+ * A list block → a WBS: the same lines, renumbered `1`, `1.1`, `1.2`, `2`, …
+ *
+ * The counterpart of `listToTable`, which flattens. **This one keeps the
+ * hierarchy** — the nesting is the work breakdown, so it is the whole point
+ * here — and reads the depth from the indent rather than guessing.
+ * Checkboxes are carried through unchanged: renumbering is not a state change.
+ *
+ * Re-running it is safe and is the normal way to use it: delete an item, run it
+ * again, and the gaps close (spec §3 "番号詰め直し"). The bullet marker is
+ * normalised to `-`, because `1. 1.1 …` reads as two competing numbers.
+ *
+ * Returns null when the block isn't a list, so the caller can leave the text alone.
+ */
+export function taskListToWbs(s: Sel): Sel | null {
+  const [from, to] = blockSpan(s);
+  const lines = s.text.slice(from, to).split('\n');
+  const items = lines.map((l) => LIST_ITEM.exec(l));
+  if (items.length === 0 || items.some((m) => m === null)) return null;
+
+  // One counter per depth. `widths` holds the indent that opened each depth, so
+  // an outdent pops back to the level it belongs to rather than to the parent.
+  const counters: number[] = [];
+  const widths: number[] = [];
+
+  const out = lines.map((line, i) => {
+    const indent = /^[ \t]*/.exec(line)![0];
+    const width = indent.replace(/\t/g, '    ').length;
+    while (widths.length > 0 && width < widths[widths.length - 1]) {
+      widths.pop();
+      counters.pop();
+    }
+    if (widths.length === 0 || width > widths[widths.length - 1]) {
+      widths.push(width);
+      counters.push(0);
+    }
+    counters[counters.length - 1] += 1;
+
+    const body = items[i]![1];
+    const task = TASK_MARK.exec(body);
+    const rest = (task ? body.slice(task[0].length) : body).replace(WBS_ID, '');
+    return `${indent}- ${task ? `[${task[1]}] ` : ''}${counters.join('.')} ${rest}`;
+  });
+
+  const wbs = out.join('\n');
+  return { text: s.text.slice(0, from) + wbs + s.text.slice(to), start: from, end: from + wbs.length };
 }
 
 // Which column is which, by what the header says. Both languages, because these
