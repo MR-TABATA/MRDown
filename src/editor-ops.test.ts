@@ -19,6 +19,7 @@ import {
   addTableColumn,
   deleteTableColumn,
   cycleTableAlign,
+  alignTableColumns,
   insertWbs,
   WBS_DEFAULTS,
   cycleCase,
@@ -448,6 +449,43 @@ describe('table columns', () => {
     const ragged = '| A | B |\n| --- | --- |\n| 1 |';
     expect(addTableColumn(on(ragged, 'A'))!.text)
       .toBe('| A |  | B |\n| --- | --- | --- |\n| 1 |  |  |');
+  });
+});
+
+describe('aligning table columns', () => {
+  it('pads every cell so the pipes line up', () => {
+    const ragged = '| A | Bee |\n| --- | --- |\n| 1 | 2 |';
+    expect(alignTableColumns(on(ragged, 'A'))!.text)
+      .toBe('| A   | Bee |\n| --- | --- |\n| 1   | 2   |');
+  });
+  it('right-aligns padding for a right-aligned column', () => {
+    const t = '| A | N |\n| --- | ---: |\n| 1 | 22 |';
+    expect(alignTableColumns(on(t, 'A'))!.text)
+      .toBe('| A   |    N |\n| --- | ---: |\n| 1   |   22 |');
+  });
+  it('centers padding for a centered column, keeping colons at both ends', () => {
+    const t = '| A | Name |\n| --- | :---: |\n| 1 | x |';
+    expect(alignTableColumns(on(t, 'A'))!.text)
+      .toBe('| A   | Name  |\n| --- | :---: |\n| 1   |   x   |');
+  });
+  it('stretches the delimiter dashes, keeping a left colon in place', () => {
+    const t = '| Name | B |\n| :--- | --- |\n| x | 1 |';
+    expect(alignTableColumns(on(t, 'Name'))!.text)
+      .toBe('| Name | B   |\n| :--- | --- |\n| x    | 1   |');
+  });
+  it('is idempotent — aligning an already-aligned table changes nothing', () => {
+    const ragged = '| A | Bee |\n| --- | --- |\n| 1 | 2 |';
+    const once = alignTableColumns(on(ragged, 'A'))!;
+    const twice = alignTableColumns({ text: once.text, start: once.start, end: once.start })!;
+    expect(twice.text).toBe(once.text);
+  });
+  it('leaves the caret in the same column', () => {
+    const ragged = '| A | Bee |\n| --- | --- |\n| 1 | 2 |';
+    const r = alignTableColumns(on(ragged, 'Bee'))!;
+    expect(r.text.split('\n')[0]).toContain('Bee');
+  });
+  it('returns null outside a table', () => {
+    expect(alignTableColumns(at('just a paragraph|'))).toBeNull();
   });
 });
 

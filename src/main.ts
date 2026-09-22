@@ -68,6 +68,7 @@ import {
   addTableColumn,
   deleteTableColumn,
   cycleTableAlign,
+  alignTableColumns,
   insertWbs,
   WBS_DEFAULTS,
   cycleCase,
@@ -2510,7 +2511,7 @@ interface FmtAction {
   titleKey: 'fmtBold' | 'fmtItalic' | 'fmtStrike' | 'fmtCode' | 'fmtLink' | 'fmtImage'
     | 'fmtHeading' | 'fmtList' | 'fmtOrdered' | 'fmtChecklist' | 'fmtQuote'
     | 'fmtCodeblock' | 'fmtTable' | 'fmtHr' | 'fmtListToTable' | 'fmtTableToGantt'
-    | 'fmtTaskListToWbs' | 'fmtAddColumn' | 'fmtDeleteColumn' | 'fmtCycleAlign'
+    | 'fmtTaskListToWbs' | 'fmtAddColumn' | 'fmtDeleteColumn' | 'fmtCycleAlign' | 'fmtAlignColumns'
     | 'fmtWbs' | 'fmtCase' | 'fmtSortText' | 'fmtSortNumber' | 'fmtSortLength'
     | 'fmtJoin' | 'fmtSplit' | 'fmtWrap' | 'fmtDedent' | 'fmtDecode';
   group: 'inline' | 'block' | 'convert' | 'text';
@@ -2586,6 +2587,9 @@ const FMT_ACTIONS: FmtAction[] = [
   { id: 'cycle-align', titleKey: 'fmtCycleAlign', group: 'convert',
     svg: ICON('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/>'),
     run: (s) => cycleTableAlign(s) },
+  { id: 'align-columns', titleKey: 'fmtAlignColumns', group: 'convert',
+    svg: ICON('<line x1="3" y1="6" x2="9" y2="6"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/><line x1="15" y1="6" x2="21" y2="6"/><line x1="15" y1="12" x2="21" y2="12"/><line x1="15" y1="18" x2="21" y2="18"/>'),
+    run: (s) => alignTableColumns(s) },
   // 引数のある部品。ここは既定値で走る定義で、`/` から選んだときだけフォームが挟まる。
   { id: 'wbs', titleKey: 'fmtWbs', group: 'block',
     svg: ICON('<line x1="4" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><line x1="4" y1="6" x2="4" y2="18"/><line x1="4" y1="12" x2="9" y2="12"/><line x1="4" y1="18" x2="9" y2="18"/>'),
@@ -2641,11 +2645,20 @@ function enabledIds(): string[] {
   return FMT_DEFAULT;
 }
 
+// The table icon's own actions live in a dropdown beside it, rather than each
+// needing its own permanent toolbar slot — they only ever do anything while
+// the caret sits inside a table, so most of the time they'd just be dead
+// buttons taking up space.
+const TABLE_MENU_IDS = ['add-column', 'delete-column', 'cycle-align', 'align-columns'];
+const TABLE_MENU_ID_SET = new Set(TABLE_MENU_IDS);
+
 function renderFormatBar() {
   const enabled = new Set(enabledIds());
   formatBar.innerHTML = '';
   let prevGroup: string | null = null;
   for (const a of FMT_ACTIONS) {
+    // The table dropdown covers these now — no standalone toolbar slot.
+    if (TABLE_MENU_ID_SET.has(a.id)) continue;
     if (!enabled.has(a.id)) continue;
     if (prevGroup && a.group !== prevGroup) {
       const sep = document.createElement('span');
@@ -2653,6 +2666,10 @@ function renderFormatBar() {
       formatBar.appendChild(sep);
     }
     prevGroup = a.group;
+    if (a.id === 'table') {
+      formatBar.appendChild(buildTableFmtGroup(a));
+      continue;
+    }
     const btn = document.createElement('button');
     btn.dataset.fmt = a.id;
     const key = a.id === 'bold' ? ' (⌘B)' : a.id === 'italic' ? ' (⌘I)' : '';
@@ -2660,6 +2677,73 @@ function renderFormatBar() {
     btn.innerHTML = a.svg;
     formatBar.appendChild(btn);
   }
+}
+
+const TABLE_CARET_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+
+/** The table icon (inserts a table) plus a caret that drops its column actions. */
+function buildTableFmtGroup(tableAction: FmtAction): HTMLElement {
+  const wrap = document.createElement('span');
+  wrap.className = 'table-fmt-wrap';
+
+  const btn = document.createElement('button');
+  btn.dataset.fmt = tableAction.id;
+  btn.title = t(tableAction.titleKey);
+  btn.innerHTML = tableAction.svg;
+  wrap.appendChild(btn);
+
+  const caret = document.createElement('button');
+  caret.type = 'button';
+  caret.className = 'format-caret';
+  caret.title = t('fmtTableMore');
+  caret.setAttribute('aria-haspopup', 'menu');
+  caret.setAttribute('aria-expanded', 'false');
+  caret.innerHTML = TABLE_CARET_ICON;
+  wrap.appendChild(caret);
+
+  const menu = document.createElement('div');
+  menu.className = 'popup-menu table-fmt-menu';
+  menu.setAttribute('role', 'menu');
+  menu.hidden = true;
+  wrap.appendChild(menu);
+
+  return wrap;
+}
+
+function closeTableMenu() {
+  const wrap = formatBar.querySelector<HTMLElement>('.table-fmt-wrap');
+  const menu = wrap?.querySelector<HTMLElement>('.table-fmt-menu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  wrap?.querySelector('.format-caret')?.setAttribute('aria-expanded', 'false');
+}
+
+/** Fill and reveal the table menu with whichever of its actions apply right now. */
+function openTableMenu(caret: HTMLElement) {
+  const wrap = caret.closest('.table-fmt-wrap') as HTMLElement;
+  const menu = wrap.querySelector<HTMLElement>('.table-fmt-menu')!;
+  const probe: Sel = { text: editor.value, start: editor.selectionStart, end: editor.selectionEnd };
+  const items = TABLE_MENU_IDS.map((id) => FMT_BY_ID.get(id))
+    .filter((a): a is FmtAction => !!a && a.run(probe) !== null);
+  menu.innerHTML = '';
+  if (items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'slash-empty';
+    empty.textContent = t('fmtTableMenuEmpty');
+    menu.appendChild(empty);
+  } else {
+    for (const a of items) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'popup-item';
+      item.dataset.fmt = a.id;
+      item.textContent = t(a.titleKey);
+      menu.appendChild(item);
+    }
+  }
+  menu.hidden = false;
+  caret.setAttribute('aria-expanded', 'true');
 }
 
 // Apply a Markdown formatting action to the editor's current selection, then
@@ -2685,9 +2769,23 @@ function applyFmt(id: string, prepare?: (s: Sel) => Sel) {
 }
 
 formatBar.addEventListener('click', (e) => {
-  const btn = (e.target as HTMLElement).closest('button');
+  const target = e.target as HTMLElement;
+  const caret = target.closest('.format-caret') as HTMLElement | null;
+  if (caret) {
+    e.stopPropagation();
+    if (caret.getAttribute('aria-expanded') === 'true') closeTableMenu();
+    else openTableMenu(caret);
+    return;
+  }
+  const btn = target.closest('button');
   const kind = btn?.dataset.fmt;
-  if (kind) applyFmt(kind);
+  if (!kind) return;
+  if (btn.closest('.table-fmt-menu')) closeTableMenu();
+  applyFmt(kind);
+});
+// Any click outside the table dropdown dismisses it, same as the search menu.
+document.addEventListener('click', (e) => {
+  if (!(e.target as HTMLElement).closest('.table-fmt-wrap')) closeTableMenu();
 });
 
 // --- The `/` insert menu ----------------------------------------------------
@@ -2710,6 +2808,7 @@ const SLASH_ITEMS: { id: string; alias: string[] }[] = [
   { id: 'add-column', alias: ['列', 'column', '追加', 'addcol'] },
   { id: 'delete-column', alias: ['列削除', 'delcol', '削除'] },
   { id: 'cycle-align', alias: ['整列', 'align', '寄せ'] },
+  { id: 'align-columns', alias: ['そろえる', 'パイプ', 'align', 'format'] },
   { id: 'wbs', alias: ['wbs', '構成', 'ブレークダウン'] },
   { id: 'case', alias: ['case', '大文字', '小文字', 'キャメル'] },
   { id: 'sort-text', alias: ['sort', '並べ替え', '辞書順'] },
@@ -2940,6 +3039,8 @@ function buildToolbarOptions() {
   toolbarOptions.innerHTML = '';
   let prevGroup: string | null = null;
   for (const a of FMT_ACTIONS) {
+    // Reachable only from the table dropdown now — nothing to toggle here.
+    if (TABLE_MENU_ID_SET.has(a.id)) continue;
     if (a.group !== prevGroup) {
       const head = document.createElement('div');
       head.className = 'opt-group-title';
@@ -4974,6 +5075,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !searchMenu.hidden) {
     closeSearchMenu();
     searchBtn.focus();
+    return;
+  }
+  if (e.key === 'Escape' && formatBar.querySelector('.table-fmt-menu:not([hidden])')) {
+    closeTableMenu();
     return;
   }
   if (e.key === 'Escape' && !settingsOverlay.hidden) {

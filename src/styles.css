@@ -679,6 +679,22 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 }
 #format-bar button:hover:not(:disabled) { background: var(--mrd-surface-3); color: var(--mrd-text); }
 #format-bar button svg { width: 15px; height: 15px; display: block; }
+/* The table icon's dropdown of column actions (add/delete/align). */
+.table-fmt-wrap { position: relative; display: inline-flex; align-items: center; }
+.table-fmt-wrap .format-caret { padding: 5px 2px; }
+.table-fmt-wrap .format-caret svg { width: 11px; height: 11px; }
+#format-bar .table-fmt-menu.popup-menu { left: 0; right: auto; }
+#format-bar .table-fmt-menu .popup-item {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--mrd-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+}
+#format-bar .table-fmt-menu .popup-item:hover { background: var(--mrd-surface-3); }
+#format-bar .table-fmt-menu .slash-empty { padding: 7px 10px; white-space: normal; }
 #format-bar .format-sep {
   width: 1px;
   height: 16px;

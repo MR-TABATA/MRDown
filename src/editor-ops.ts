@@ -753,6 +753,51 @@ export function cycleTableAlign(s: Sel): Sel | null {
   return putTable(s, table, text, col);
 }
 
+/** Pad `text` to `width` inside its column, per the column's declared alignment. */
+function padCell(text: string, width: number, align: Align): string {
+  const gap = width - text.length;
+  if (gap <= 0) return text;
+  if (align === 'right') return ' '.repeat(gap) + text;
+  if (align === 'center') {
+    const left = Math.floor(gap / 2);
+    return ' '.repeat(left) + text + ' '.repeat(gap - left);
+  }
+  return text + ' '.repeat(gap);
+}
+
+/** The delimiter cell for `align`, stretched to `width` — colons stay put, only the dash run grows. */
+function padDelim(align: Align, width: number): string {
+  const colons = align === 'center' ? 2 : align ? 1 : 0;
+  const dashes = '-'.repeat(width - colons);
+  if (align === 'center') return `:${dashes}:`;
+  if (align === 'left') return `:${dashes}`;
+  if (align === 'right') return `${dashes}:`;
+  return dashes;
+}
+
+/**
+ * Pad every cell of the caret's table so its pipes line up in the raw source.
+ * `renderTable()` above deliberately skips this — the preview doesn't need it
+ * — but a human reading or diffing the source does, and a stable column width
+ * is what a future required-column check would read off of.
+ */
+export function alignTableColumns(s: Sel): Sel | null {
+  const found = tableAt(s);
+  if (!found) return null;
+  const { table, col } = found;
+  const header = table.header.map((c) => c.text);
+  const rows = table.rows.map((r) => r.map((c) => c.text));
+  const n = header.length;
+  const widths = Array.from({ length: n }, (_, i) =>
+    Math.max(header[i]?.length ?? 0, DELIM[String(table.align[i] ?? null)].length, ...rows.map((r) => r[i]?.length ?? 0))
+  );
+  const line = (cells: string[]) =>
+    `| ${Array.from({ length: n }, (_, i) => padCell(cells[i] ?? '', widths[i], table.align[i] ?? null)).join(' | ')} |`;
+  const delim = `| ${Array.from({ length: n }, (_, i) => padDelim(table.align[i] ?? null, widths[i])).join(' | ')} |`;
+  const text = [line(header), delim, ...rows.map(line)].join('\n');
+  return putTable(s, table, text, col);
+}
+
 /**
  * An ID already sitting at the head of an item (`1.`, `1.2`, `2.3.1)`). Stripped
  * before renumbering, so running the conversion twice renumbers instead of
