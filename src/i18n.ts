@@ -82,6 +82,7 @@ const DICT = {
     // sidebar
     sidebarHeader: '開いている文書',
     folderOpen: 'フォルダを開く',
+    folderTreeCopy: 'フォルダツリーをテキストでコピー',
     folderClose: 'フォルダを閉じる',
     folderEmpty: 'Markdown ファイルがありません',
     close: '閉じる',
@@ -265,6 +266,8 @@ const DICT = {
     deleteTitle: 'ファイルを削除',
     deleteOk: 'ゴミ箱に入れる',
     cancel: 'キャンセル',
+    folderTreeLargeConfirm: '{n} 件あります。node_modules など大きなフォルダが含まれていないか確認してください。',
+    folderTreeLargeOk: 'コピーする',
     closeConfirm: '「{name}」は未保存です。閉じますか？',
   },
   en: {
@@ -336,6 +339,7 @@ const DICT = {
     kindDraft: 'Rescued draft',
     sidebarHeader: 'Open Documents',
     folderOpen: 'Open folder',
+    folderTreeCopy: 'Copy folder tree as text',
     folderClose: 'Close folder',
     folderEmpty: 'No Markdown files here',
     close: 'Close',
@@ -510,6 +514,8 @@ const DICT = {
     deleteTitle: 'Delete file',
     deleteOk: 'Move to Trash',
     cancel: 'Cancel',
+    folderTreeLargeConfirm: 'This includes {n} entries. Check whether a large folder like node_modules got pulled in.',
+    folderTreeLargeOk: 'Copy anyway',
     closeConfirm: '“{name}” has unsaved changes. Close it?',
   },
 } as const;

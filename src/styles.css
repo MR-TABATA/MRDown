@@ -329,6 +329,7 @@ body.sidebar-hidden #sidebar { display: none; }
 .folder-head .folder-btn svg { width: 8px; height: 8px; display: block; }
 .folder-head:hover .folder-btn { border-color: var(--mrd-muted); color: var(--mrd-muted); }
 .folder-head .folder-btn:hover { background: var(--mrd-surface-3); border-color: var(--mrd-surface-3); color: var(--mrd-text); }
+.folder-head .folder-btn.done { color: var(--mrd-accent); border-color: var(--mrd-accent); }
 #folder-tree { list-style: none; margin-bottom: 4px; }
 #folder-tree .tree-row {
   display: flex;
@@ -362,6 +363,25 @@ body.sidebar-hidden #sidebar { display: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Per-folder tree-export button — ghost, revealed on row hover like the code
+   block's copy button, so the tree isn't cluttered by default. */
+.tree-copy-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--mrd-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.tree-copy-btn svg { width: 100%; height: 100%; display: block; }
+#folder-tree .tree-row:hover .tree-copy-btn,
+.tree-copy-btn:focus-visible { opacity: 1; }
+.tree-copy-btn:hover { background: var(--mrd-surface-3); color: var(--mrd-text); }
+.tree-copy-btn.done { opacity: 1; color: var(--mrd-accent); }
 #folder-tree .tree-empty {
   padding: 4px 14px;
   font-size: 12px;

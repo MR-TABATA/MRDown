@@ -206,6 +206,7 @@ const folderBtn = document.getElementById('folder-btn')!;
 const folderTree = document.getElementById('folder-tree') as HTMLElement;
 const folderHead = document.getElementById('folder-head') as HTMLElement;
 const folderName = document.getElementById('folder-name')!;
+const folderTreeCopyBtn = document.getElementById('folder-tree-copy-btn') as HTMLButtonElement;
 const folderCloseBtn = document.getElementById('folder-close-btn') as HTMLButtonElement;
 const contentArea = document.querySelector('.content-area') as HTMLElement;
 
@@ -1154,6 +1155,9 @@ const expandedFolders = new Set<string>();
 const treeChildren = new Map<string, TreeEntry[]>();
 
 const listDir = (dir: string) => invoke<TreeEntry[]>('read_dir', { dir }).catch(() => []);
+// Same as read_dir but unfiltered — for the folder-tree text export, which
+// wants every file (like the `tree` command), not just Markdown.
+const listDirAll = (dir: string) => invoke<TreeEntry[]>('read_dir_all', { dir }).catch(() => []);
 
 function saveFolderState() {
   if (!folderRoot) {
@@ -1241,6 +1245,35 @@ const TREE_FOLDER =
   '<svg class="tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
 const TREE_FILE =
   '<svg class="tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+const TREE_COPY_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+// Past this many entries, confirm before copying — same scope as the `tree`
+// command (nothing is excluded), so a stray node_modules can otherwise land
+// on the clipboard as a million-character surprise.
+const TREE_CONFIRM_THRESHOLD = 1000;
+
+// Copy one subfolder's tree as text, flashing `btn` briefly on success. Shared
+// by the folder-head button (whole open folder) and each row's own button
+// (that row's subtree only).
+async function copyFolderTree(path: string, btn: HTMLElement) {
+  const { text, count } = await folderTreeAsText(path);
+  if (count > TREE_CONFIRM_THRESHOLD) {
+    const ok = await confirmDialog(t('folderTreeLargeConfirm', { n: String(count) }), {
+      title: t('folderTreeCopy'),
+      kind: 'warning',
+      okLabel: t('folderTreeLargeOk'),
+      cancelLabel: t('cancel'),
+    });
+    if (!ok) return;
+  }
+  // Fenced so pasting into a Markdown document keeps the ASCII layout — a bare
+  // paste collapses every line onto one, since Markdown treats a single
+  // newline as a soft break.
+  if (!(await copyText('```\n' + text + '\n```'))) return;
+  btn.classList.add('done');
+  setTimeout(() => btn.classList.remove('done'), 1400);
+}
 
 // Rebuild the whole tree from the cache (synchronous). Only expanded folders
 // recurse, so collapsed branches cost nothing.
@@ -1268,9 +1301,15 @@ function appendTreeRows(entry: TreeEntry, depth: number) {
 
   if (entry.is_dir) {
     if (expandedFolders.has(entry.path)) li.classList.add('expanded');
-    li.innerHTML = `${TREE_CHEVRON}${TREE_FOLDER}${label}`;
+    li.innerHTML = `${TREE_CHEVRON}${TREE_FOLDER}${label}<button type="button" class="tree-copy-btn">${TREE_COPY_ICON}</button>`;
     li.querySelector('.tree-name')!.textContent = entry.name;
     li.addEventListener('click', () => toggleFolder(entry.path));
+    const copyBtn = li.querySelector('.tree-copy-btn') as HTMLButtonElement;
+    copyBtn.title = t('folderTreeCopy');
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyFolderTree(entry.path, copyBtn);
+    });
     folderTree.appendChild(li);
     if (expandedFolders.has(entry.path)) {
       for (const child of treeChildren.get(entry.path) ?? []) appendTreeRows(child, depth + 1);
@@ -1283,6 +1322,41 @@ function appendTreeRows(entry: TreeEntry, depth: number) {
     folderTree.appendChild(li);
   }
 }
+
+interface TreeNode extends TreeEntry {
+  children?: TreeNode[];
+}
+
+// A fresh, full read of the folder — independent of the sidebar's expanded-only
+// cache, since the export needs every branch regardless of what's collapsed.
+// Siblings and subfolders are all fetched in parallel.
+async function loadTreeRecursive(dir: string): Promise<TreeNode[]> {
+  const entries = await listDirAll(dir);
+  return Promise.all(
+    entries.map(async (entry): Promise<TreeNode> =>
+      entry.is_dir ? { ...entry, children: await loadTreeRecursive(entry.path) } : entry
+    )
+  );
+}
+
+function pushTreeLines(node: TreeNode, prefix: string, isLast: boolean, lines: string[]) {
+  lines.push(prefix + (isLast ? '└── ' : '├── ') + node.name + (node.is_dir ? '/' : ''));
+  if (!node.children) return;
+  const childPrefix = prefix + (isLast ? '    ' : '│   ');
+  node.children.forEach((child, i) => pushTreeLines(child, childPrefix, i === node.children!.length - 1, lines));
+}
+
+async function folderTreeAsText(root: string): Promise<{ text: string; count: number }> {
+  const nodes = await loadTreeRecursive(root);
+  const lines = [basename(root) + '/'];
+  nodes.forEach((node, i) => pushTreeLines(node, '', i === nodes.length - 1, lines));
+  return { text: lines.join('\n'), count: lines.length - 1 };
+}
+
+folderTreeCopyBtn.addEventListener('click', async () => {
+  if (!folderRoot) return;
+  await copyFolderTree(folderRoot, folderTreeCopyBtn);
+});
 
 folderBtn.addEventListener('click', async () => {
   const dir = await open({ directory: true, multiple: false });

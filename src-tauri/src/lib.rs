@@ -221,15 +221,13 @@ struct DirEntry {
     is_dir: bool,
 }
 
-/// List the immediate children of `dir` for the folder tree: subdirectories and
-/// supported Markdown files only. Hidden entries (dotfiles like `.git`,
-/// `.obsidian`) are skipped, and the listing is one level deep — subfolders are
-/// fetched lazily on expand so large vaults never fan out eagerly. Sorted with
-/// folders first, then files, each case-insensitively by name.
-#[tauri::command]
-fn read_dir(dir: String) -> Result<Vec<DirEntry>, String> {
+/// Shared walk for one directory level: skips hidden entries (dotfiles like
+/// `.git`, `.obsidian`), optionally skips files `is_supported` doesn't
+/// recognize as Markdown, and sorts folders first, then files, each
+/// case-insensitively by name.
+fn list_dir_entries(dir: &str, markdown_only: bool) -> Result<Vec<DirEntry>, String> {
     let mut entries: Vec<DirEntry> = Vec::new();
-    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
+    for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
         let Ok(entry) = entry else { continue };
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') {
@@ -237,13 +235,29 @@ fn read_dir(dir: String) -> Result<Vec<DirEntry>, String> {
         }
         let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
         let path = entry.path().to_string_lossy().into_owned();
-        if !is_dir && !is_supported(&path) {
+        if markdown_only && !is_dir && !is_supported(&path) {
             continue;
         }
         entries.push(DirEntry { name, path, is_dir });
     }
     sort_dir_entries(&mut entries);
     Ok(entries)
+}
+
+/// List the immediate children of `dir` for the folder tree: subdirectories and
+/// supported Markdown files only. The listing is one level deep — subfolders
+/// are fetched lazily on expand so large vaults never fan out eagerly.
+#[tauri::command]
+fn read_dir(dir: String) -> Result<Vec<DirEntry>, String> {
+    list_dir_entries(&dir, true)
+}
+
+/// Same as `read_dir` but every entry, not just Markdown — for exporting a
+/// folder's structure as text (same default scope as the `tree` command:
+/// everything except dotfiles).
+#[tauri::command]
+fn read_dir_all(dir: String) -> Result<Vec<DirEntry>, String> {
+    list_dir_entries(&dir, false)
 }
 
 /// Order tree entries: folders first, then files, each case-insensitively by name.
@@ -896,6 +910,7 @@ pub fn run() {
             delete_file,
             file_mtime,
             read_dir,
+            read_dir_all,
             get_recent_files,
             add_recent_file,
             get_pending_file,
