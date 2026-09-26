@@ -2,7 +2,7 @@
 
 **English** | [日本語](README.ja.md)
 
-**Read the diff of what your AI just rewrote.**
+**Your AI said "updated the README." MRDown shows you whether that's true — and exactly where.**
 
 A Markdown viewer and editor for macOS that keeps a timestamped version of every save — and of
 every rewrite that arrives from outside the app. **Git is optional.**
