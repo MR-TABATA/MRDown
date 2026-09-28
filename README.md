@@ -18,7 +18,9 @@ every rewrite that arrives from outside the app. **Git is optional.**
 
 *Left: every save is a version, and `HEAD` joins the same list in a Git repository. Right: the same view compares any two files (`⌘⇧D`).*
 
-**[Download for macOS](https://github.com/MR-TABATA/MRDown/releases)** — signed and notarized, so it opens normally.
+**[Download MRDown for macOS](https://github.com/MR-TABATA/MRDown/releases)** — free, signed and notarized, so it opens normally.
+
+Want the paid AI feature? **[Buy MrkDown](https://buy.polar.sh/polar_cl_0ZFDepQfKNP0v374jKC5AApEKjtQRs0gowqVs3x6YvO)**, the paid build that unlocks AI diff explanation.
 
 ## Why
 
@@ -115,6 +117,18 @@ myself**, and there is no Windows code-signing certificate, so no Windows binary
 Download the macOS build (Apple Silicon / Intel, macOS 10.15+) from the [Releases](https://github.com/MR-TABATA/MRDown/releases) page.
 
 The binaries are signed and notarized with an Apple Developer ID, so they open normally once downloaded.
+
+## MrkDown, the paid build
+
+MRDown is free and MIT licensed. MrkDown is the paid build for people who want AI to explain a diff in plain language.
+
+- Buy once for USD 39, use on up to 3 Macs.
+- Apple Silicon Mac, macOS 13 or later.
+- No separate trial; the free MRDown app is the trial path.
+- After purchase, download the DMG from the Polar Customer Portal and copy `MrkDown License Key - copy to app` into MrkDown Settings > Licenses.
+- AI usage is BYOK: your provider API key is stored in the macOS Keychain, and the Markdown text you ask to explain is sent only to the provider you choose.
+
+Product page: [MrkDown](docs/mrkdown.en.html)
 
 ## Development
 

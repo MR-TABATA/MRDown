@@ -18,7 +18,9 @@ macOS 用の Markdown ビューア／エディタ。保存するたび、そし�
 
 *左：保存するたびに版が残り、Git リポジトリなら `HEAD` も同じ一覧に並びます。右：同じ画面で任意の 2 ファイルを比較できます（`⌘⇧D`）。（スクリーンショットは英語 UI）*
 
-**[macOS 版をダウンロード](https://github.com/MR-TABATA/MRDown/releases)** — 署名・公証済みなので、そのまま起動できます。
+**[macOS 版 MRDown をダウンロード](https://github.com/MR-TABATA/MRDown/releases)** — 無料、署名・公証済みなので、そのまま起動できます。
+
+AI に差分を説明させたい場合は、有償版 **[MrkDown](https://buy.polar.sh/polar_cl_0ZFDepQfKNP0v374jKC5AApEKjtQRs0gowqVs3x6YvO)** を購入できます。
 
 ## なぜ作ったか
 
@@ -115,6 +117,18 @@ Tauri なので Windows でもビルドでき、**動くはずです**。ただ�
 macOS 版（Apple Silicon / Intel、macOS 10.15 以降）のビルドを [Releases](https://github.com/MR-TABATA/MRDown/releases) ページからダウンロードできます。
 
 バイナリは Apple Developer ID で署名・公証（notarization）済みなので、ダウンロードしてそのまま起動できます。
+
+## 有償版 MrkDown
+
+MRDown は無料・MIT ライセンスです。MrkDown は、AI に差分を平易に説明させたい人向けの有償ビルドです。
+
+- 買い切り 39 USD、3 台の Mac まで利用できます。
+- Apple Silicon Mac / macOS 13 以降。
+- 別トライアルはありません。購入前の試用は無料版 MRDown で行えます。
+- 購入後は Polar の購入者ポータルから DMG をダウンロードし、`MrkDown License Key - copy to app` を MrkDown の Settings > Licenses に入力します。
+- AI 利用は BYOK です。プロバイダ API キーは macOS Keychain に保存され、説明対象の Markdown テキストは、そのリクエストで選んだ AI プロバイダにだけ送られます。
+
+製品ページ: [MrkDown](docs/mrkdown.ja.html)
 
 ## 開発
 
