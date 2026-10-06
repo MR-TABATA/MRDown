@@ -34,6 +34,7 @@ import {
   type TemplateKind,
 } from './templates';
 import { buildMatcher, findMatches, sliceMatches, type FindOpts, type Match } from './find';
+import { findInNormalized, normalizeForSearch, normalizeWithMap, type Normalized } from './search-norm';
 import {
   sideBySide,
   inlineSegments,
@@ -4882,6 +4883,18 @@ function toLineHit(text: string, lineStart: number, matches: Match[]): LineHit {
   return { start: lineStart + first[0], end: lineStart + first[1], lineNo, segments };
 }
 
+// The normalized form of a document (NFKC + lowercase, with a map back to the source),
+// kept until its text changes so typing in the search box doesn't redo it per keystroke.
+const normalizedDocs = new WeakMap<Doc, { src: string; n: Normalized }>();
+function normalizedText(doc: Doc): Normalized {
+  const text = doc.workingText;
+  const hit = normalizedDocs.get(doc);
+  if (hit && hit.src === text) return hit.n;
+  const n = normalizeWithMap(text);
+  normalizedDocs.set(doc, { src: text, n });
+  return n;
+}
+
 function runDocSearch() {
   docSearchResults.innerHTML = '';
   if (docs.length === 0) {
@@ -4890,13 +4903,16 @@ function runDocSearch() {
   }
   // Space-separated words are ANDed: a document qualifies only if it contains
   // every word (any order, anywhere), and every word's occurrences are shown.
-  // Plain, case-insensitive — regex/whole-word live on the in-document find bar.
+  // Plain — regex/whole-word live on the in-document find bar. Words and documents
+  // are both NFKC-normalized and lowercased (the usual search-engine normalization), so full-width / half-width
+  // forms, half-width kana and case all match one another; hits are mapped back to the
+  // original text for highlighting and jumping.
   const opts: FindOpts = { regex: false, caseSensitive: false, wholeWord: false };
   const matchers = docSearchInput.value
     .trim()
     .split(/\s+/)
     .filter(Boolean)
-    .map((word) => buildMatcher(word, opts));
+    .map((word) => buildMatcher(normalizeForSearch(word), opts));
   if (matchers.length === 0 || matchers.some((m) => !m)) {
     docSearchSummary.textContent = '';
     return;
@@ -4906,15 +4922,16 @@ function runDocSearch() {
   let docsWithHits = 0;
   for (const doc of docs) {
     const text = doc.workingText;
+    const norm = normalizedText(doc);
     // Quick reject: a word missing from the whole document can't share a line
     // with the others, so there's nothing to show.
-    if (!matchers.every((m) => findMatches(text, m, 1).length > 0)) continue;
+    if (!matchers.every((m) => findMatches(norm.text, m, 1).length > 0)) continue;
 
     // Group every word's matches by the line they sit on, tracking which words
     // landed on each line.
     const byLine = new Map<number, { matches: Match[]; words: Set<number> }>();
     matchers.forEach((matcher, w) => {
-      for (const m of findMatches(text, matcher)) {
+      for (const m of findInNormalized(norm, matcher)) {
         const lineStart = text.lastIndexOf('\n', m.start - 1) + 1;
         let g = byLine.get(lineStart);
         if (!g) {

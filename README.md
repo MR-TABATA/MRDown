@@ -82,7 +82,7 @@ myself**, and there is no Windows code-signing certificate, so no Windows binary
 ### Finding things
 
 - Find & replace in the current document (`⌘F`): while editing it searches the source and highlights every hit (the current one emphasized); in preview it searches the rendered text so matches can span inline formatting (e.g. across `**bold**`). Regex, case-sensitive and whole-word toggles (remembered); step with `Enter` / `⇧Enter`; replace one or all while editing (undoable with `⌘Z`).
-- **Search across every open document** (`⌘⇧F`, or the 🔍 button ▸ "Search across open documents"): one field searches the whole set you have open, matching all your words on the same line whatever their order. Results are grouped by document, each with its line number and the line quoted; pick one and that document opens in the editor with the match selected. Whatever is in the `⌘F` box carries over, so `⌘F` → `⌘⇧F` widens the same query to every open document.
+- **Search across every open document** (`⌘⇧F`, or the 🔍 button ▸ "Search across open documents"): one field searches the whole set you have open, matching all your words on the same line whatever their order. **Full-width and half-width forms, half-width kana and upper/lower case match one another** (`ＲＵＳＴ` finds `rust`, `ｶﾞｲﾄﾞ` finds `ガイド`); a voiced kana still differs from its plain one (`が` ≠ `か`). Results are grouped by document, each with its line number and the line quoted; pick one and that document opens in the editor with the match selected. Whatever is in the `⌘F` box carries over, so `⌘F` → `⌘⇧F` widens the same query to every open document.
 
 ### Documents, not just text files
 
