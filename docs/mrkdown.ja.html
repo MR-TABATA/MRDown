@@ -1,103 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MrkDown — MRDown の有償 AI diff explanation</title>
-  <meta name="description" content="MrkDown は MRDown の有償ビルドです。Markdown の差分を AI が説明する機能を解放します。買い切り 39 USD、Apple Silicon Mac 3 台まで。">
-
-  <meta property="og:title" content="MrkDown">
-  <meta property="og:description" content="AI が差分を説明する、MRDown の有償ビルド。">
-  <meta property="og:type" content="website">
-  <meta property="og:locale" content="ja_JP">
-  <meta property="og:url" content="https://mr-tabata.github.io/MRDown/mrkdown.ja.html">
-  <meta property="og:image" content="https://mr-tabata.github.io/MRDown/media/og-image.jpg">
-  <meta name="twitter:card" content="summary_large_image">
-
-  <link rel="canonical" href="https://mr-tabata.github.io/MRDown/mrkdown.ja.html">
-  <link rel="alternate" hreflang="ja" href="https://mr-tabata.github.io/MRDown/mrkdown.ja.html">
-  <link rel="alternate" hreflang="en" href="https://mr-tabata.github.io/MRDown/mrkdown.en.html">
-  <link rel="stylesheet" href="lp.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MrkTools へ移動しました</title>
+<link rel="canonical" href="https://mrktools.app/ja/md/">
+<meta http-equiv="refresh" content="0; url=https://mrktools.app/ja/md/#pricing">
+<script>
+(function () {
+  var map = {'#pricing': '#pricing', '#features': '#features', '#basics': '#basics', '#pro': '#pricing'};
+  var h = map[location.hash] || '#pricing';
+  location.replace('https://mrktools.app/ja/md/' + h);
+})();
+</script>
 </head>
-<body>
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-    <defs>
-      <linearGradient id="paidLogoBg" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#181818"/>
-        <stop offset="1" stop-color="#050505"/>
-      </linearGradient>
-    </defs>
-    <symbol id="paidLogo" viewBox="0 0 100 100">
-      <rect width="100" height="100" rx="23" fill="url(#paidLogoBg)"/>
-      <g fill="none" stroke="#d6a84f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="30,40 50,55 70,40"/>
-        <polyline points="30,56 50,71 70,56"/>
-      </g>
-    </symbol>
-  </svg>
-
-  <nav>
-    <a class="brand" href="index.ja.html"><svg><use href="#paidLogo"/></svg> MrkDown</a>
-    <div class="nav-links">
-      <a href="index.ja.html">MRDown</a>
-      <a href="#buy">購入</a>
-      <a href="#setup">設定</a>
-      <a href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">GitHub</a>
-      <a class="lang-switch" href="mrkdown.en.html" hreflang="en" lang="en">English</a>
-    </div>
-  </nav>
-
-  <header class="product-hero">
-    <div class="wrap">
-      <div>
-        <p class="kicker">MRDown の有償ビルド</p>
-        <h1>AI が差分を説明します。</h1>
-        <p class="lead">MrkDown は MRDown の履歴・差分ビューをそのまま使い、そこに有償機能を 1 つ足します。2 つの版を選び、AI プロバイダを選ぶと、何が変わったかを平易に説明します。</p>
-        <div class="btn-row" style="justify-content:flex-start; margin-top:28px;">
-          <a class="btn btn-primary" href="https://buy.polar.sh/polar_cl_0ZFDepQfKNP0v374jKC5AApEKjtQRs0gowqVs3x6YvO" target="_blank" rel="noopener">MrkDown を購入</a>
-          <a class="btn btn-ghost" href="index.ja.html">まず無料版 MRDown を試す</a>
-        </div>
-      </div>
-      <aside class="price-card" id="buy">
-        <div class="price">$39</div>
-        <div class="meta">買い切り<br>3 台の Mac まで</div>
-        <a class="btn btn-primary" href="https://buy.polar.sh/polar_cl_0ZFDepQfKNP0v374jKC5AApEKjtQRs0gowqVs3x6YvO" target="_blank" rel="noopener">購入へ進む</a>
-      </aside>
-    </div>
-  </header>
-
-  <section>
-    <div class="wrap">
-      <div class="facts">
-        <div class="fact"><strong>解放される機能</strong><span>履歴・差分ビューでの AI diff explanation。</span></div>
-        <div class="fact"><strong>試用方法</strong><span>別トライアルなし。購入前は無料版 MRDown を使えます。</span></div>
-        <div class="fact"><strong>動作環境</strong><span>Apple Silicon Mac、macOS 13 以降。</span></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="setup" style="background:#1a1a1a;">
-    <div class="wrap">
-      <div class="section-title">
-        <h2>購入後の流れ</h2>
-        <p>ライセンスキーは Polar の購入者ポータルにあります。</p>
-      </div>
-      <div class="steps">
-        <div class="step"><div><h3>DMG をダウンロード</h3><p>Polar の購入者ポータルを開き、<code>MrkDown App Download - install this DMG</code> から DMG をダウンロードします。</p></div></div>
-        <div class="step"><div><h3>ライセンスキーをコピー</h3><p>同じポータルを下にスクロールし、<code>MrkDown License Key - copy to app</code> をコピーします。領収メールにはキーが載らない場合があります。</p></div></div>
-        <div class="step"><div><h3>MrkDown 内で有効化</h3><p>MrkDown を開き、Settings &gt; Licenses にキーを貼り付けて Activate を押します。</p></div></div>
-        <div class="step"><div><h3>AI キーは自分のものを使う</h3><p>AI 利用は BYOK です。プロバイダ API キーは macOS Keychain に保存され、説明対象の Markdown テキストは、そのリクエストで選んだ AI プロバイダにだけ送られます。</p></div></div>
-      </div>
-    </div>
-  </section>
-
-  <footer>
-    <div class="wrap">
-      <div class="brand"><svg style="width:24px;height:24px;border-radius:6px;"><use href="#paidLogo"/></svg> MrkDown</div>
-      <p>MRDown の有償ビルド · Polar で販売</p>
-      <p style="margin-top:8px;"><a href="index.ja.html">MRDown</a> · <a href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">GitHub</a> · <a href="mrkdown.en.html" hreflang="en" lang="en">English</a></p>
-      <p style="margin-top:6px; color:#4a4a4a;">© 2026 TABATA Hitoshi</p>
-    </div>
-  </footer>
+<body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem">
+<p>自動で移動しない場合は、こちらを開いてください：<a href="https://mrktools.app/ja/md/#pricing">https://mrktools.app/ja/md/#pricing</a></p>
 </body>
 </html>

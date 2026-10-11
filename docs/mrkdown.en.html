@@ -1,103 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MrkDown — Paid AI diff explanation for MRDown</title>
-  <meta name="description" content="MrkDown is the paid build of MRDown. It unlocks AI diff explanation for Markdown changes. $39 one-time purchase, up to 3 Apple Silicon Macs.">
-
-  <meta property="og:title" content="MrkDown">
-  <meta property="og:description" content="The paid build of MRDown, with AI diff explanation.">
-  <meta property="og:type" content="website">
-  <meta property="og:locale" content="en_US">
-  <meta property="og:url" content="https://mr-tabata.github.io/MRDown/mrkdown.en.html">
-  <meta property="og:image" content="https://mr-tabata.github.io/MRDown/media/og-image.jpg">
-  <meta name="twitter:card" content="summary_large_image">
-
-  <link rel="canonical" href="https://mr-tabata.github.io/MRDown/mrkdown.en.html">
-  <link rel="alternate" hreflang="ja" href="https://mr-tabata.github.io/MRDown/mrkdown.ja.html">
-  <link rel="alternate" hreflang="en" href="https://mr-tabata.github.io/MRDown/mrkdown.en.html">
-  <link rel="stylesheet" href="lp.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moved to MrkTools</title>
+<link rel="canonical" href="https://mrktools.app/en/md/">
+<meta http-equiv="refresh" content="0; url=https://mrktools.app/en/md/#pricing">
+<script>
+(function () {
+  var map = {'#pricing': '#pricing', '#features': '#features', '#basics': '#basics', '#pro': '#pricing'};
+  var h = map[location.hash] || '#pricing';
+  location.replace('https://mrktools.app/en/md/' + h);
+})();
+</script>
 </head>
-<body>
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-    <defs>
-      <linearGradient id="paidLogoBg" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#181818"/>
-        <stop offset="1" stop-color="#050505"/>
-      </linearGradient>
-    </defs>
-    <symbol id="paidLogo" viewBox="0 0 100 100">
-      <rect width="100" height="100" rx="23" fill="url(#paidLogoBg)"/>
-      <g fill="none" stroke="#d6a84f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="30,40 50,55 70,40"/>
-        <polyline points="30,56 50,71 70,56"/>
-      </g>
-    </symbol>
-  </svg>
-
-  <nav>
-    <a class="brand" href="index.en.html"><svg><use href="#paidLogo"/></svg> MrkDown</a>
-    <div class="nav-links">
-      <a href="index.en.html">MRDown</a>
-      <a href="#buy">Buy</a>
-      <a href="#setup">Setup</a>
-      <a href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">GitHub</a>
-      <a class="lang-switch" href="mrkdown.ja.html" hreflang="ja" lang="ja">日本語</a>
-    </div>
-  </nav>
-
-  <header class="product-hero">
-    <div class="wrap">
-      <div>
-        <p class="kicker">Paid build of MRDown</p>
-        <h1>AI explains what changed.</h1>
-        <p class="lead">MrkDown keeps MRDown's version timeline and diff view, then adds one paid feature: AI diff explanation. Pick two versions, choose a provider, and get a plain-language summary of the change.</p>
-        <div class="btn-row" style="justify-content:flex-start; margin-top:28px;">
-          <a class="btn btn-primary" href="https://buy.polar.sh/polar_cl_0ZFDepQfKNP0v374jKC5AApEKjtQRs0gowqVs3x6YvO" target="_blank" rel="noopener">Buy MrkDown</a>
-          <a class="btn btn-ghost" href="index.en.html">Try free MRDown first</a>
-        </div>
-      </div>
-      <aside class="price-card" id="buy">
-        <div class="price">$39</div>
-        <div class="meta">One-time purchase<br>Use on up to 3 Macs</div>
-        <a class="btn btn-primary" href="https://buy.polar.sh/polar_cl_0ZFDepQfKNP0v374jKC5AApEKjtQRs0gowqVs3x6YvO" target="_blank" rel="noopener">Checkout</a>
-      </aside>
-    </div>
-  </header>
-
-  <section>
-    <div class="wrap">
-      <div class="facts">
-        <div class="fact"><strong>What it unlocks</strong><span>AI diff explanation in the history/diff view.</span></div>
-        <div class="fact"><strong>Trial path</strong><span>No separate trial. Use free MRDown before purchase.</span></div>
-        <div class="fact"><strong>Requirements</strong><span>Apple Silicon Mac, macOS 13 or later.</span></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="setup" style="background:#1a1a1a;">
-    <div class="wrap">
-      <div class="section-title">
-        <h2>After purchase</h2>
-        <p>The license key lives in the Polar Customer Portal.</p>
-      </div>
-      <div class="steps">
-        <div class="step"><div><h3>Download the DMG</h3><p>Open your Polar Customer Portal and download <code>MrkDown App Download - install this DMG</code>.</p></div></div>
-        <div class="step"><div><h3>Copy the license key</h3><p>Scroll down in the same portal and copy <code>MrkDown License Key - copy to app</code>. The receipt email may not include the key.</p></div></div>
-        <div class="step"><div><h3>Activate inside MrkDown</h3><p>Open MrkDown, go to Settings &gt; Licenses, paste the key, and press Activate.</p></div></div>
-        <div class="step"><div><h3>Bring your own AI key</h3><p>AI usage is BYOK. Your provider API key is stored in the macOS Keychain. The Markdown text you ask to explain is sent only to the provider you choose for that request.</p></div></div>
-      </div>
-    </div>
-  </section>
-
-  <footer>
-    <div class="wrap">
-      <div class="brand"><svg style="width:24px;height:24px;border-radius:6px;"><use href="#paidLogo"/></svg> MrkDown</div>
-      <p>Paid build of MRDown · Sold through Polar</p>
-      <p style="margin-top:8px;"><a href="index.en.html">MRDown</a> · <a href="https://github.com/MR-TABATA/MRDown" target="_blank" rel="noopener">GitHub</a> · <a href="mrkdown.ja.html" hreflang="ja" lang="ja">日本語</a></p>
-      <p style="margin-top:6px; color:#4a4a4a;">© 2026 TABATA Hitoshi</p>
-    </div>
-  </footer>
+<body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem">
+<p>If you are not redirected, open this link: <a href="https://mrktools.app/en/md/#pricing">https://mrktools.app/en/md/#pricing</a></p>
 </body>
 </html>
