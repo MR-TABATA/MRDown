@@ -1,4 +1,5 @@
 // Pure Markdown-rendering helpers — no DOM or Tauri dependencies.
+import { marked, type MarkedExtension, type Token, type Tokens } from 'marked';
 
 /**
  * Build a URL-friendly id from heading text. Keeps unicode letters/numbers
@@ -16,18 +17,79 @@ export function slugify(text: string): string {
 // character (no spaces between "words"), unlike space-delimited scripts.
 const CJK = /[぀-ヿ㐀-䶿一-鿿＀-￯]/g;
 
+/** Block-level tokens end their line, so words in two paragraphs never fuse. */
+const BLOCK_TOKENS = new Set(['paragraph', 'heading', 'blockquote', 'code']);
+
 /**
- * Character count, (space-delimited) word count and an estimated reading time
- * for a document. CJK characters are counted individually and read at ~500/min;
- * the remaining space-delimited words at ~200/min, so mixed JA/EN text is
- * estimated sensibly. Reading time is at least a minute for any non-empty text.
+ * The text a reader actually reads: the Markdown with its notation taken away.
+ * `#`, `**`, list markers, link URLs, image paths, HTML tags and frontmatter are
+ * not text; a link contributes its label, an image its alt text, and a code
+ * block its code (it is read too). Built from the same token stream the preview
+ * renders from, so the count follows what is on screen.
  */
-export function docStats(text: string): { chars: number; words: number; minutes: number } {
-  const chars = [...text].length;
+export function readableText(source: string): string {
+  return readableFromTokens(marked.lexer(extractFrontmatter(source).body));
+}
+
+function readableFromTokens(all: Token[]): string {
+  const plain = (tokens: Token[]): string => {
+    let out = '';
+    for (const tok of tokens) {
+      switch (tok.type) {
+        case 'html':
+        case 'space':
+        case 'def':
+          break;
+        case 'hr':
+        case 'br':
+          out += '\n';
+          break;
+        case 'list':
+          for (const item of (tok as Tokens.List).items) out += plain(item.tokens) + '\n';
+          break;
+        case 'table': {
+          const t = tok as Tokens.Table;
+          for (const row of [t.header, ...t.rows]) out += row.map((c) => plain(c.tokens)).join(' ') + '\n';
+          break;
+        }
+        default: {
+          const kids = (tok as { tokens?: Token[] }).tokens;
+          if (kids) out += plain(kids);
+          else if ('text' in tok) out += (tok as { text: string }).text;
+          if (BLOCK_TOKENS.has(tok.type) && kids) out += '\n';
+          else if (tok.type === 'code') out += '\n';
+        }
+      }
+    }
+    return out;
+  };
+  return plain(all);
+}
+
+/**
+ * Size of a document, measured on what is read (see `readableText`): characters
+ * without whitespace, space-delimited words, and an estimated reading time.
+ * CJK characters count one by one and are read at ~500/min; the remaining words
+ * at ~200/min, so mixed JA/EN text is estimated sensibly. `minutes` is 0 for
+ * anything under a minute — callers say "under a minute" rather than round a
+ * 17-character note up to one.
+ */
+export function docStats(source: string): DocStats {
+  return statsFromText(readableText(source));
+}
+
+export interface DocStats {
+  chars: number;
+  words: number;
+  minutes: number;
+}
+
+function statsFromText(text: string): DocStats {
+  const chars = [...text.replace(/\s+/gu, '')].length;
   const cjk = (text.match(CJK) || []).length;
-  const words = (text.replace(CJK, ' ').match(/\S+/g) || []).length;
-  const minutes = chars === 0 ? 0 : Math.max(1, Math.round(cjk / 500 + words / 200));
-  return { chars, words, minutes };
+  const words = (text.replace(CJK, ' ').match(/[\p{L}\p{N}][\p{L}\p{N}'’_-]*/gu) || []).length;
+  const exact = cjk / 500 + words / 200;
+  return { chars, words, minutes: exact < 1 ? 0 : Math.round(exact) };
 }
 
 const FENCE = /^\s{0,3}(```|~~~)/;
@@ -239,4 +301,77 @@ export function docHeaderToHtml(
     .join('');
   const metaRow = meta ? `<div class="doc-header-meta">${meta}</div>` : '';
   return `<div class="doc-header">${top}${title}${metaRow}</div>`;
+}
+
+export const CALLOUT_KINDS = ['note', 'tip', 'important', 'warning', 'caution'] as const;
+export type CalloutKind = (typeof CALLOUT_KINDS)[number];
+
+const CALLOUT_MARKER = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\n|$)/i;
+
+/**
+ * GitHub-style callouts: a blockquote whose first line is `[!NOTE]` (also TIP,
+ * IMPORTANT, WARNING, CAUTION) renders as a labelled box. Anything else — an
+ * unknown kind, or a marker that isn't alone on the first line — stays an
+ * ordinary quote, as it does on GitHub. `label` supplies the title text so the
+ * box speaks the app's language.
+ */
+export function calloutExtension(label: (kind: CalloutKind) => string): MarkedExtension {
+  return {
+    renderer: {
+      blockquote({ text }) {
+        const m = CALLOUT_MARKER.exec(text);
+        if (!m) return false; // fall back to marked's own blockquote
+        const kind = m[1].toLowerCase() as CalloutKind;
+        // Re-lex what follows the marker; the nested tokens still carry it.
+        const rest = text.slice(m[0].length);
+        const inner = rest.trim() ? marked.parser(marked.lexer(rest)) : '';
+        return `<div class="callout callout-${kind}"><p class="callout-title">${label(kind)}</p>${inner}</div>\n`;
+      },
+    },
+  };
+}
+
+export interface DocCounts {
+  lines: number;
+  headings: number;
+  links: number;
+  images: number;
+  codeBlocks: number;
+  tasks: { done: number; total: number };
+}
+
+/**
+ * What a document is made of, counted from the same token stream the preview is
+ * rendered from — so a `- [ ]` or a link inside a code fence is not counted, and
+ * the numbers agree with what the reader sees. Frontmatter is not body text.
+ */
+export function docCounts(text: string): DocCounts {
+  return countsFromTokens(text, text ? marked.lexer(extractFrontmatter(text).body) : []);
+}
+
+function countsFromTokens(text: string, tokens: Token[]): DocCounts {
+  const counts: DocCounts = { lines: 0, headings: 0, links: 0, images: 0, codeBlocks: 0, tasks: { done: 0, total: 0 } };
+  if (!text) return counts;
+  counts.lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+  marked.walkTokens(tokens, (tok) => {
+    switch (tok.type) {
+      case 'heading': counts.headings++; break;
+      case 'link': counts.links++; break;
+      case 'image': counts.images++; break;
+      case 'code': counts.codeBlocks++; break;
+      case 'list_item':
+        if (tok.task) {
+          counts.tasks.total++;
+          if (tok.checked) counts.tasks.done++;
+        }
+        break;
+    }
+  });
+  return counts;
+}
+
+/** Both measures from one parse — what a live panel needs on every keystroke. */
+export function docOverview(source: string): { stats: DocStats; counts: DocCounts } {
+  const tokens = source ? marked.lexer(extractFrontmatter(source).body) : [];
+  return { stats: statsFromText(readableFromTokens(tokens)), counts: countsFromTokens(source, tokens) };
 }

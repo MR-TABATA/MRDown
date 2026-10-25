@@ -336,7 +336,7 @@ fn handle_opened_file(app: &tauri::AppHandle, path: String) {
 /// Menu items that act on the active document, and so are dead without one.
 /// Their frontend handlers all bail out when nothing is open, which made them
 /// look clickable but do nothing; `set_doc_items_enabled` greys them out instead.
-const DOC_ITEMS: [&str; 11] = [
+const DOC_ITEMS: [&str; 12] = [
     "save",
     "save_as",
     "template_from_doc",
@@ -348,6 +348,7 @@ const DOC_ITEMS: [&str; 11] = [
     "edit",
     "outline",
     "reading",
+    "stats",
 ];
 
 /// The OS language, narrowed to the two the menu speaks. The frontend re-applies
@@ -416,6 +417,8 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
             // No accelerator: ⌘⌫ stays the editor's "delete to line start".
             &MenuItem::with_id(app, "delete", pick("ゴミ箱に移動", "Move to Trash"), has_doc, None::<&str>)?,
             &MenuItem::with_id(app, "close", pick("閉じる", "Close"), has_doc, Some("CmdOrCtrl+W"))?,
+            // Not in DOC_ITEMS: it is most useful when the last document was just closed.
+            &MenuItem::with_id(app, "reopen_closed", pick("閉じたファイルを開き直す", "Reopen Closed File"), true, Some("CmdOrCtrl+Shift+T"))?,
         ],
     )?;
 
@@ -443,6 +446,9 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
             &MenuItem::with_id(app, "outline", pick("アウトライン", "Outline"), has_doc, Some("CmdOrCtrl+2"))?,
             &MenuItem::with_id(app, "edit", pick("編集 / プレビュー", "Edit / Preview"), has_doc, Some("CmdOrCtrl+E"))?,
             &MenuItem::with_id(app, "reading", pick("読書モード", "Reading Mode"), has_doc, Some("CmdOrCtrl+Shift+M"))?,
+            // No accelerator: it is also one click on the count in the status bar. Shows or
+            // hides the stats under the outline.
+            &MenuItem::with_id(app, "stats", pick("文書の統計", "Document Stats"), has_doc, None::<&str>)?,
         ],
     )?;
 

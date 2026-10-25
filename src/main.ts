@@ -23,7 +23,9 @@ import {
   docHeaderToHtml,
   type DocHeaderField,
   docStats,
+  docOverview,
   toggleTaskListItem,
+  calloutExtension,
 } from './markdown';
 import {
   docTemplate,
@@ -48,6 +50,8 @@ import {
   type ThreeRow,
   type Seg,
 } from './diff';
+import { pushClosed, popReopenable } from './closed-stack';
+import { localDay, noteBaseline, parseBaselines, formatDelta, type Baselines } from './writing-stats';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
 import {
   toggleWrap,
@@ -96,6 +100,13 @@ import {
 // as plain text rather than throwing and losing the rest of the document.
 marked.use(markedFootnote());
 marked.use(markedKatex({ throwOnError: false }));
+// `> [!NOTE]` and friends. The label is read at render time, so a language
+// change shows on the next render.
+marked.use(
+  calloutExtension((k) =>
+    t(({ note: 'calloutNote', tip: 'calloutTip', important: 'calloutImportant', warning: 'calloutWarning', caution: 'calloutCaution' } as const)[k])
+  )
+);
 
 const sidebarBtn = document.getElementById('sidebar-btn')!;
 const openBtn = document.getElementById('open-btn')!;
@@ -793,13 +804,139 @@ function showEmpty() {
 // Reflect the active document + dirty state in the toolbar.
 // Toolbar reading stats for the active document, e.g. "1,234 字 · 約2分" /
 // "1,234 chars · ~2 min". Empty for an empty document.
-function formatDocStats(text: string): string {
-  const { chars, minutes } = docStats(text);
-  if (chars === 0) return '';
-  return `${chars.toLocaleString()} ${t('statsChars')} · ${t('statsReadPrefix')}${minutes}${t('statsMin')}`;
+/** "約3分", or "1分未満" when `minutes` is 0 (see docStats). */
+function readTimeLabel(minutes: number): string {
+  return minutes === 0 ? t('statsUnderMin') : `${t('statsReadPrefix')}${minutes}${t('statsMin')}`;
+}
+
+// --- Document stats: what this document is made of, and how much it grew ---
+// "Today" is measured from the first time a saved file is seen that day, kept in
+// localStorage; "this session" from the first time the app showed the document.
+const BASELINE_KEY = 'mrdown.baselines';
+const sessionBase = new WeakMap<Doc, number>();
+let baselines: Baselines = loadBaselines();
+
+function loadBaselines(): Baselines {
+  try {
+    return parseBaselines(localStorage.getItem(BASELINE_KEY), localDay());
+  } catch {
+    return parseBaselines(null, localDay());
+  }
+}
+
+/** Remember the starting size of `doc`, the first time it is shown. */
+function noteBaselines(doc: Doc) {
+  const day = localDay();
+  if (baselines.day !== day) baselines = { day, chars: {} };
+  const needToday = !!doc.path && !(doc.path in baselines.chars);
+  // Counting parses the document, so only do it when there is a baseline to take.
+  if (sessionBase.has(doc) && !needToday) return;
+  const chars = docStats(doc.savedSource).chars;
+  if (!sessionBase.has(doc)) sessionBase.set(doc, chars);
+  if (!needToday) return;
+  noteBaseline(baselines, doc.path!, chars);
+  try {
+    localStorage.setItem(BASELINE_KEY, JSON.stringify(baselines));
+  } catch {
+    // The numbers just reset next launch.
+  }
+}
+
+const statsInspector = document.getElementById('stats-inspector')!;
+const STATS_KEY = 'mrdown.statsInspector';
+let statsShown = localStorage.getItem(STATS_KEY) === '1';
+
+// The size of a document that is not the active one only changes when its text
+// does, so it is counted once per text rather than on every keystroke elsewhere.
+const charsCache = new WeakMap<Doc, { text: string; chars: number }>();
+function charsOf(doc: Doc): number {
+  const hit = charsCache.get(doc);
+  if (hit && hit.text === doc.workingText) return hit.chars;
+  const chars = docStats(doc.workingText).chars;
+  charsCache.set(doc, { text: doc.workingText, chars });
+  return chars;
+}
+
+function renderStats(doc: Doc, o: ReturnType<typeof docOverview>) {
+  const n = (v: number) => v.toLocaleString();
+  const { chars, words, minutes } = o.stats;
+  const c = o.counts;
+  const html: string[] = [];
+  const title = (k: Key) => html.push(`<div class="st-title">${t(k)}</div>`);
+  const row = (k: Key, v: string) => html.push(`<div class="st-row"><span>${t(k)}</span><b>${v}</b></div>`);
+  title('statsDocGroup');
+  row('statsRowChars', n(chars));
+  row('statsRowWords', n(words));
+  row('statsRowRead', chars === 0 ? '—' : readTimeLabel(minutes));
+  row('statsRowLines', n(c.lines));
+  row('statsRowHeadings', n(c.headings));
+  row('statsRowLinks', n(c.links));
+  row('statsRowImages', n(c.images));
+  row('statsRowCode', n(c.codeBlocks));
+  row('statsRowTasks', `${n(c.tasks.done)} / ${n(c.tasks.total)}`);
+  title('statsChangeGroup');
+  if (doc.path && doc.path in baselines.chars) row('statsToday', formatDelta(chars - baselines.chars[doc.path]));
+  row('statsSession', formatDelta(chars - (sessionBase.get(doc) ?? chars)));
+  let all = 0;
+  for (const d of docs) {
+    const c2 = d === doc ? chars : charsOf(d);
+    all += c2 - (sessionBase.get(d) ?? c2);
+  }
+  row('statsSessionAll', formatDelta(all));
+  if (!doc.path) html.push(`<div class="st-note">${t('statsNoToday')}</div>`);
+  statsInspector.innerHTML = html.join('');
+}
+
+function applyStatsShown() {
+  statsInspector.hidden = !(statsShown && active);
+  if (!statsInspector.hidden) refreshDocStats();
+}
+
+/** View ▸ Document Stats, and the count in the status bar. */
+function toggleStats() {
+  if (!active) return;
+  statsShown = !statsShown;
+  localStorage.setItem(STATS_KEY, statsShown ? '1' : '0');
+  // The inspector is part of the outline column: asking for it brings the column
+  // back if it was put away in this mode.
+  if (statsShown && outlineHiddenIn(isEditing)) {
+    localStorage.setItem(outlineHiddenKey(isEditing), '0');
+    applyOutlineHidden();
+  }
+  applyStatsShown();
+}
+docStatsEl.addEventListener('click', toggleStats);
+
+// Counting parses the whole document, which a keystroke can't afford on a very
+// large one: past this size the status-bar figure settles shortly after typing.
+const STATS_LIVE_LIMIT = 100_000;
+let statsTimer: ReturnType<typeof setTimeout> | undefined;
+function refreshDocStats() {
+  clearTimeout(statsTimer);
+  if (!active) {
+    docStatsEl.textContent = '';
+    statsInspector.hidden = true;
+    return;
+  }
+  const doc = active;
+  const show = () => {
+    const o = docOverview(doc.workingText);
+    docStatsEl.textContent = o.stats.chars === 0 ? '' : `${o.stats.chars.toLocaleString()} ${t('statsChars')} · ${readTimeLabel(o.stats.minutes)}`;
+    statsInspector.hidden = !statsShown;
+    if (statsShown) renderStats(doc, o);
+  };
+  if (doc.workingText.length < STATS_LIVE_LIMIT) {
+    show();
+    return;
+  }
+  docStatsEl.textContent = '';
+  statsTimer = setTimeout(() => {
+    if (active === doc) show();
+  }, 400);
 }
 
 function updateStatus() {
+  if (active) noteBaselines(active);
   const dirty = active ? isDirty(active) : false;
   saveBtn.disabled = !dirty;
   saveBtn.classList.toggle('dirty', dirty);
@@ -807,7 +944,7 @@ function updateStatus() {
   deleteBtn.disabled = !(active && active.path);
   historyBtn.disabled = !(active && active.path);
   statusPath.textContent = '';
-  docStatsEl.textContent = active ? formatDocStats(active.workingText) : '';
+  refreshDocStats();
   statusbar.hidden = !active;
   // Window title shows the file name; the status bar shows the full (~) path.
   const title = titleFor(active ? active.name : null);
@@ -1725,6 +1862,20 @@ async function closeDoc(doc: Doc) {
     return;
   }
   await removeDoc(doc);
+  // Untitled buffers and converted documents have no file to come back to.
+  // Delete goes through removeDoc directly, so a trashed file is never offered.
+  if (doc.path) pushClosed(closedPaths, doc.path);
+}
+
+// ⌘⇧T: reopen the most recently closed file, one per press.
+const closedPaths: string[] = [];
+async function reopenClosed() {
+  const path = await popReopenable(
+    closedPaths,
+    (p) => docs.some((d) => d.path === p),
+    (p) => invoke<number>('file_mtime', { path: p }).then(() => true, () => false)
+  );
+  if (path) await openFile(path);
 }
 
 // Move the active document's file to the trash (the Delete of CRUD), then drop
@@ -3638,6 +3789,7 @@ const SHORTCUT_GROUPS: Array<{
       ['⌘⇧S', 'scSaveAs'],
       ['⌘R', 'scReload'],
       ['⌘W', 'scClose'],
+      ['⌘⇧T', 'scReopen'],
       ['⌘⌫', 'scTrash'],
     ],
   },
@@ -5465,11 +5617,13 @@ listen<string>('menu', (e) => {
     case 'reload': reload(); break;
     case 'delete': deleteActive(); break;
     case 'close': if (active) closeDoc(active); break;
+    case 'reopen_closed': reopenClosed(); break;
     case 'compare': openCompare(); break;
     case 'sidebar': sidebarBtn.click(); break;
     case 'outline': toggleOutline(); break;
     case 'edit': if (active) setEditing(!isEditing); break;
     case 'reading': if (active) toggleReading(); break;
+    case 'stats': toggleStats(); break;
     case 'settings': openSettings(); break;
     case 'shortcuts': openShortcuts(); break;
   }
