@@ -314,6 +314,11 @@ describe('docCounts', () => {
     const c = docCounts('---\ntitle: [x](y)\n---\n```\n- [ ] no\n[a](b)\n```\n');
     expect(c).toMatchObject({ links: 0, codeBlocks: 1, tasks: { done: 0, total: 0 } });
   });
+  it('counts lines of the body, not the frontmatter', () => {
+    const src = '---\ntitle: a\ndate: b\n---\n# H\n\ntext\n';
+    expect(docCounts(src).lines).toBe(3);
+    expect(docOverview(src).counts.lines).toBe(3);
+  });
   it('is all zero for an empty document', () => {
     expect(docCounts('')).toEqual({ lines: 0, headings: 0, links: 0, images: 0, codeBlocks: 0, tasks: { done: 0, total: 0 } });
   });

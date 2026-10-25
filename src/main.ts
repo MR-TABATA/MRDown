@@ -797,6 +797,7 @@ function showEmpty() {
   findBar.hidden = true;
   statusPath.textContent = '';
   statusbar.hidden = true;
+  refreshDocStats(); // no document: clears the figure and puts the inspector away
   if (productName) appWindow.setTitle(productName).catch(() => {});
   invoke<string[]>('get_recent_files').then(renderRecent).catch(() => {});
 }
@@ -1821,12 +1822,26 @@ async function openFile(path: string, opts: { recent?: boolean } = {}) {
     : { path, name: basename(path), savedSource: content, workingText: content, mtime };
   // A newly opened document starts at the top, but the one we're leaving keeps
   // its place — it's still open, and you'll be back.
+  const leaving = active;
   if (active) rememberScroll(active);
   docs.push(doc);
   active = doc;
   lastActiveDirty = false;
   editor.value = content;
-  await renderSource(content, path);
+  try {
+    await renderSource(content, path);
+  } catch (e) {
+    // Don't leave a half-opened document behind: it would sit in `docs` unrendered,
+    // and look "already open" to the next attempt (⌘⇧T, the sidebar, a drop).
+    const i = docs.indexOf(doc);
+    if (i !== -1) docs.splice(i, 1);
+    active = null;
+    if (leaving && docs.includes(leaving)) await setActive(leaving);
+    else showEmpty();
+    statusbar.hidden = false;
+    statusPath.textContent = t('openFailed', { e: String(e) });
+    return;
+  }
   showDocUI();
   updateStatus();
   if (imported) {

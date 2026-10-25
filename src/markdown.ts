@@ -370,7 +370,8 @@ export interface DocCounts {
  * the numbers agree with what the reader sees. Frontmatter is not body text.
  */
 export function docCounts(text: string): DocCounts {
-  return countsFromTokens(text, text ? marked.lexer(extractFrontmatter(text).body) : []);
+  const body = extractFrontmatter(text).body;
+  return countsFromTokens(body, body ? marked.lexer(body) : []);
 }
 
 function countsFromTokens(text: string, tokens: Token[]): DocCounts {
@@ -396,6 +397,7 @@ function countsFromTokens(text: string, tokens: Token[]): DocCounts {
 
 /** Both measures from one parse — what a live panel needs on every keystroke. */
 export function docOverview(source: string): { stats: DocStats; counts: DocCounts } {
-  const tokens = source ? marked.lexer(extractFrontmatter(source).body) : [];
-  return { stats: statsFromText(readableFromTokens(tokens)), counts: countsFromTokens(source, tokens) };
+  const body = extractFrontmatter(source).body;
+  const tokens = body ? marked.lexer(body) : [];
+  return { stats: statsFromText(readableFromTokens(tokens)), counts: countsFromTokens(body, tokens) };
 }
