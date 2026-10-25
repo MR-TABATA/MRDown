@@ -34,6 +34,17 @@ describe('statistics beside the footnote extension', () => {
   });
 });
 
+describe('footnote definitions in the document counts', () => {
+  const note = 'see [x](http://a) and ![i](p.png)';
+  it('count what a referenced definition holds, once', () => {
+    expect(docCounts(`Text[^1].\n\n[^1]: ${note}\n`)).toMatchObject({ links: 1, images: 1 });
+  });
+  it('ignore what an unreferenced definition holds', () => {
+    expect(docCounts(`Text.\n\n[^2]: ${note}\n`)).toMatchObject({ links: 0, images: 0 });
+    expect(docOverview(`Text.\n\n[^2]: ${note}\n`).counts).toMatchObject({ links: 0, images: 0 });
+  });
+});
+
 describe('callout markers in the statistics', () => {
   it('are not counted, as the preview does not draw them', () => {
     const s = docStats('> [!NOTE]\n> body\n');
