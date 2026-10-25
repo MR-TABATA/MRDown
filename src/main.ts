@@ -832,7 +832,10 @@ function noteBaselines(doc: Doc) {
   // Counting parses the document, so only do it when there is a baseline to take.
   if (sessionBase.has(doc) && !needToday) return;
   const chars = docStats(doc.savedSource).chars;
-  if (!sessionBase.has(doc)) sessionBase.set(doc, chars);
+  // The session starts from what is shown: a restored draft isn't growth.
+  if (!sessionBase.has(doc)) {
+    sessionBase.set(doc, doc.workingText === doc.savedSource ? chars : docStats(doc.workingText).chars);
+  }
   if (!needToday) return;
   noteBaseline(baselines, doc.path!, chars);
   try {
