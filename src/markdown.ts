@@ -46,7 +46,8 @@ function lexBody(body: string): Token[] {
   const tokens = statsMarked.lexer(body);
   const hook = statsMarked.defaults.walkTokens;
   if (hook) statsMarked.walkTokens(tokens, hook);
-  return tokens;
+  // A definition nothing refers to is not drawn, so nothing in it is counted.
+  return tokens.filter((t) => t.type !== 'footnote' || ((t as unknown as { refs: unknown[] }).refs?.length ?? 0) > 0);
 }
 
 function readableFromTokens(all: Token[]): string {
