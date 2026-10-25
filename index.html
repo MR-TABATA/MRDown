@@ -200,11 +200,18 @@
          Set it to "left" and main.ts moves this node into the sidebar, where it
          stacks under the open-documents list as it used to. -->
     <aside id="outline">
-      <div class="sidebar-title outline-head" id="outline-head" hidden>
-        <svg class="outline-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        <span data-i18n="outlineHeader">アウトライン</span>
+      <!-- The headings scroll in their own box, so the stats below keep a fixed
+           share of the column however long the outline gets. -->
+      <div id="outline-scroll">
+        <div class="sidebar-title outline-head" id="outline-head" hidden>
+          <svg class="outline-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <span data-i18n="outlineHeader">アウトライン</span>
+        </div>
+        <ul id="outline-list" hidden></ul>
       </div>
-      <ul id="outline-list" hidden></ul>
+      <!-- Document stats (View ▸ Document Stats, or the count in the status bar).
+           Filled in by main.ts on every change. -->
+      <section id="stats-inspector" hidden></section>
     </aside>
   </div>
 

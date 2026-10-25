@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { Marked } from 'marked';
 import {
   slugify,
   firstHeadingTitle,
@@ -8,7 +9,11 @@ import {
   docHeaderToHtml,
   type DocHeaderField,
   docStats,
+  readableText,
   toggleTaskListItem,
+  calloutExtension,
+  docCounts,
+  docOverview,
 } from './markdown';
 
 describe('slugify', () => {
@@ -175,9 +180,9 @@ describe('docHeaderToHtml', () => {
 });
 
 describe('docStats', () => {
-  it('counts words and characters for space-delimited text', () => {
+  it('counts characters without whitespace, and space-delimited words', () => {
     const s = docStats('the quick brown fox');
-    expect(s.chars).toBe(19);
+    expect(s.chars).toBe(16);
     expect(s.words).toBe(4);
   });
   it('counts CJK characters individually (no word split)', () => {
@@ -191,12 +196,40 @@ describe('docStats', () => {
   it('is zero for empty text', () => {
     expect(docStats('')).toEqual({ chars: 0, words: 0, minutes: 0 });
   });
-  it('rounds reading time up to at least one minute', () => {
-    expect(docStats('hello world').minutes).toBe(1);
+  it('leaves Markdown notation out of the count', () => {
+    const plain = docStats('見出し\n\n本文です');
+    const marked = docStats('---\ntitle: x\n---\n# 見出し\n\n**本文**です');
+    expect(marked).toEqual(plain);
+    expect(marked.chars).toBe(7);
+  });
+  it('counts a link by its label and an image by its alt text', () => {
+    expect(docStats('[あいう](https://example.com/very/long/url)').chars).toBe(3);
+    expect(docStats('![図表](a/b/c.png)').chars).toBe(2);
+  });
+  it('counts list items and table cells, but not their markers', () => {
+    expect(docStats('- あ\n- い\n  - う').chars).toBe(3);
+    expect(docStats('| 名 | 値 |\n| --- | --- |\n| あ | い |').chars).toBe(4);
+  });
+  it('reads a code block, but not its fence or language', () => {
+    expect(docStats('```js\nabc\n```').chars).toBe(3);
+  });
+  it('keeps words from fusing across paragraphs and inline code', () => {
+    expect(docStats('one\n\ntwo').words).toBe(2);
+    expect(docStats('a `b` c').words).toBe(3);
+  });
+  it('reports under a minute as 0 instead of rounding up', () => {
+    expect(docStats('hello world').minutes).toBe(0);
+    expect(docStats('日本語のテスト').minutes).toBe(0);
   });
   it('estimates longer reading time from volume', () => {
     const words = Array(600).fill('word').join(' ');
     expect(docStats(words).minutes).toBe(3); // 600 / 200 wpm
+  });
+});
+
+describe('readableText', () => {
+  it('drops HTML tags and reference definitions', () => {
+    expect(readableText('<div>x</div>\n\n[a]: http://u\n\nbody').replace(/\s+/g, '')).toBe('body');
   });
 });
 
@@ -226,5 +259,74 @@ describe('toggleTaskListItem', () => {
   it('returns null when the index is out of range', () => {
     expect(toggleTaskListItem('- [ ] a', 3)).toBeNull();
     expect(toggleTaskListItem('no tasks here', 0)).toBeNull();
+  });
+});
+
+describe('calloutExtension', () => {
+  const md = new Marked();
+  md.use(calloutExtension((k) => `L:${k}`));
+  const html = (src: string) => md.parse(src, { async: false }) as string;
+
+  it('renders each GitHub kind as a titled box', () => {
+    for (const k of ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION']) {
+      const out = html(`> [!${k}]\n> body`);
+      expect(out).toContain(`callout-${k.toLowerCase()}`);
+      expect(out).toContain(`L:${k.toLowerCase()}`);
+      expect(out).toContain('body');
+      expect(out).not.toContain('[!');
+    }
+  });
+  it('is case-insensitive and keeps inline markup and lists in the body', () => {
+    const out = html('> [!note]\n> **bold** and\n>\n> - a\n> - b');
+    expect(out).toContain('callout-note');
+    expect(out).toContain('<strong>bold</strong>');
+    expect(out).toContain('<li>a</li>');
+  });
+  it('leaves other quotes alone', () => {
+    expect(html('> [!BOGUS]\n> x')).toContain('<blockquote>');
+    expect(html('> [!NOTE] same line\n> x')).toContain('<blockquote>');
+    expect(html('> plain quote')).toContain('<blockquote>');
+  });
+  it('resolves a reference link defined outside the box', () => {
+    const out = html('> [!NOTE]\n> see [docs][d]\n\n[d]: https://example.com/x\n');
+    expect(out).toContain('callout-note');
+    expect(out).toContain('<a href="https://example.com/x">docs</a>');
+    expect(out).not.toContain('[docs]');
+  });
+  it('keeps several paragraphs after the marker', () => {
+    const out = html('> [!WARNING]\n> one\n>\n> two');
+    expect(out).toContain('callout-warning');
+    expect(out).toContain('<p>one</p>');
+    expect(out).toContain('<p>two</p>');
+  });
+  it('renders a marker with no body', () => {
+    expect(html('> [!TIP]')).toContain('callout-tip');
+  });
+});
+
+describe('docCounts', () => {
+  it('counts what the document is made of', () => {
+    const c = docCounts('# A\n\n## B\n\n[x](http://a) and ![i](p.png)\n\n```js\ncode\n```\n\n- [x] done\n- [ ] todo\n- plain\n');
+    expect(c).toMatchObject({ headings: 2, links: 1, images: 1, codeBlocks: 1, tasks: { done: 1, total: 2 } });
+    expect(c.lines).toBe(13);
+  });
+  it('ignores tasks and links inside a code fence, and frontmatter', () => {
+    const c = docCounts('---\ntitle: [x](y)\n---\n```\n- [ ] no\n[a](b)\n```\n');
+    expect(c).toMatchObject({ links: 0, codeBlocks: 1, tasks: { done: 0, total: 0 } });
+  });
+  it('counts lines of the body, not the frontmatter', () => {
+    const src = '---\ntitle: a\ndate: b\n---\n# H\n\ntext\n';
+    expect(docCounts(src).lines).toBe(3);
+    expect(docOverview(src).counts.lines).toBe(3);
+  });
+  it('is all zero for an empty document', () => {
+    expect(docCounts('')).toEqual({ lines: 0, headings: 0, links: 0, images: 0, codeBlocks: 0, tasks: { done: 0, total: 0 } });
+  });
+});
+
+describe('docOverview', () => {
+  it('agrees with docStats and docCounts', () => {
+    const src = '---\na: b\n---\n# 題\n\n本文 [x](u)\n\n- [x] a\n';
+    expect(docOverview(src)).toEqual({ stats: docStats(src), counts: docCounts(src) });
   });
 });

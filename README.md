@@ -59,7 +59,9 @@ myself**, and there is no Windows code-signing certificate, so no Windows binary
 - Typesets maths with [KaTeX](https://katex.org/) (`$…$` inline, `$$…$$` display; a malformed formula is left as text rather than throwing). Footnotes (`[^1]`) render as a cross-linked section at the end, and `- [ ]` / `- [x]` task lists render as checkboxes.
 - Pick a **preview theme** in Settings (`⌘,`): the default MRDown look, or GitHub Light / GitHub Dark for a document that reads exactly as it will on GitHub.
 - **Reading mode** (`⌘⇧M`): hides the toolbar, sidebar and outline and centres the text, for reading a generated `.md` with nothing else on screen. `Escape` brings the chrome back.
+- **Callouts**: a quote that starts with `> [!NOTE]` (also `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`) is drawn as a coloured, titled box — the same five kinds GitHub draws, and the way AI-written READMEs and design notes mark the warnings you shouldn't miss. Any other kind stays an ordinary quote, as it does on GitHub. The boxes come along in HTML export.
 - Outline (table of contents) in a column of its own, to the right of the document: click a heading to jump to it, and the heading you're reading is highlighted as you scroll. Toggle it with `⌘2`; it follows the document live while you edit. It's **hidden by default while editing**, so the text keeps its width — bring it back with `⌘2` and it stays (visibility is remembered separately for preview and edit). Settings (`⌘,`) can move it back into the left sidebar instead (where it stays collapsible).
+- **Document stats** under the outline (View ▸ Document Stats, or click the count in the status bar): characters, words and reading time of the text you actually *read* — Markdown marks, link URLs and frontmatter aren't counted, and a note under a minute says so instead of rounding up — plus headings, links, images, code blocks and task progress, and how much the document has grown today and this session. It updates as you type; the outline above it scrolls on its own.
 - Auto-reloads when the open file changes on disk (scroll position preserved).
 - Links stay in the app: external links open in your browser, in-document anchors scroll, and links to local Markdown files (`[text](./other.md)`) open that file right in the app instead of leaving it.
 - HTML output sanitized with DOMPurify and locked down with a strict CSP (safe to open untrusted files).
@@ -104,6 +106,7 @@ The default is one column. When checking Markdown written by an AI, one readable
 - Size the side columns to your documents: drag the line between the sidebar and the document, or between the document and the outline. Double-click a line to put that column back to its default. The widths are remembered; a narrow window borrows the space back and returns it when you widen the window again.
 - Open files by double-clicking or "Open With" (registered as a handler for those extensions), the button, `⌘O`, or by dragging a file onto the window.
 - Recent files list on the start screen for quick reopening.
+- Reopen a closed file with `⌘⇧T`, newest first and one per press (the last 20), like reopening a closed browser tab. Untitled documents and files you moved to the Trash aren't brought back.
 
 ### Making it yours
 
