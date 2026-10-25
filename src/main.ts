@@ -1835,9 +1835,13 @@ async function openFile(path: string, opts: { recent?: boolean } = {}) {
     // and look "already open" to the next attempt (⌘⇧T, the sidebar, a drop).
     const i = docs.indexOf(doc);
     if (i !== -1) docs.splice(i, 1);
-    active = null;
-    if (leaving && docs.includes(leaving)) await setActive(leaving);
-    else showEmpty();
+    // Several files dropped at once open concurrently: if a later one has become
+    // the active document since, it is not ours to roll back.
+    if (active === doc) {
+      active = null;
+      if (leaving && docs.includes(leaving)) await setActive(leaving);
+      else showEmpty();
+    }
     statusbar.hidden = false;
     statusPath.textContent = t('openFailed', { e: String(e) });
     return;
