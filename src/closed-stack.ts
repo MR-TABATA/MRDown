@@ -12,6 +12,16 @@ export function pushClosed(stack: string[], path: string, max = CLOSED_MAX): voi
 }
 
 /**
+ * 取り出したのに開けなかったパスを、スタックの**一番古い側**へ戻す。失われないが、
+ * 先頭には戻さない（開けない 1 件が居座って、その下の候補へ進めなくなるため）。
+ * 既に積まれている場合は何もしない。
+ */
+export function requeueClosed(stack: string[], path: string, max = CLOSED_MAX): void {
+  if (stack.includes(path) || stack.length >= max) return;
+  stack.unshift(path);
+}
+
+/**
  * 開き直せる最新の 1 件を取り出す。既に開いている・もう存在しないものは
  * 黙って読み捨てる（押すたびに「何も起きない」になるのを避ける）。無ければ null。
  */

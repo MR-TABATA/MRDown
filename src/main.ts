@@ -50,7 +50,7 @@ import {
   type ThreeRow,
   type Seg,
 } from './diff';
-import { pushClosed, popReopenable } from './closed-stack';
+import { pushClosed, popReopenable, requeueClosed } from './closed-stack';
 import { localDay, noteBaseline, parseBaselines, formatDelta, type Baselines } from './writing-stats';
 import { t, getLang, setLang, isSystemLang, type Lang, type Key } from './i18n';
 import {
@@ -1875,7 +1875,11 @@ async function reopenClosed() {
     (p) => docs.some((d) => d.path === p),
     (p) => invoke<number>('file_mtime', { path: p }).then(() => true, () => false)
   );
-  if (path) await openFile(path);
+  if (!path) return;
+  await openFile(path);
+  // A file that vanished or couldn't be read between the check and the open
+  // isn't lost: it goes to the far end, so the next press tries an older one.
+  if (!docs.some((d) => d.path === path)) requeueClosed(closedPaths, path);
 }
 
 // Move the active document's file to the trash (the Delete of CRUD), then drop

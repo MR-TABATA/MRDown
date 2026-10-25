@@ -315,16 +315,40 @@ const CALLOUT_MARKER = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\n|$)
  * ordinary quote, as it does on GitHub. `label` supplies the title text so the
  * box speaks the app's language.
  */
+/** Drop the first `n` source characters from a run of inline tokens, cutting
+ *  into the token that straddles the boundary (a plain text token, in practice). */
+function dropLeading(tokens: Token[], n: number): Token[] {
+  const out: Token[] = [];
+  for (const tok of tokens) {
+    if (n <= 0) {
+      out.push(tok);
+    } else if (tok.raw.length <= n) {
+      n -= tok.raw.length;
+    } else if ('text' in tok && typeof tok.text === 'string' && tok.raw === tok.text) {
+      out.push({ ...tok, raw: tok.raw.slice(n), text: tok.text.slice(n) } as Token);
+      n = 0;
+    } else {
+      out.push(tok); // not text: keep whole rather than corrupt it
+      n = 0;
+    }
+  }
+  return out;
+}
+
 export function calloutExtension(label: (kind: CalloutKind) => string): MarkedExtension {
   return {
     renderer: {
-      blockquote({ text }) {
+      blockquote({ text, tokens }) {
         const m = CALLOUT_MARKER.exec(text);
-        if (!m) return false; // fall back to marked's own blockquote
+        const first = tokens[0];
+        if (!m || first?.type !== 'paragraph') return false; // fall back to marked's own blockquote
         const kind = m[1].toLowerCase() as CalloutKind;
-        // Re-lex what follows the marker; the nested tokens still carry it.
-        const rest = text.slice(m[0].length);
-        const inner = rest.trim() ? marked.parser(marked.lexer(rest)) : '';
+        // Render the tokens already parsed, minus the marker. Re-lexing the body
+        // as a fresh document would lose what only the whole document knows:
+        // reference-style links defined outside the box.
+        const body = dropLeading((first as Tokens.Paragraph).tokens, m[0].length);
+        const blocks: Token[] = [...(body.length ? [{ ...first, tokens: body } as Token] : []), ...tokens.slice(1)];
+        const inner = blocks.length ? this.parser.parse(blocks) : '';
         return `<div class="callout callout-${kind}"><p class="callout-title">${label(kind)}</p>${inner}</div>\n`;
       },
     },

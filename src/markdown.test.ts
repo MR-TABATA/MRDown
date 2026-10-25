@@ -287,6 +287,18 @@ describe('calloutExtension', () => {
     expect(html('> [!NOTE] same line\n> x')).toContain('<blockquote>');
     expect(html('> plain quote')).toContain('<blockquote>');
   });
+  it('resolves a reference link defined outside the box', () => {
+    const out = html('> [!NOTE]\n> see [docs][d]\n\n[d]: https://example.com/x\n');
+    expect(out).toContain('callout-note');
+    expect(out).toContain('<a href="https://example.com/x">docs</a>');
+    expect(out).not.toContain('[docs]');
+  });
+  it('keeps several paragraphs after the marker', () => {
+    const out = html('> [!WARNING]\n> one\n>\n> two');
+    expect(out).toContain('callout-warning');
+    expect(out).toContain('<p>one</p>');
+    expect(out).toContain('<p>two</p>');
+  });
   it('renders a marker with no body', () => {
     expect(html('> [!TIP]')).toContain('callout-tip');
   });

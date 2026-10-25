@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pushClosed, popReopenable } from './closed-stack';
+import { pushClosed, popReopenable, requeueClosed } from './closed-stack';
 
 describe('pushClosed', () => {
   it('moves a repeated path to the newest slot instead of duplicating it', () => {
@@ -31,5 +31,21 @@ describe('popReopenable', () => {
   it('returns null when nothing is left', async () => {
     expect(await popReopenable([], () => false, yes)).toBeNull();
     expect(await popReopenable(['x'], () => false, async () => false)).toBeNull();
+  });
+});
+
+describe('requeueClosed', () => {
+  it('puts a path that failed to open at the oldest end, not the top', () => {
+    const s = ['a', 'b'];
+    requeueClosed(s, 'x');
+    expect(s).toEqual(['x', 'a', 'b']);
+  });
+  it('does nothing if the path is already there or the stack is full', () => {
+    const s = ['a'];
+    requeueClosed(s, 'a');
+    expect(s).toEqual(['a']);
+    const full = ['a', 'b'];
+    requeueClosed(full, 'x', 2);
+    expect(full).toEqual(['a', 'b']);
   });
 });
