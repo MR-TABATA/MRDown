@@ -1,5 +1,6 @@
 // Pure Markdown-rendering helpers — no DOM or Tauri dependencies.
-import { marked, type MarkedExtension, type Token, type Tokens } from 'marked';
+import { Marked, type MarkedExtension, type Token, type Tokens } from 'marked';
+import markedFootnote from 'marked-footnote';
 
 /**
  * Build a URL-friendly id from heading text. Keeps unicode letters/numbers
@@ -32,15 +33,19 @@ export function readableText(source: string): string {
 }
 
 /**
- * Lex the way `marked.parse` does, extension hooks included. Footnotes keep state
- * across a lex and clear it from their `walkTokens` hook; lexing alone leaves it
- * behind, and the next render of a document with footnotes loses its footnote
- * section or throws. Statistics run beside the preview, so they must not do that.
+ * Statistics lex with a `Marked` of their own, never the preview's. The footnote
+ * extension keeps state across a lex (whether it has met a definition, and the
+ * numbering of references); sharing it would leave that state behind for the next
+ * render of a document with footnotes — a lost footnote section, or its first
+ * reference numbered 2. Statistics run beside the preview, so they must not.
  */
+const statsMarked = new Marked(markedFootnote());
+
+/** Lex the way `parse` does, extension hooks included, so this instance resets too. */
 function lexBody(body: string): Token[] {
-  const tokens = marked.lexer(body);
-  const hook = marked.defaults.walkTokens;
-  if (hook) marked.walkTokens(tokens, hook);
+  const tokens = statsMarked.lexer(body);
+  const hook = statsMarked.defaults.walkTokens;
+  if (hook) statsMarked.walkTokens(tokens, hook);
   return tokens;
 }
 
@@ -406,7 +411,7 @@ function countsFromTokens(text: string, tokens: Token[]): DocCounts {
   const counts: DocCounts = { lines: 0, headings: 0, links: 0, images: 0, codeBlocks: 0, tasks: { done: 0, total: 0 } };
   if (!text) return counts;
   counts.lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-  marked.walkTokens(tokens, (tok) => {
+  statsMarked.walkTokens(tokens, (tok) => {
     switch (tok.type) {
       case 'heading': counts.headings++; break;
       case 'link': counts.links++; break;

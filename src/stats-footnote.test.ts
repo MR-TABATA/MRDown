@@ -20,6 +20,13 @@ describe('statistics beside the footnote extension', () => {
     docOverview(WITH_NOTE);
     expect(hasSection()).toBe(true);
   });
+  it('do not shift the numbering of the next render', () => {
+    const first = () => /data-footnote-ref[^>]*>(\d+)</.exec(String(marked.parse(WITH_NOTE)))?.[1];
+    expect(first()).toBe('1');
+    docStats(WITH_NOTE);
+    docOverview(WITH_NOTE);
+    expect(first()).toBe('1');
+  });
   it('count a referenced definition once, and skip an unreferenced one', () => {
     const text = readableText('Text[^1] here.\n\n[^1]: referenced note\n\n[^2]: unreferenced note\n');
     expect(text.match(/referenced note/g)).toHaveLength(1);
