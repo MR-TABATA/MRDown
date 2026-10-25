@@ -1842,6 +1842,10 @@ async function openFile(path: string, opts: { recent?: boolean } = {}) {
       if (leaving && docs.includes(leaving)) await setActive(leaving);
       else showEmpty();
     }
+    // A later open may already have drawn the sidebar and saved the session with
+    // this document in them.
+    renderSidebar();
+    saveSession();
     statusbar.hidden = false;
     statusPath.textContent = t('openFailed', { e: String(e) });
     return;
@@ -5483,6 +5487,8 @@ makePaneResizer(outlineResizer, {
   widthAt: (clientX, rect) => rect.right - clientX,
 });
 
+// Dropped files open one after another, across drops too.
+let dropOpening: Promise<void> = Promise.resolve();
 // Drag a Markdown file onto the window to open it.
 getCurrentWebview().onDragDropEvent((event) => {
   const p = event.payload;
@@ -5496,7 +5502,14 @@ getCurrentWebview().onDragDropEvent((event) => {
     if (dragState?.moved || Date.now() - lastReorderAt < 400) return;
     // ドロップも「開く」ダイアログと同じものを受ける。片方だけ通ると、
     // 選んでいるのではなく壊れていると読まれる（Open With と同じ理由）。
-    for (const file of p.paths.filter((f) => isSupported(f) || isImportable(f))) openFile(file);
+    // 1 件ずつ順に開く。並行に開くと、描画の終わる順で表示中の文書が入れ替わり、
+    // 失敗した 1 件の後始末が他の open と競合する。続けて落としても、前の分の後。
+    const files = p.paths.filter((f) => isSupported(f) || isImportable(f));
+    dropOpening = dropOpening
+      .then(async () => {
+        for (const file of files) await openFile(file);
+      })
+      .catch(() => {});
   } else {
     contentArea.classList.remove('drag-over');
   }
