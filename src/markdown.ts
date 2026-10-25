@@ -28,7 +28,20 @@ const BLOCK_TOKENS = new Set(['paragraph', 'heading', 'blockquote', 'code']);
  * renders from, so the count follows what is on screen.
  */
 export function readableText(source: string): string {
-  return readableFromTokens(marked.lexer(extractFrontmatter(source).body));
+  return readableFromTokens(lexBody(extractFrontmatter(source).body));
+}
+
+/**
+ * Lex the way `marked.parse` does, extension hooks included. Footnotes keep state
+ * across a lex and clear it from their `walkTokens` hook; lexing alone leaves it
+ * behind, and the next render of a document with footnotes loses its footnote
+ * section or throws. Statistics run beside the preview, so they must not do that.
+ */
+function lexBody(body: string): Token[] {
+  const tokens = marked.lexer(body);
+  const hook = marked.defaults.walkTokens;
+  if (hook) marked.walkTokens(tokens, hook);
+  return tokens;
 }
 
 function readableFromTokens(all: Token[]): string {
@@ -47,6 +60,21 @@ function readableFromTokens(all: Token[]): string {
         case 'list':
           for (const item of (tok as Tokens.List).items) out += plain(item.tokens) + '\n';
           break;
+        case 'footnotes':
+          // The section the preview draws: referenced definitions, once each.
+          for (const item of (tok as unknown as { items: Array<{ content: Token[] }> }).items) out += plain(item.content);
+          break;
+        case 'blockquote': {
+          // A callout's `[!NOTE]` marker is not drawn; it is not read either.
+          const bq = tok as Tokens.Blockquote;
+          const first = bq.tokens[0];
+          const m = first?.type === 'paragraph' ? CALLOUT_MARKER.exec(bq.text) : null;
+          const kids = m
+            ? [{ ...first, tokens: dropLeading((first as Tokens.Paragraph).tokens, m[0].length) } as Token, ...bq.tokens.slice(1)]
+            : bq.tokens;
+          out += plain(kids) + '\n';
+          break;
+        }
         case 'table': {
           const t = tok as Tokens.Table;
           for (const row of [t.header, ...t.rows]) out += row.map((c) => plain(c.tokens)).join(' ') + '\n';
@@ -371,7 +399,7 @@ export interface DocCounts {
  */
 export function docCounts(text: string): DocCounts {
   const body = extractFrontmatter(text).body;
-  return countsFromTokens(body, body ? marked.lexer(body) : []);
+  return countsFromTokens(body, body ? lexBody(body) : []);
 }
 
 function countsFromTokens(text: string, tokens: Token[]): DocCounts {
@@ -398,6 +426,6 @@ function countsFromTokens(text: string, tokens: Token[]): DocCounts {
 /** Both measures from one parse — what a live panel needs on every keystroke. */
 export function docOverview(source: string): { stats: DocStats; counts: DocCounts } {
   const body = extractFrontmatter(source).body;
-  const tokens = body ? marked.lexer(body) : [];
+  const tokens = body ? lexBody(body) : [];
   return { stats: statsFromText(readableFromTokens(tokens)), counts: countsFromTokens(body, tokens) };
 }
