@@ -833,7 +833,7 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
    bar stays full width: it's chrome, not text. */
 .content-area.editing.swap .editor-area {
   width: 100%;
-  max-width: var(--preview-width, none);
+  max-width: var(--preview-width, 85%);
   margin: 0 auto;
 }
 
@@ -896,7 +896,8 @@ mark.find-hit-current { background: var(--mrd-hit-current); color: var(--mrd-hit
 body.has-doc #output { display: block; }
 
 #output {
-  max-width: var(--preview-width, none);
+  width: 100%;
+  max-width: var(--preview-width, 85%);
   margin: 0 auto;
   line-height: 1.55;
   color: var(--mrd-text);
@@ -1805,7 +1806,8 @@ body.reading .pane-resizer,
 body.reading .editor-pane { display: none !important; }
 body.reading .content-area { padding: 0; }
 body.reading #output {
-  max-width: 44rem;
+  width: 100%;
+  max-width: min(var(--preview-width, 85%), 48rem);
   margin: 0 auto;
   padding: 3rem 1.5rem 6rem;
 }

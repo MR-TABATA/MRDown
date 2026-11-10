@@ -3253,33 +3253,35 @@ function buildToolbarOptions() {
   }
 }
 
-// Preview width: a slider from a readable column up to full width. The slider's
-// top maps to the actual content-area width (so the whole travel is meaningful
-// on any window size) and means "no limit"; anything below centres a fixed-width
-// column. Stored in localStorage as a pixel number or 'full'; defaults to full.
-const WIDTH_KEY = 'mrdown.previewWidth';
-const WIDTH_MIN = 480;
-const WIDTH_STEP = 20;
-type PreviewWidth = number | 'full';
+import {
+  resolvePreviewWidth,
+  WIDTH_KEY,
+  WIDTH_LEGACY_KEY,
+  WIDTH_MIN,
+  WIDTH_MAX,
+  WIDTH_STEP,
+  type PreviewWidth,
+} from './preview-width';
 
+// Preview width: a slider from a readable relative percentage (50%) up to full width (100%).
+// Stored in localStorage under WIDTH_KEY as a percentage number (50..100) or 'full'.
 function storedWidth(): PreviewWidth {
-  const raw = localStorage.getItem(WIDTH_KEY);
-  if (raw === null || raw === 'full') return 'full';
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= WIDTH_MIN ? n : 'full';
+  return resolvePreviewWidth(
+    localStorage.getItem(WIDTH_KEY),
+    localStorage.getItem(WIDTH_LEGACY_KEY)
+  );
 }
 
 function applyPreviewWidth(val: PreviewWidth) {
-  document.documentElement.style.setProperty('--preview-width', val === 'full' ? 'none' : `${val}px`);
+  const isFull = val === 'full' || val >= WIDTH_MAX;
+  document.documentElement.style.setProperty('--preview-width', isFull ? '100%' : `${val}%`);
 }
 
 function buildWidthOption() {
-  // Largest useful column: the content area minus its horizontal padding.
-  const maxW = Math.max(WIDTH_MIN + WIDTH_STEP, Math.round(contentArea.clientWidth) - 80);
   const stored = storedWidth();
-  const current = stored === 'full' ? maxW : Math.min(stored, maxW);
-  const atFull = (v: number) => v >= maxW;
-  const label = (v: number) => (atFull(v) ? t('widthFull') : `${v}px`);
+  const current = stored === 'full' ? WIDTH_MAX : stored;
+  const atFull = (v: number) => v >= WIDTH_MAX;
+  const label = (v: number) => (atFull(v) ? t('widthFull') : `${v}%`);
 
   widthOption.innerHTML = '';
   const value = document.createElement('div');
@@ -3288,7 +3290,7 @@ function buildWidthOption() {
   const slider = document.createElement('input');
   slider.type = 'range';
   slider.min = String(WIDTH_MIN);
-  slider.max = String(maxW);
+  slider.max = String(WIDTH_MAX);
   slider.step = String(WIDTH_STEP);
   slider.value = String(current);
   slider.addEventListener('input', () => {
