@@ -20,8 +20,6 @@ macOS 用の Markdown ビューア／エディタ。保存するたび、そし�
 
 **[macOS 版 MRDown をダウンロード](https://github.com/MR-TABATA/MRDown/releases)** — 無料、署名・公証済みなので、そのまま起動できます。
 
-AI に差分を説明させたい場合は、有償版 **[MrkDown](https://buy.polar.sh/polar_cl_0ZFDepQfKNP0v374jKC5AApEKjtQRs0gowqVs3x6YvO)** を購入できます。
-
 ## なぜ作ったか
 
 きっかけは Claude Code が生成する `.md` の確認でした。重いエディタを開いて右クリックでプレビュー
@@ -122,18 +120,6 @@ macOS 版（Apple Silicon / Intel、macOS 10.15 以降）のビルドを [Releas
 
 バイナリは Apple Developer ID で署名・公証（notarization）済みなので、ダウンロードしてそのまま起動できます。
 
-## 有償版 MrkDown
-
-MRDown は無料・MIT ライセンスです。MrkDown は、AI に差分を平易に説明させたい人向けの有償ビルドです。
-
-- 買い切り 39 USD、3 台の Mac まで利用できます。
-- Apple Silicon Mac / macOS 13 以降。
-- 別トライアルはありません。購入前の試用は無料版 MRDown で行えます。
-- 購入後は Polar の購入者ポータルから DMG をダウンロードし、`MrkDown License Key - copy to app` を MrkDown の Settings > Licenses に入力します。
-- AI 利用は BYOK です。プロバイダ API キーは macOS Keychain に保存され、説明対象の Markdown テキストは、そのリクエストで選んだ AI プロバイダにだけ送られます。
-
-製品ページ: [MrkDown](docs/mrkdown.ja.html)
-
 ## 開発
 
 ```bash
@@ -153,7 +139,7 @@ MRDown 本体は [MIT ライセンス](LICENSE)です。ただし **MRDown の�
 
 配布物には第三者のオープンソースソフトウェアを同梱しています。その一覧と著作権表示は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にあり、アプリの設定（`⌘,`）からも読めます。この一覧は `npm run notice` で生成されます。
 
-MRDown は open-core です。**このリポジトリにあるものが MRDown であり、すべて MIT で、これからも MIT です。** 将来の有料機能（AI による差分の説明、プロジェクト全体の横断検索、GitHub / SSH などの認証を伴うリモート）は別リポジトリに置かれ、ここには入りません。どこに線を引いているかは [CONTRIBUTING.md](CONTRIBUTING.md) に書いてあります。
+MRDown は MIT ライセンスで、このリポジトリにあるものは、すべて MIT です。
 
 ## 推奨 IDE 構成
 

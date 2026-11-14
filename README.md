@@ -20,8 +20,6 @@ every rewrite that arrives from outside the app. **Git is optional.**
 
 **[Download MRDown for macOS](https://github.com/MR-TABATA/MRDown/releases)** — free, signed and notarized, so it opens normally.
 
-Want the paid AI feature? **[Buy MrkDown](https://buy.polar.sh/polar_cl_0ZFDepQfKNP0v374jKC5AApEKjtQRs0gowqVs3x6YvO)**, the paid build that unlocks AI diff explanation.
-
 ## Why
 
 It began with the `.md` files Claude Code generates. Opening a heavy editor and right-clicking to
@@ -122,18 +120,6 @@ Download the macOS build (Apple Silicon / Intel, macOS 10.15+) from the [Release
 
 The binaries are signed and notarized with an Apple Developer ID, so they open normally once downloaded.
 
-## MrkDown, the paid build
-
-MRDown is free and MIT licensed. MrkDown is the paid build for people who want AI to explain a diff in plain language.
-
-- Buy once for USD 39, use on up to 3 Macs.
-- Apple Silicon Mac, macOS 13 or later.
-- No separate trial; the free MRDown app is the trial path.
-- After purchase, download the DMG from the Polar Customer Portal and copy `MrkDown License Key - copy to app` into MrkDown Settings > Licenses.
-- AI usage is BYOK: your provider API key is stored in the macOS Keychain, and the Markdown text you ask to explain is sent only to the provider you choose.
-
-Product page: [MrkDown](docs/mrkdown.en.html)
-
 ## Development
 
 ```bash
@@ -153,7 +139,7 @@ MRDown itself is [MIT licensed](LICENSE). **The MRDown name and logo are not cov
 
 The binaries bundle third-party open-source software; its inventory and copyright notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), also readable from Settings (`⌘,`) inside the app. Regenerate it with `npm run notice`.
 
-MRDown is open-core. **What is in this repository is MRDown, all of it MIT, and it stays MIT.** The paid features that are planned — AI explaining a diff, project-wide search, authenticated remotes like GitHub and SSH — will live in a separate repository and will not land here. [CONTRIBUTING.md](CONTRIBUTING.md) says exactly where the line is drawn.
+MRDown is MIT licensed, and everything in this repository is MIT.
 
 ## Recommended IDE Setup
 
