@@ -209,7 +209,7 @@ describe('foldUnchanged', () => {
 });
 
 describe('threeWay', () => {
-  // The situation MRDown exists for: you were editing, an agent rewrote the file.
+  // The situation MrMarkdown exists for: you were editing, an agent rewrote the file.
   const BASE = '# メモ\n\n共通の行\n最後の行';
 
   it('attributes a change to the side that made it', () => {

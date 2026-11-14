@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MRDown",
-  "version": "1.19.0",
+  "productName": "MrMarkdown",
+  "version": "1.20.0",
   "identifier": "com.hitoshi.mrdown",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "MRDown",
+        "title": "MrMarkdown",
         "width": 1100,
         "height": 760,
         "minWidth": 640,

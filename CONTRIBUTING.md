@@ -1,12 +1,12 @@
 # コントリビューション / Contributing
 
-MRDown への関心をありがとうございます。Issue も Pull Request も歓迎します。
-Thanks for your interest in MRDown. Issues and pull requests are welcome.
+MrMarkdown への関心をありがとうございます。Issue も Pull Request も歓迎します。
+Thanks for your interest in MrMarkdown. Issues and pull requests are welcome.
 
 ## スコープ / Scope
 
-MRDown は **手元の Markdown を見る・直す** アプリです。開く、描画する、編集する、保存する、フォルダを辿る、アウトライン、開いている文書の中の検索・置換、外観の設定、HTML/PDF 書き出し、ローカル履歴とその差分。
-MRDown is an app for **reading and editing the Markdown in front of you**: open, render, edit, save, walk a folder, outline, find/replace within the documents you have open, appearance settings, HTML/PDF export, local history and its diffs.
+MrMarkdown は **手元の Markdown を見る・直す** アプリです。開く、描画する、編集する、保存する、フォルダを辿る、アウトライン、開いている文書の中の検索・置換、外観の設定、HTML/PDF 書き出し、ローカル履歴とその差分。
+MrMarkdown is an app for **reading and editing the Markdown in front of you**: open, render, edit, save, walk a folder, outline, find/replace within the documents you have open, appearance settings, HTML/PDF export, local history and its diffs.
 
 MIT で、**全機能が 1 つのリポジトリにあります。** 有償版も、機能の出し分けもありません。どの機能にも PR を歓迎します。フォークして Windows 版を出す自由もあります（[名前とロゴだけは別](README.md#ライセンス--license)）。
 MIT licensed, and **every feature lives in this one repository.** There is no paid edition and no feature gating. Pull requests are welcome on any part of it, and you are free to fork it and ship, say, a Windows build ([the name and logo are the one exception](README.md#ライセンス--license)).

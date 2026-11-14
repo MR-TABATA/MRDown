@@ -1,10 +1,10 @@
 # サードパーティ・ライセンス / Third-Party Notices
 
-MRDown はオープンソースのソフトウェアを同梱して配布しています。
-以下は同梱物とその著作権表示・許諾条件です。MRDown 本体のライセンスは [LICENSE](LICENSE) を参照してください。
+MrMarkdown はオープンソースのソフトウェアを同梱して配布しています。
+以下は同梱物とその著作権表示・許諾条件です。MrMarkdown 本体のライセンスは [LICENSE](LICENSE) を参照してください。
 
-MRDown bundles the open-source software listed below. Their copyright and
-permission notices are reproduced here as their licenses require. For MRDown
+MrMarkdown bundles the open-source software listed below. Their copyright and
+permission notices are reproduced here as their licenses require. For MrMarkdown
 itself, see [LICENSE](LICENSE).
 
 同梱パッケージ数 / Bundled packages: **628** (npm: 110, Rust: 518)

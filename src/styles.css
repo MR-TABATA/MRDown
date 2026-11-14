@@ -6,7 +6,7 @@
    again. Background + text drive the whole window — document *and* chrome
    (toolbar, sidebar, panels) — through the derived tokens further down. */
 :root {
-  /* Accent — MRDown's brand indigo, matching the app icon and the site. The
+  /* Accent — MrMarkdown's brand indigo, matching the app icon and the site. The
      "System" choice in Settings overrides this inline with AccentColor (the
      macOS accent), pairing it with AccentColorText; every other choice is a
      plain colour and keeps white as its foreground. */

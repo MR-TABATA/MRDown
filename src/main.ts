@@ -2340,7 +2340,7 @@ async function refreshActiveFromDisk(preserveScroll: boolean, external = false) 
   if (!active || !active.path) return;
   const content = await invoke<string>('read_file', { path: active.path }).catch(() => null);
   if (content == null) return;
-  // Something outside MRDown wrote this. Put both ends of it in the timeline
+  // Something outside MrMarkdown wrote this. Put both ends of it in the timeline
   // before the old content is gone from memory.
   if (external) await recordExternal(active.path, active.savedSource, content);
   const scrollTop = contentArea.scrollTop;
@@ -2363,7 +2363,7 @@ async function reload() {
 }
 
 // --- Conflict: the file changed on disk while we held unsaved edits ----------
-// This is the case MRDown is for. An agent rewrites the .md you are in the
+// This is the case MrMarkdown is for. An agent rewrites the .md you are in the
 // middle of editing, and neither version may be thrown away without asking. So:
 // snapshot what's on disk into Local History the moment we see it (an agent's
 // work is never ours to lose), then stop and let the user decide.
