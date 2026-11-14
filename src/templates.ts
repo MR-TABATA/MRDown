@@ -1,7 +1,7 @@
-// Starting points for the documents MRDown is built to carry: a design doc and
+// Starting points for the documents MrMarkdown is built to carry: a design doc and
 // a requirements doc. Deliberately skeletons — headings, empty tables and a
 // prompt of what belongs in each section, and no prose. A filled-in template
-// reads as "this is how MRDown thinks a spec should be written", which is
+// reads as "this is how MrMarkdown thinks a spec should be written", which is
 // exactly wrong for a company whose format differs; an empty one is a scaffold
 // either kind of reader can work with.
 //

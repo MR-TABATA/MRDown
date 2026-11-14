@@ -1,15 +1,15 @@
-# MRDown
+# MrMarkdown
 
 **English** | [日本語](README.ja.md)
 
-**Your AI said "updated the README." MRDown shows you whether that's true — and exactly where.**
+**Your AI said "updated the README." MrMarkdown shows you whether that's true — and exactly where.**
 
 A Markdown viewer and editor for macOS that keeps a timestamped version of every save — and of
 every rewrite that arrives from outside the app. **Git is optional.**
 
-[![MRDown showing the three-column view after a file was rewritten while the user was editing it: last save, what is on disk, and the user's own unsaved edits, with only the conflicting lines marked](docs/media/demo-en.jpg)](docs/media/demo-en.mp4)
+[![MrMarkdown showing the three-column view after a file was rewritten while the user was editing it: last save, what is on disk, and the user's own unsaved edits, with only the conflicting lines marked](docs/media/demo-en.jpg)](docs/media/demo-en.mp4)
 
-*An agent rewrote the file while there were unsaved edits in the window. MRDown neither reloads over you nor overwrites what arrived — it shows **last save / on disk / my edits** side by side and lets you choose. [Watch the 20-second demo.](docs/media/demo-en.mp4)*
+*An agent rewrote the file while there were unsaved edits in the window. MrMarkdown neither reloads over you nor overwrites what arrived — it shows **last save / on disk / my edits** side by side and lets you choose. [Watch the 20-second demo.](docs/media/demo-en.mp4)*
 
 <p align="center">
   <img src="docs/media/shot-timeline-en.png" width="49%" alt="The History panel comparing a version from 14 days ago with the current text, with HEAD (Git) in the same list">
@@ -18,18 +18,18 @@ every rewrite that arrives from outside the app. **Git is optional.**
 
 *Left: every save is a version, and `HEAD` joins the same list in a Git repository. Right: the same view compares any two files (`⌘⇧D`).*
 
-**[Download MRDown for macOS](https://github.com/MR-TABATA/MRDown/releases)** — free, signed and notarized, so it opens normally.
+**[Download MrMarkdown for macOS](https://github.com/MR-TABATA/MrMarkdown/releases)** — free, signed and notarized, so it opens normally.
 
 ## Why
 
 It began with the `.md` files Claude Code generates. Opening a heavy editor and right-clicking to
 preview was a chore — so I asked Claude Code for help and had a **viewer-only 0.1 in two hours**.
-At first it was a split — **write in an editor, read in MRDown**. That split is gone: **I no longer
+At first it was a split — **write in an editor, read in MrMarkdown**. That split is gone: **I no longer
 open VSCode for `.md` at all**, I read and write here.
 
 What grew out of that is the part no other Markdown app covers. When an agent rewrites a file
 under you, an ordinary editor either reloads over your unsaved edits or overwrites what the agent
-wrote — and either way, one of the two versions is gone. MRDown keeps both: every save, and
+wrote — and either way, one of the two versions is gone. MrMarkdown keeps both: every save, and
 **every rewrite from outside the app**, quietly becomes a timestamped version, and the History
 panel puts **any two of them side by side**. In a Git repository `HEAD` joins the same list, so the
 diff against what's committed is right there — but Git is not required, and versions live in the
@@ -45,7 +45,7 @@ myself**, and there is no Windows code-signing certificate, so no Windows binary
 
 - **History and diffs**: every save — and every rewrite from outside the app — quietly keeps a timestamped version. The History panel (clock icon) puts **any two versions side by side** so you can read what changed (only the words that differ are marked; unchanged runs are folded away). In a Git repository, `HEAD` joins the same list, so **the diff against what's committed** is right there. Restore any version into the editor in one click, non-destructively (nothing is written until you save). Versions live in the app's data directory, so they never clutter your files or Git repos. **Git is optional.**
 - **Compare any two files** (`⌘⇧D`): File ▸ "Compare Two Files…" — pick two, and read the difference in exactly the same view the version timeline uses. Works with nothing open.
-- **Nothing is lost when an agent rewrites the file under you**: if something changes the file on disk while you have unsaved edits, MRDown neither overwrites it silently nor reloads over you. The disk's version is snapshotted the moment it's seen, and your unsaved edits are snapshotted before they're discarded. **Three columns — last save, what's on disk, your edits** — with only the lines you both rewrote differently marked as conflicts. Versions record where they came from (saved / changed elsewhere / back to the committed version / rescued draft). *Which* application wrote a file isn't knowable — macOS doesn't record it — except for Git: content matching the committed blob byte-for-byte was Git putting the file back.
+- **Nothing is lost when an agent rewrites the file under you**: if something changes the file on disk while you have unsaved edits, MrMarkdown neither overwrites it silently nor reloads over you. The disk's version is snapshotted the moment it's seen, and your unsaved edits are snapshotted before they're discarded. **Three columns — last save, what's on disk, your edits** — with only the lines you both rewrote differently marked as conflicts. Versions record where they came from (saved / changed elsewhere / back to the committed version / rescued draft). *Which* application wrote a file isn't knowable — macOS doesn't record it — except for Git: content matching the committed blob byte-for-byte was Git putting the file back.
 
 ### Reading
 
@@ -55,7 +55,7 @@ myself**, and there is no Windows code-signing certificate, so no Windows binary
 - Syntax-highlights fenced code blocks with [highlight.js](https://highlightjs.org/) (lazy-loaded common bundle; tuned to the dark theme).
 - Renders [Mermaid](https://mermaid.js.org/) diagrams in ```` ```mermaid ```` code blocks (lazy-loaded; falls back to source on syntax errors).
 - Typesets maths with [KaTeX](https://katex.org/) (`$…$` inline, `$$…$$` display; a malformed formula is left as text rather than throwing). Footnotes (`[^1]`) render as a cross-linked section at the end, and `- [ ]` / `- [x]` task lists render as checkboxes.
-- Pick a **preview theme** in Settings (`⌘,`): the default MRDown look, or GitHub Light / GitHub Dark for a document that reads exactly as it will on GitHub.
+- Pick a **preview theme** in Settings (`⌘,`): the default MrMarkdown look, or GitHub Light / GitHub Dark for a document that reads exactly as it will on GitHub.
 - **Reading mode** (`⌘⇧M`): hides the toolbar, sidebar and outline and centres the text, for reading a generated `.md` with nothing else on screen. `Escape` brings the chrome back.
 - **Callouts**: a quote that starts with `> [!NOTE]` (also `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`) is drawn as a coloured, titled box — the same five kinds GitHub draws, and the way AI-written READMEs and design notes mark the warnings you shouldn't miss. Any other kind stays an ordinary quote, as it does on GitHub. The boxes come along in HTML export.
 - Outline (table of contents) in a column of its own, to the right of the document: click a heading to jump to it, and the heading you're reading is highlighted as you scroll. Toggle it with `⌘2`; it follows the document live while you edit. It's **hidden by default while editing**, so the text keeps its width — bring it back with `⌘2` and it stays (visibility is remembered separately for preview and edit). Settings (`⌘,`) can move it back into the left sidebar instead (where it stays collapsible).
@@ -116,7 +116,7 @@ The default is one column. When checking Markdown written by an AI, one readable
 
 ## Install
 
-Download the macOS build (Apple Silicon / Intel, macOS 10.15+) from the [Releases](https://github.com/MR-TABATA/MRDown/releases) page.
+Download the macOS build (Apple Silicon / Intel, macOS 10.15+) from the [Releases](https://github.com/MR-TABATA/MrMarkdown/releases) page.
 
 The binaries are signed and notarized with an Apple Developer ID, so they open normally once downloaded.
 
@@ -135,11 +135,11 @@ npm run tauri build
 
 ## License
 
-MRDown itself is [MIT licensed](LICENSE). **The MRDown name and logo are not covered by that license** — please rename and re-icon any fork you distribute.
+MrMarkdown itself is [MIT licensed](LICENSE). **The MrMarkdown name and logo are not covered by that license** — please rename and re-icon any fork you distribute.
 
 The binaries bundle third-party open-source software; its inventory and copyright notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), also readable from Settings (`⌘,`) inside the app. Regenerate it with `npm run notice`.
 
-MRDown is MIT licensed, and everything in this repository is MIT.
+MrMarkdown is MIT licensed, and everything in this repository is MIT.
 
 ## Recommended IDE Setup
 

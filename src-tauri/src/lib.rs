@@ -123,7 +123,7 @@ fn export_file(path: String, content: String) -> Result<(), String> {
 
 /// Open the native print dialog for the webview's contents. macOS routes this
 /// through NSPrintOperation, where "Save as PDF" is the standard destination —
-/// which is how MRDown exports PDF without bundling a renderer.
+/// which is how MrMarkdown exports PDF without bundling a renderer.
 #[tauri::command]
 fn print_document(window: tauri::WebviewWindow) -> Result<(), String> {
     window.print().map_err(|e| e.to_string())
@@ -370,7 +370,7 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
     let sep = || PredefinedMenuItem::separator(app);
 
     let about_meta = AboutMetadata {
-        name: Some("MRDown".into()),
+        name: Some("MrMarkdown".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
         copyright: Some("© 2026 TABATA Hitoshi".into()),
         // Shown in the macOS About panel's credits area (localized).
@@ -379,18 +379,18 @@ fn build_menu(app: &tauri::AppHandle, lang: &str, has_doc: bool) -> tauri::Resul
     };
     let app_menu = Submenu::with_items(
         app,
-        "MRDown",
+        "MrMarkdown",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some(pick("MRDown について", "About MRDown")), Some(about_meta))?,
+            &PredefinedMenuItem::about(app, Some(pick("MrMarkdown について", "About MrMarkdown")), Some(about_meta))?,
             &sep()?,
             &MenuItem::with_id(app, "settings", pick("設定…", "Settings…"), true, Some("CmdOrCtrl+,"))?,
             &sep()?,
-            &PredefinedMenuItem::hide(app, Some(pick("MRDown を隠す", "Hide MRDown")))?,
+            &PredefinedMenuItem::hide(app, Some(pick("MrMarkdown を隠す", "Hide MrMarkdown")))?,
             &PredefinedMenuItem::hide_others(app, Some(pick("ほかを隠す", "Hide Others")))?,
             &PredefinedMenuItem::show_all(app, Some(pick("すべてを表示", "Show All")))?,
             &sep()?,
-            &PredefinedMenuItem::quit(app, Some(pick("MRDown を終了", "Quit MRDown")))?,
+            &PredefinedMenuItem::quit(app, Some(pick("MrMarkdown を終了", "Quit MrMarkdown")))?,
         ],
     )?;
 
@@ -572,7 +572,7 @@ fn history_dir(app: &tauri::AppHandle, path: &str) -> Option<std::path::PathBuf>
 enum Kind {
     /// You pressed ⌘S.
     Save,
-    /// The content appeared on disk without MRDown writing it — an agent, an
+    /// The content appeared on disk without MrMarkdown writing it — an agent, an
     /// editor, something. macOS does not record which process wrote a file
     /// (`stat` has no writer, `lsof` is empty once the writer closed it, and the
     /// only real answer, Endpoint Security, needs an entitlement no Markdown
@@ -872,7 +872,7 @@ fn git_refs(path: String) -> Vec<GitRef> {
     }
 
     let mut refs = Vec::new();
-    // Local branches, alphabetical. This is the review case MRDown exists for:
+    // Local branches, alphabetical. This is the review case MrMarkdown exists for:
     // diff a branch an agent pushed against the working tree before merging.
     if let Some(out) = git(&root, &["for-each-ref", "--format=%(refname:short)", "refs/heads"]) {
         for name in out.lines().filter(|l| !l.is_empty()) {

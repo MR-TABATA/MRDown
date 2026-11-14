@@ -1,6 +1,6 @@
 // The diff engine behind every "what changed?" view: Local History (two saved
 // versions), Git diff (HEAD vs the working tree), and later the reload flash.
-// Pure and dependency-free — this is the core of what MRDown is for, so it isn't
+// Pure and dependency-free — this is the core of what MrMarkdown is for, so it isn't
 // farmed out to a library, and it stays trivially testable.
 
 export type OpType = 'eq' | 'del' | 'ins';
@@ -243,7 +243,7 @@ export function inlineSegments(oldLine: string, newLine: string): { left: Seg[];
 
 // ── Three-way ────────────────────────────────────────────────────────────────
 // When something rewrites the file on disk while you have unsaved edits — an AI
-// agent, most often, which is the case MRDown exists for — there is no single
+// agent, most often, which is the case MrMarkdown exists for — there is no single
 // "before". There are three texts: the version you both started from (the last
 // save), what the file says now (theirs), and what your buffer says (ours). Same
 // shape as a Git merge, and the same question: who touched what, and where do
